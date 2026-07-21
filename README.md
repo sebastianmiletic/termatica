@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="168" alt="Termatica amber ASCII terminal logo">
+  <img src="Resources/AppIcon.png" width="168" alt="Termatica lightning terminal logo">
 </p>
 
 <h1 align="center">Termatica</h1>
@@ -7,18 +7,29 @@
 <p align="center"><strong>A tiny native macOS terminal with an extensible, terminal-first command harness.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/Termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/Termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
-  <a href="https://github.com/sebastianmiletic/Termatica/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sebastianmiletic/Termatica?style=flat-square&color=C97A18"></a>
-  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-C97A18?style=flat-square"></a>
-  <img alt="macOS 13 or later" src="https://img.shields.io/badge/macOS-13%2B-40260F?style=flat-square">
+  <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
+  <a href="https://github.com/sebastianmiletic/termatica/releases/latest"><img alt="Latest release" src="https://img.shields.io/github/v/release/sebastianmiletic/termatica?style=flat-square&color=7AA2F7"></a>
+  <a href="LICENSE"><img alt="MIT license" src="https://img.shields.io/badge/license-MIT-7AA2F7?style=flat-square"></a>
+  <img alt="macOS 13 or later" src="https://img.shields.io/badge/macOS-13%2B-151820?style=flat-square">
 </p>
 
 <p align="center">
-  <a href="https://github.com/sebastianmiletic/Termatica/releases/latest/download/Termatica-macOS-universal.dmg"><img alt="Download DMG" src="https://img.shields.io/badge/Download-DMG-C97A18?style=for-the-badge&logo=apple&logoColor=white"></a>
-  <a href="https://github.com/sebastianmiletic/Termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-4E3015?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg"><img alt="Download DMG" src="https://img.shields.io/badge/Download-DMG-7AA2F7?style=for-the-badge&logo=apple&logoColor=white"></a>
+  <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript engine, bundled shell, package manager, or third-party framework. The default window is the shell itself. Themes, plugins, AI tools, and editor integrations live in user-owned files outside the app bundle.
+
+```text
+┌──────────────┐
+│ ●  ●  ●      │
+├──────────────┤
+│     /\       │
+│    / /__  _  │
+│   /___ / |_| │
+│      /_/  ▔  │
+└──────────────┘
+```
 
 The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal.
 
@@ -43,14 +54,18 @@ module> editor-deck
 - Vim-friendly Control, Meta, modified arrow, Shift-Tab, navigation, and function-key sequences
 - Command-C copy, Command-V paste, mouse selection, and scrollback
 - Terminal-native plugin, theme, and profile browser
+- Arrow-key and Enter navigation in every module browser
 - Editor controls for Vim, Neovim, terminal-mode Emacs, Nano, Micro, and Helix
+- Minimal numbered vertical tabs that disappear when only one terminal is open
+- Neutral dark default theme with the complete ANSI color palette
+- Skeleterm reduced-overhead profile with effects, extensions, and deep scrollback disabled
 - Language-neutral JSON-lines extension protocol
 - Portable JSON themes with opacity, blur, glow, scanlines, vignette, cursor, and palette control
 - Universal Apple Silicon and Intel binary with a 1 MB bundle budget
 
 ## Install
 
-Download the latest [DMG](https://github.com/sebastianmiletic/Termatica/releases/latest/download/Termatica-macOS-universal.dmg) or [ZIP](https://github.com/sebastianmiletic/Termatica/releases/latest/download/Termatica-macOS-universal.zip), then move `Termatica.app` to `/Applications`.
+Download the latest [DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg) or [ZIP](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip), then move `Termatica.app` to `/Applications`.
 
 Current public builds are ad-hoc signed and not notarized. On first launch, macOS may require Control-clicking the app, choosing **Open**, and confirming once. Release checksums are published as `SHA256SUMS` beside each download.
 
@@ -59,7 +74,7 @@ Current public builds are ad-hoc signed and not notarized. On first launch, macO
 Requirements: macOS 13 or later and Apple Command Line Tools.
 
 ```sh
-git clone https://github.com/sebastianmiletic/Termatica.git
+git clone https://github.com/sebastianmiletic/termatica.git
 cd Termatica
 make release
 open build/Termatica.app
@@ -76,7 +91,9 @@ termatica plugins
 termatica themes
 termatica marketplace
 termatica install editor-deck
+termatica run vim README.md
 termatica editor nvim README.md
+termatica skeleterm
 termatica reload
 ```
 
@@ -91,7 +108,7 @@ termatica plugins
 # choose editor-deck
 ```
 
-Press Command-K and run `/vim README.md`, `/nvim src/main.m`, `/emacs`, `/nano`, `/micro`, or `/hx`. The extension writes a `termatica editor ...` command into the active PTY, and the editor takes over the terminal normally. Emacs is forced to `-nw`; no editor integration opens a GUI.
+Run `termatica run vim README.md`, `termatica run nvim src/main.m`, `termatica run emacs`, `termatica run nano`, `termatica run micro`, or `termatica run hx`. The extension writes a `termatica editor ...` command into the active PTY, and the editor takes over the terminal normally. Emacs is forced to `-nw`; no editor integration opens a GUI.
 
 Focused plugins such as `vim-control`, `neovim-control`, and `helix-control` are available when the full deck is unnecessary. The source-readable reference implementation lives in [`examples/editor-controls`](examples/editor-controls).
 
@@ -102,10 +119,12 @@ Focused plugins such as `vim-control`, `neovim-control`, and `helix-control` are
 | Copy selected cells | Command-C |
 | Paste into PTY | Command-V |
 | New window | Command-N |
+| New terminal tab | Command-T |
+| Close terminal tab | Command-W |
+| Select terminal tab | Command-1 through Command-9 |
 | Open configuration | Command-, |
 | Reload configuration | Command-R |
-| Clear terminal | Command-L |
-| Command and extension matrix | Command-K |
+| Clear terminal | Command-K |
 | Terminal module browser | Command-M |
 | Increase, decrease, reset text | Command-+, Command--, Command-0 |
 
@@ -120,17 +139,17 @@ Press Command-, or run `termatica config` to create `~/.config/termatica/config.
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
   "fontName": "Monaco",
-  "fontSize": 13,
+  "fontSize": 11,
   "padding": 12,
   "scrollback": 5000,
-  "theme": "amber-crt",
+  "theme": "terminal-default",
   "appearance": {
-    "backgroundOpacity": 0.91,
+    "backgroundOpacity": 1.0,
     "windowOpacity": 1.0,
-    "blur": true,
-    "glow": 0.16,
-    "scanlines": 0.08,
-    "vignette": 0.12,
+    "blur": false,
+    "glow": 0,
+    "scanlines": 0,
+    "vignette": 0,
     "cursorStyle": "block"
   }
 }
@@ -140,7 +159,7 @@ See [configuration](docs/CONFIGURATION.md) and [themes](docs/THEMES.md) for all 
 
 ## Extensions
 
-Extensions are executable folders in `~/.config/termatica/extensions`. The native host exchanges one JSON-RPC-style object per line over standard input and output. Extensions can register Command-K actions and write text into the active terminal.
+Extensions are executable folders in `~/.config/termatica/extensions`. The native host exchanges one JSON-RPC-style object per line over standard input and output. Extensions register terminal commands invoked with `termatica run <name> [query]` and can write text into the active PTY.
 
 ```text
 my-extension/

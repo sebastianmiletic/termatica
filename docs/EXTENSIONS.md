@@ -31,16 +31,16 @@ The entry file must be executable. It may be a compiled program or a script with
 Termatica starts each valid extension and writes:
 
 ```json
-{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.1.0"}}
+{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.0"}}
 ```
 
-An extension registers a palette command by writing:
+An extension registers a terminal command by writing:
 
 ```json
 {"jsonrpc":"2.0","method":"command.register","params":{"id":"ai.ask","title":"AI: ask about the terminal","slash":"/ai"}}
 ```
 
-The `slash` field is optional. With it, `/ai explain the error` invokes the command and passes `explain the error` as `query`.
+The `slash` field is optional. With it, `termatica run ai explain the error` invokes the command and passes `explain the error` as `query`.
 
 When the user runs the command, Termatica writes:
 
@@ -64,7 +64,7 @@ Extensions can currently emit these notifications:
 
 ### `command.register`
 
-Adds a command to Command-K. Parameters: `id`, `title`, and optional `slash`.
+Adds a command that can be invoked with `termatica run <slash-or-id> [query]`. Parameters: `id`, `title`, and optional `slash`.
 
 ### `terminal.sendText`
 

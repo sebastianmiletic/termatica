@@ -7,6 +7,7 @@
 #import <stdarg.h>
 #import <libproc.h>
 #import <string.h>
+#import <termios.h>
 
 static const uint32_t TDefaultColor = 0xFFFFFFFFu;
 static CFAbsoluteTime TProcessStartedAt;
@@ -81,6 +82,8 @@ static NSColor *TColor(uint32_t rgb) {
 @property CGFloat fontSize;
 @property CGFloat padding;
 @property NSUInteger scrollback;
+@property BOOL skeleterm;
+@property CGFloat tabRailWidth;
 @property CGFloat backgroundOpacity;
 @property CGFloat windowOpacity;
 @property CGFloat glow;
@@ -118,20 +121,16 @@ static NSColor *TColor(uint32_t rgb) {
 - (NSDictionary *)defaults {
     return @{
         @"shell": NSProcessInfo.processInfo.environment[@"SHELL"] ?: @"/bin/zsh",
-        @"shellArguments": @[@"-l"], @"fontName": @"Monaco", @"fontSize": @13,
+        @"shellArguments": @[@"-l"], @"fontName": @"Monaco", @"fontSize": @11,
         @"padding": @12, @"scrollback": @5000,
-        @"theme": @"amber-crt",
+        @"theme": @"terminal-default",
         @"appearance": @{},
-        @"keybindings": @{@"commandPalette":@"cmd+k", @"copy":@"cmd+c", @"paste":@"cmd+v"}
+        @"tabs": @{@"railWidth":@34},
+        @"keybindings": @{@"openConfig":@"cmd+,",@"newWindow":@"cmd+n",@"newTab":@"cmd+t",@"closeTab":@"cmd+w",@"clearTerminal":@"cmd+k",@"modules":@"cmd+m",@"reload":@"cmd+r",@"copy":@"cmd+c",@"paste":@"cmd+v",@"selectAll":@"cmd+a",@"zoomIn":@"cmd+plus",@"zoomOut":@"cmd+-",@"zoomReset":@"cmd+0"}
     };
 }
 - (NSDictionary *)fallbackTheme {
-    return @{@"background":@"#100B08", @"foreground":@"#FFAD42", @"cursor":@"#FFD17A",
-             @"accent":@"#FFAD42", @"panel":@"#160E09", @"muted":@"#9A5D24", @"selection":@"#56300F",
-             @"palette":@[@"#140C08",@"#E45B3D",@"#B7B84B",@"#FFAD42",
-                           @"#D48745",@"#C66D82",@"#D7A05D",@"#FFD19A",
-                           @"#6B3C1E",@"#FF7656",@"#D4D56A",@"#FFD17A",
-                           @"#E79C61",@"#E1889A",@"#F0BB75",@"#FFF0D0"]};
+    return @{@"background":@"#101216",@"foreground":@"#D8DEE9",@"cursor":@"#EEF1F5",@"accent":@"#7AA2F7",@"panel":@"#151820",@"muted":@"#6B7280",@"selection":@"#2B3445",@"appearance":@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"block"},@"palette":@[@"#1B1D23",@"#E06C75",@"#98C379",@"#E5C07B",@"#61AFEF",@"#C678DD",@"#56B6C2",@"#D7DAE0",@"#5C6370",@"#F07178",@"#AAD94C",@"#FFB454",@"#59C2FF",@"#D2A6FF",@"#95E6CB",@"#EEF1F5"]};
 }
 - (NSDictionary *)themeNamed:(NSString *)name {
     if (!name.length) return nil;
@@ -154,9 +153,11 @@ static NSColor *TColor(uint32_t rgb) {
     self.shell = [d[@"shell"] isKindOfClass:NSString.class] ? d[@"shell"] : @"/bin/zsh";
     self.shellArguments = [d[@"shellArguments"] isKindOfClass:NSArray.class] ? d[@"shellArguments"] : @[@"-l"];
     self.fontName = [d[@"fontName"] isKindOfClass:NSString.class] ? d[@"fontName"] : @"Monaco";
-    self.fontSize = MAX(8, MIN(48, [d[@"fontSize"] doubleValue] ?: 13));
+    self.fontSize = MAX(8, MIN(48, [d[@"fontSize"] doubleValue] ?: 11));
     self.padding = MAX(0, MIN(40, [d[@"padding"] doubleValue]));
     self.scrollback = MAX(100, MIN(100000, [d[@"scrollback"] unsignedIntegerValue] ?: 5000));
+    self.skeleterm = [d[@"profile"] isEqual:@"skeleterm"];
+    NSDictionary *tabs=[d[@"tabs"] isKindOfClass:NSDictionary.class]?d[@"tabs"]:@{};self.tabRailWidth=MAX(28,MIN(64,[tabs[@"railWidth"] doubleValue]?:34));
     id rawTheme=d[@"theme"];self.themeName=[rawTheme isKindOfClass:NSString.class]?rawTheme:@"custom";
     NSDictionary *theme=[rawTheme isKindOfClass:NSDictionary.class]?rawTheme:[self themeNamed:self.themeName];if(!theme)theme=[self fallbackTheme];
     NSDictionary *themeAppearance=[theme[@"appearance"] isKindOfClass:NSDictionary.class]?theme[@"appearance"]:@{};
@@ -168,12 +169,12 @@ static NSColor *TColor(uint32_t rgb) {
     self.blurMaterial=[appearance[@"blurMaterial"] isKindOfClass:NSString.class]?appearance[@"blurMaterial"]:@"hud";
     self.glow=MAX(0,MIN(1,[appearance[@"glow"] doubleValue]));self.scanlines=MAX(0,MIN(1,[appearance[@"scanlines"] doubleValue]));self.vignette=MAX(0,MIN(1,[appearance[@"vignette"] doubleValue]));
     self.cursorStyle=[appearance[@"cursorStyle"] isKindOfClass:NSString.class]?appearance[@"cursorStyle"]:@"block";
-    self.keybindings=[d[@"keybindings"] isKindOfClass:NSDictionary.class]?d[@"keybindings"]:@{};
-    self.background = [THexColor(theme[@"background"], THexColor(@"#100B08", NSColor.blackColor)) colorWithAlphaComponent:self.backgroundOpacity];
-    self.foreground = THexColor(theme[@"foreground"], THexColor(@"#FFAD42", NSColor.orangeColor));
-    self.cursor = THexColor(theme[@"cursor"], THexColor(@"#FFD17A", NSColor.orangeColor));
+    NSMutableDictionary *bindings=[[[self defaults] objectForKey:@"keybindings"] mutableCopy];if([d[@"keybindings"] isKindOfClass:NSDictionary.class])[bindings addEntriesFromDictionary:d[@"keybindings"]];self.keybindings=bindings;
+    self.background = [THexColor(theme[@"background"], THexColor(@"#101216", NSColor.blackColor)) colorWithAlphaComponent:self.backgroundOpacity];
+    self.foreground = THexColor(theme[@"foreground"], THexColor(@"#D8DEE9", NSColor.textColor));
+    self.cursor = THexColor(theme[@"cursor"], THexColor(@"#EEF1F5", NSColor.textColor));
     self.accent = THexColor(theme[@"accent"], self.cursor);
-    self.panel=THexColor(theme[@"panel"],THexColor(@"#160E09",NSColor.windowBackgroundColor));self.muted=THexColor(theme[@"muted"],THexColor(@"#9A5D24",NSColor.secondaryLabelColor));self.selection=THexColor(theme[@"selection"],THexColor(@"#56300F",self.accent));
+    self.panel=THexColor(theme[@"panel"],THexColor(@"#151820",NSColor.windowBackgroundColor));self.muted=THexColor(theme[@"muted"],THexColor(@"#6B7280",NSColor.secondaryLabelColor));self.selection=THexColor(theme[@"selection"],THexColor(@"#2B3445",self.accent));
     NSArray *raw = [theme[@"palette"] isKindOfClass:NSArray.class] ? theme[@"palette"] : [self fallbackTheme][@"palette"];
     NSMutableArray *colors = [NSMutableArray arrayWithCapacity:16];
     for (NSUInteger i = 0; i < 16; i++) {
@@ -200,22 +201,27 @@ static NSColor *TColor(uint32_t rgb) {
     NSData *data=[NSJSONSerialization dataWithJSONObject:dictionary options:NSJSONWritingPrettyPrinted error:nil];[data writeToFile:self.path atomically:YES];[self reload];
 }
 - (void)applySkeleterm {
-    NSMutableDictionary *d=[self editableDictionary];d[@"profile"]=@"skeleterm";d[@"appearance"]=@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"block"};[self writeEditableDictionary:d];
+    NSMutableDictionary *d=[self editableDictionary];d[@"profile"]=@"skeleterm";d[@"theme"]=@"terminal-default";d[@"scrollback"]=@300;d[@"appearance"]=@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"block"};[self writeEditableDictionary:d];
 }
 - (void)mergeEditableValues:(NSDictionary *)values {if(![values isKindOfClass:NSDictionary.class])return;NSMutableDictionary *d=[self editableDictionary];[d addEntriesFromDictionary:values];[self writeEditableDictionary:d];}
 @end
 
-static void TPostCLICommand(NSString *command) {
-    if([NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.termatica.Termatica"].count==0)return;
-    [NSDistributedNotificationCenter.defaultCenter postNotificationName:TCLICommandNotification object:@"TermaticaCLI" userInfo:@{@"command":command?:@""} deliverImmediately:YES];
+static BOOL TPostCLIRequest(NSDictionary *request) {
+    if([NSRunningApplication runningApplicationsWithBundleIdentifier:@"com.termatica.Termatica"].count==0)return NO;
+    [NSDistributedNotificationCenter.defaultCenter postNotificationName:TCLICommandNotification object:@"TermaticaCLI" userInfo:request deliverImmediately:YES];return YES;
 }
+static void TPostCLICommand(NSString *command) {TPostCLIRequest(@{@"command":command?:@""});}
 
 static NSArray<NSDictionary *> *TMarketplaceItems(void) {
     NSMutableArray *items=[@[
-      @{@"id":@"amber-crt",@"kind":@"themes",@"icon":@"[T:]",@"title":@"AMBER CRT",@"detail":@"reference phosphor palette, glow and blur"},
+      @{@"id":@"terminal-default",@"kind":@"themes",@"icon":@"[T]",@"title":@"TERMINAL DEFAULT",@"detail":@"neutral dark surface with a complete standard ANSI palette"},
+      @{@"id":@"amber-crt",@"kind":@"themes",@"icon":@"[T:]",@"title":@"AMBER CRT",@"detail":@"optional phosphor palette, glow and blur"},
       @{@"id":@"ghost-glass",@"kind":@"themes",@"icon":@"[T~]",@"title":@"GHOST GLASS",@"detail":@"transparent cool glass and bar cursor"},
       @{@"id":@"green-screen",@"kind":@"themes",@"icon":@"[T#]",@"title":@"GREEN SCREEN",@"detail":@"opaque green phosphor and underline cursor"},
-      @{@"id":@"skeleterm",@"kind":@"profiles",@"icon":@"[SK]",@"title":@"SKELETERM",@"detail":@"lowest-resource profile, effects and chrome off"},
+      @{@"id":@"skeleterm",@"kind":@"profiles",@"icon":@"[SK]",@"title":@"SKELETERM",@"detail":@"minimum-memory mode, 300-line history, effects and plugins off"},
+      @{@"id":@"plain-terminal",@"kind":@"profiles",@"icon":@"[PL]",@"title":@"PLAIN TERMINAL",@"detail":@"opaque terminal, normal ANSI colors, full extension support",@"config":@{@"profile":@"standard",@"theme":@"terminal-default",@"appearance":@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"block"}}},
+      @{@"id":@"amber-focus",@"kind":@"profiles",@"icon":@"[AF]",@"title":@"AMBER FOCUS",@"detail":@"opaque amber with a restrained cursor glow",@"config":@{@"profile":@"standard",@"theme":@"amber-crt",@"appearance":@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0.08,@"scanlines":@0,@"vignette":@0.04,@"cursorStyle":@"block"}}},
+      @{@"id":@"ghost-lite",@"kind":@"profiles",@"icon":@"[GL]",@"title":@"GHOST LITE",@"detail":@"translucent surface without the memory cost of blur",@"config":@{@"profile":@"standard",@"theme":@"ghost-glass",@"appearance":@{@"backgroundOpacity":@0.88,@"windowOpacity":@1,@"blur":@NO,@"glow":@0.04,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"bar"}}},
       @{@"id":@"hello",@"kind":@"plugins",@"icon":@"[>_]",@"title":@"HELLO PROTOCOL",@"detail":@"source-readable extension example, Python 3"},
       @{@"id":@"pi-bridge",@"kind":@"plugins",@"icon":@"[PI]",@"title":@"PI COMMAND BRIDGE",@"detail":@"adds /pi for an installed Pi CLI, Python 3"},
       @{@"id":@"editor-deck",@"kind":@"plugins",@"icon":@"[ED]",@"title":@"EDITOR DECK",@"detail":@"terminal controls for Vim, Neovim, Emacs, Nano, Micro and Helix"},
@@ -258,15 +264,29 @@ static BOOL TInstallModule(NSDictionary *item,TConfig *config,NSError **error) {
     if([item[@"manifest"] isKindOfClass:NSDictionary.class]){NSData *script=[item[@"script"] isKindOfClass:NSString.class]?[item[@"script"] dataUsingEncoding:NSUTF8StringEncoding]:TDownloadModule(item[@"downloadURL"],error);return TWritePlugin(identifier,item[@"manifest"],script,error);}
     NSDictionary *manifest=@{@"id":[NSString stringWithFormat:@"com.termatica.%@",identifier],@"name":identifier,@"version":@"1.0.0",@"entry":@"extension.py"};NSString *script=nil;
     if([identifier isEqual:@"editor-deck"]||[identifier hasSuffix:@"-control"]){script=TEditorControlsScript(identifier);}
-    else {NSString *command=[identifier isEqual:@"pi-bridge"]?@"pi":@"printf '\\033[38;2;255;173;66mTermatica\\033[0m %s\\n'";NSString *slash=[identifier isEqual:@"pi-bridge"]?@"/pi":@"/hello";NSString *title=[identifier isEqual:@"pi-bridge"]?@"Pi: send prompt":@"Hello: write into shell";script=[NSString stringWithFormat:@"#!/usr/bin/env python3\nimport json,sys,shlex\nfor line in sys.stdin:\n try:\n  m=json.loads(line)\n  if m.get('method')=='initialize': print(json.dumps({'jsonrpc':'2.0','method':'command.register','params':{'id':'%@.run','title':'%@','slash':'%@'}}),flush=True)\n  elif m.get('method')=='command.execute':\n   q=m.get('params',{}).get('query',''); print(json.dumps({'jsonrpc':'2.0','method':'terminal.sendText','params':{'text':\"%@ \"+shlex.quote(q)+\"\\n\"}}),flush=True)\n except Exception: pass\n",identifier,title,slash,command];}
+    else {NSString *command=[identifier isEqual:@"pi-bridge"]?@"pi":@"printf '\\033[38;2;122;162;247mTermatica\\033[0m %s\\n'";NSString *slash=[identifier isEqual:@"pi-bridge"]?@"/pi":@"/hello";NSString *title=[identifier isEqual:@"pi-bridge"]?@"Pi: send prompt":@"Hello: write into shell";script=[NSString stringWithFormat:@"#!/usr/bin/env python3\nimport json,sys,shlex\nfor line in sys.stdin:\n try:\n  m=json.loads(line)\n  if m.get('method')=='initialize': print(json.dumps({'jsonrpc':'2.0','method':'command.register','params':{'id':'%@.run','title':'%@','slash':'%@'}}),flush=True)\n  elif m.get('method')=='command.execute':\n   q=m.get('params',{}).get('query',''); print(json.dumps({'jsonrpc':'2.0','method':'terminal.sendText','params':{'text':\"%@ \"+shlex.quote(q)+\"\\n\"}}),flush=True)\n except Exception: pass\n",identifier,title,slash,command];}
     return TWritePlugin(identifier,manifest,[script dataUsingEncoding:NSUTF8StringEncoding],error);
 }
 
+static volatile sig_atomic_t TMenuInterrupted=0;
+static void TMenuSignal(int signalNumber){TMenuInterrupted=1;}
+
+static void TDrawMarketplace(NSArray<NSDictionary *> *items,NSUInteger selected) {
+    fputs("\033[2J\033[H\033[38;2;122;162;247m+------------------------------------------------------------------+\n|  >_ TERMATICA // MODULES                                        |\n|  arrows move  enter installs  q exits                            |\n+------------------------------------------------------------------+\033[0m\n",stdout);
+    for(NSUInteger i=0;i<items.count;i++){NSDictionary *item=items[i];if(i==selected)fputs("\033[48;2;43;52;69m\033[38;2;238;241;245m",stdout);else fputs("\033[38;2;216;222;233m",stdout);fprintf(stdout," %c %2lu  %-4s %-22s  %-38s\033[0m\n",i==selected?'>':' ',(unsigned long)i+1,[item[@"icon"] UTF8String],[[item[@"title"] uppercaseString] UTF8String],[item[@"detail"]?:@"user catalog module" UTF8String]);}
+    fputs("\n\033[38;2;107;114;128m[ UP/DOWN or J/K ] MOVE   [ ENTER ] INSTALL   [ Q ] QUIT\033[0m",stdout);fflush(stdout);
+}
+
 static int TRunMarketplace(NSString *category,TConfig *config) {
-    NSArray *all=TMarketplaceItems();NSArray *items=[category isEqual:@"all"]?all:[all filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *item,NSDictionary *bindings){return [item[@"kind"] isEqual:category];}]];
-    fputs("\033[2J\033[H\033[38;2;255;173;66m",stdout);fputs("+------------------------------------------------------------------+\n|  >_ TERMATICA // MODULES                                        |\n|  terminal-native themes, plugins and resource profiles          |\n+------------------------------------------------------------------+\n\033[0m",stdout);
-    for(NSUInteger i=0;i<items.count;i++){NSDictionary *item=items[i];fprintf(stdout,"\033[38;2;255;173;66m %2lu  %-4s %-22s\033[0m %s\n",(unsigned long)i+1,[item[@"icon"] UTF8String],[[item[@"title"] uppercaseString] UTF8String],[item[@"detail"]?:@"user catalog module" UTF8String]);}
-    fputs("\n\033[38;2;154;93;36mType a number or module id to install. Type q to return.\033[0m\nmodule> ",stdout);fflush(stdout);char input[128]={0};if(!fgets(input,sizeof(input),stdin))return 0;NSString *answer=[[[NSString stringWithUTF8String:input] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] lowercaseString];if([answer isEqual:@"q"]||[answer isEqual:@"quit"]||!answer.length)return 0;NSInteger choice=answer.integerValue;NSDictionary *item=nil;if(choice>=1&&choice<=(NSInteger)items.count)item=items[(NSUInteger)choice-1];else for(NSDictionary *candidate in items)if([candidate[@"id"] isEqual:answer]){item=candidate;break;}if(!item){fprintf(stderr,"termatica: module not found: %s\n",answer.UTF8String);return 2;}for(int i=0;i<=20;i++){fputs("\r\033[38;2;255;173;66mWRITE [",stdout);for(int j=0;j<20;j++)fputc(j<i?'#':(j==i?'>':'.'),stdout);fprintf(stdout,"] %3d%%\033[0m",i*5);fflush(stdout);usleep(12000);}fputc('\n',stdout);NSError *error=nil;BOOL ok=TInstallModule(item,config,&error);if(ok){TPostCLICommand(@"reload");fprintf(stdout,"\033[38;2;121;230;109m[ INSTALLED ]\033[0m %s\n",[item[@"title"] UTF8String]);return 0;}fprintf(stderr,"[ FAILED ] %s\n",(error.localizedDescription?:@"installation failed").UTF8String);return 1;
+    NSArray *all=TMarketplaceItems();NSArray *items=nil;if([category isEqual:@"all"])items=all;else if([category isEqual:@"plugins"])items=[all filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *item,NSDictionary *bindings){return [@[@"plugins",@"profiles"] containsObject:item[@"kind"]];}]];else items=[all filteredArrayUsingPredicate:[NSPredicate predicateWithBlock:^BOOL(NSDictionary *item,NSDictionary *bindings){return [item[@"kind"] isEqual:category];}]];
+    NSDictionary *item=nil;
+    struct termios original;BOOL interactive=isatty(STDIN_FILENO)&&isatty(STDOUT_FILENO)&&tcgetattr(STDIN_FILENO,&original)==0;
+    if(interactive){
+        struct termios raw=original;raw.c_lflag&=~(ICANON|ECHO);raw.c_iflag&=~(IXON|ICRNL);raw.c_cc[VMIN]=1;raw.c_cc[VTIME]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw);void (*previous)(int)=signal(SIGINT,TMenuSignal);TMenuInterrupted=0;NSUInteger selected=0;fputs("\033[?25l",stdout);while(!TMenuInterrupted){TDrawMarketplace(items,selected);unsigned char key=0;if(read(STDIN_FILENO,&key,1)!=1)continue;if(key=='q'||key=='Q')break;if(key=='\r'||key=='\n'){item=items[selected];break;}if(key=='j'||key=='J'){selected=(selected+1)%items.count;continue;}if(key=='k'||key=='K'){selected=(selected+items.count-1)%items.count;continue;}if(key==27){unsigned char sequence[2]={0};if(read(STDIN_FILENO,&sequence[0],1)==1&&read(STDIN_FILENO,&sequence[1],1)==1&&sequence[0]=='['){if(sequence[1]=='A')selected=(selected+items.count-1)%items.count;else if(sequence[1]=='B')selected=(selected+1)%items.count;}}}tcsetattr(STDIN_FILENO,TCSAFLUSH,&original);signal(SIGINT,previous);fputs("\033[?25h\033[0m\n",stdout);if(!item)return TMenuInterrupted?130:0;
+    } else {
+        TDrawMarketplace(items,NSNotFound);fputs("\nType a number or module id to install. Type q to return.\nmodule> ",stdout);fflush(stdout);char input[128]={0};if(!fgets(input,sizeof(input),stdin))return 0;NSString *answer=[[[NSString stringWithUTF8String:input] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet] lowercaseString];if([answer isEqual:@"q"]||[answer isEqual:@"quit"]||!answer.length)return 0;NSInteger choice=answer.integerValue;if(choice>=1&&choice<=(NSInteger)items.count)item=items[(NSUInteger)choice-1];else for(NSDictionary *candidate in items)if([candidate[@"id"] isEqual:answer]){item=candidate;break;}if(!item){fprintf(stderr,"termatica: module not found: %s\n",answer.UTF8String);return 2;}
+    }
+    for(int i=0;i<=20;i++){fputs("\r\033[38;2;122;162;247mWRITE [",stdout);for(int j=0;j<20;j++)fputc(j<i?'#':(j==i?'>':'.'),stdout);fprintf(stdout,"] %3d%%\033[0m",i*5);fflush(stdout);usleep(12000);}fputc('\n',stdout);NSError *error=nil;BOOL ok=TInstallModule(item,config,&error);if(ok){TPostCLICommand(@"reload");fprintf(stdout,"\033[38;2;152;195;121m[ INSTALLED ]\033[0m %s\n",[item[@"title"] UTF8String]);return 0;}fprintf(stderr,"[ FAILED ] %s\n",(error.localizedDescription?:@"installation failed").UTF8String);return 1;
 }
 
 static NSDictionary *TMarketplaceItemNamed(NSString *identifier) {for(NSDictionary *item in TMarketplaceItems())if([item[@"id"] isEqual:identifier])return item;return nil;}
@@ -281,10 +301,11 @@ static int TRunEditorCLI(int argc,const char *argv[]) {
 static int TRunCLI(int argc, const char *argv[]) {
     NSString *arg=argc>1?[NSString stringWithUTF8String:argv[1]]:@"--help";
     if([arg isEqual:@"--help"]||[arg isEqual:@"-h"]||[arg isEqual:@"help"]){
-        fputs("Termatica 0.2.0\n\nUSAGE\n  termatica <command> [arguments]\n\nTERMINAL COMMANDS\n  plugins            Browse and install plugins in the terminal\n  themes             Browse and install themes in the terminal\n  marketplace        Browse every module in the terminal\n  install <id>       Install a module without opening the browser\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro or Helix\n  reload             Reload config and installed extensions\n\nFILES AND PROFILES\n  config             Open editable config.json\n  config-path        Print the config path\n  config-dir         Open the Termatica data folder\n  plugins-dir        Open installed extensions\n  themes-dir         Open installed themes\n  catalog            Open the user marketplace catalog\n  skeleterm          Apply the lowest-resource profile\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n\nLong commands also accept their legacy --command spelling.\n",stdout);return 0;
+        fputs("Termatica 0.3.0\n\nUSAGE\n  termatica <command> [arguments]\n\nTERMINAL COMMANDS\n  plugins            Browse plugins and profiles with arrow keys\n  themes             Browse themes with arrow keys\n  profiles           Browse resource and appearance profiles\n  marketplace        Browse every module in the terminal\n  install <id>       Install a module without opening the browser\n  run <name> [text]  Run an installed extension command\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro or Helix\n  reload             Reload config and installed extensions\n\nFILES AND PROFILES\n  config             Open editable config.json\n  config-path        Print the config path\n  config-dir         Open the Termatica data folder\n  plugins-dir        Open installed extensions\n  themes-dir         Open installed themes\n  catalog            Open the user marketplace catalog\n  skeleterm          Apply minimum-memory mode\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n\nLong commands also accept their legacy --command spelling.\n",stdout);return 0;
     }
-    if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fputs("Termatica 0.2.0\n",stdout);return 0;}
+    if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fputs("Termatica 0.3.0\n",stdout);return 0;}
     if([arg isEqual:@"editor"]||[arg isEqual:@"--editor"]||[arg isEqual:@"edit"]||[arg isEqual:@"--edit"])return TRunEditorCLI(argc,argv);
+    if([arg isEqual:@"run"]||[arg isEqual:@"--run"]){if(argc<3){fputs("termatica: run requires an extension command name\n",stderr);return 2;}NSMutableArray *parts=[NSMutableArray array];for(int i=3;i<argc;i++)[parts addObject:[NSString stringWithUTF8String:argv[i]]];BOOL sent=TPostCLIRequest(@{@"command":@"run",@"name":[NSString stringWithUTF8String:argv[2]],@"query":[parts componentsJoinedByString:@" "]});if(!sent){fputs("termatica: the Termatica app is not running\n",stderr);return 1;}return 0;}
     TConfig *config=[TConfig new];
     if([arg isEqual:@"--config-path"]||[arg isEqual:@"config-path"]){fprintf(stdout,"%s\n",config.path.fileSystemRepresentation);return 0;}
     if([arg isEqual:@"--config"]||[arg isEqual:@"--settings"]||[arg isEqual:@"config"]||[arg isEqual:@"settings"]){[config ensureEditableFile];TOpenPath(config.path);fprintf(stdout,"opened %s\n",config.path.fileSystemRepresentation);return 0;}
@@ -292,10 +313,11 @@ static int TRunCLI(int argc, const char *argv[]) {
     if([arg isEqual:@"--plugins-dir"]||[arg isEqual:@"plugins-dir"]){NSString *p=TEnsureDirectory(@"extensions");TOpenPath(p);fprintf(stdout,"opened %s\n",p.fileSystemRepresentation);return 0;}
     if([arg isEqual:@"--themes-dir"]||[arg isEqual:@"themes-dir"]){NSString *p=TEnsureDirectory(@"themes");TOpenPath(p);fprintf(stdout,"opened %s\n",p.fileSystemRepresentation);return 0;}
     if([arg isEqual:@"--catalog"]||[arg isEqual:@"catalog"]){NSString *p=[TConfigDirectoryPath() stringByAppendingPathComponent:@"marketplace.json"];if(![NSFileManager.defaultManager fileExistsAtPath:p]){NSData *data=[NSJSONSerialization dataWithJSONObject:@{ @"items":@[] } options:NSJSONWritingPrettyPrinted error:nil];[data writeToFile:p atomically:YES];}TOpenPath(p);fprintf(stdout,"opened %s\n",p.fileSystemRepresentation);return 0;}
-    if([arg isEqual:@"--skeleterm"]||[arg isEqual:@"skeleterm"]){[config applySkeleterm];TPostCLICommand(@"reload");fputs("skeleterm profile applied: blur, glow, scanlines, vignette and optional chrome disabled\n",stdout);return 0;}
+    if([arg isEqual:@"--skeleterm"]||[arg isEqual:@"skeleterm"]){[config applySkeleterm];TPostCLICommand(@"reload");fputs("skeleterm applied: 300-line history, effects and extension processes disabled\n",stdout);return 0;}
     if([arg isEqual:@"--reload"]||[arg isEqual:@"reload"]){TPostCLICommand(@"reload");fputs("reload requested\n",stdout);return 0;}
     if([arg isEqual:@"--plugins"]||[arg isEqual:@"plugins"])return TRunMarketplace(@"plugins",config);
     if([arg isEqual:@"--themes"]||[arg isEqual:@"themes"])return TRunMarketplace(@"themes",config);
+    if([arg isEqual:@"--profiles"]||[arg isEqual:@"profiles"])return TRunMarketplace(@"profiles",config);
     if([arg isEqual:@"--marketplace"]||[arg isEqual:@"marketplace"]||[arg isEqual:@"modules"])return TRunMarketplace(@"all",config);
     if([arg isEqual:@"--install"]||[arg isEqual:@"install"]){if(argc<3){fputs("termatica: install requires a module id\n",stderr);return 2;}NSString *identifier=[[NSString stringWithUTF8String:argv[2]] lowercaseString];NSDictionary *item=TMarketplaceItemNamed(identifier);if(!item){fprintf(stderr,"termatica: module not found: %s\n",identifier.UTF8String);return 2;}NSError *error=nil;if(!TInstallModule(item,config,&error)){fprintf(stderr,"termatica: install failed: %s\n",(error.localizedDescription?:@"unknown error").UTF8String);return 1;}TPostCLICommand(@"reload");fprintf(stdout,"installed %s\n",identifier.UTF8String);return 0;}
     fprintf(stderr,"termatica: unknown command: %s\nRun 'termatica --help'.\n",arg.UTF8String);return 2;
@@ -413,7 +435,7 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
         setenv("TERM", "xterm-256color", 1);
         setenv("COLORTERM", "truecolor", 1);
         setenv("TERM_PROGRAM", "Termatica", 1);
-        setenv("TERM_PROGRAM_VERSION", "0.2.0", 1);
+        setenv("TERM_PROGRAM_VERSION", "0.3.0", 1);
         NSString *bin=NSBundle.mainBundle.executablePath.stringByDeletingLastPathComponent;
         NSString *path=NSProcessInfo.processInfo.environment[@"PATH"]?:@"/usr/bin:/bin:/usr/sbin:/sbin";
         setenv("PATH",[[NSString stringWithFormat:@"%@:%@",bin,path] UTF8String],1);
@@ -709,53 +731,21 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
 
 @class TWindowController;
 
-@interface TCommandRow : NSTableRowView
-@property TConfig *config;
-@end
-@implementation TCommandRow
-- (void)drawSelectionInRect:(NSRect)dirtyRect{[[self.config.selection colorWithAlphaComponent:0.92]setFill];NSRectFill(self.bounds);[self.config.accent setStroke];NSBezierPath *p=[NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds,0.5,0.5)];[p stroke];}
-@end
-
-@interface TPaletteController : NSViewController <NSTableViewDataSource,NSTableViewDelegate,NSSearchFieldDelegate>
-@property TConfig *config;
-@property(nonatomic) NSArray<NSDictionary *> *commands;
-@property (copy) void (^execute)(NSDictionary *command, NSString *query);
-@property NSTextField *search;
-@property NSTableView *table;
-@property NSArray<NSDictionary *> *filtered;
-@end
-
-@implementation TPaletteController
-- (void)loadView {
-    NSView *root=[[NSView alloc]initWithFrame:NSMakeRect(0,0,520,350)];root.wantsLayer=YES;root.layer.backgroundColor=self.config.panel.CGColor;root.layer.borderColor=self.config.accent.CGColor;root.layer.borderWidth=1;
-    NSTextField *heading=[NSTextField labelWithString:@":: COMMAND MATRIX // TYPE /PLUGIN OR >SHELL"];heading.frame=NSMakeRect(16,316,488,16);heading.font=[NSFont fontWithName:self.config.fontName size:10]?:[NSFont monospacedSystemFontOfSize:10 weight:NSFontWeightMedium];heading.textColor=self.config.muted;[root addSubview:heading];
-    _search=[[NSTextField alloc]initWithFrame:NSMakeRect(16,278,488,28)];_search.placeholderString=@">_ COMMAND / THEME / EXTENSION";_search.delegate=(id)self;_search.target=self;_search.action=@selector(accept:);_search.accessibilityLabel=@"Command search";_search.font=[NSFont fontWithName:self.config.fontName size:13]?:[NSFont monospacedSystemFontOfSize:13 weight:NSFontWeightRegular];_search.textColor=self.config.foreground;_search.backgroundColor=[self.config.background colorWithAlphaComponent:0.86];_search.focusRingType=NSFocusRingTypeNone;_search.bezelStyle=NSTextFieldSquareBezel;[root addSubview:_search];
-    NSScrollView *scroll=[[NSScrollView alloc]initWithFrame:NSMakeRect(8,8,504,258)];scroll.drawsBackground=NO;scroll.hasVerticalScroller=YES;
-    _table=[[NSTableView alloc]initWithFrame:scroll.bounds];NSTableColumn *col=[[NSTableColumn alloc]initWithIdentifier:@"command"];col.width=490;[_table addTableColumn:col];_table.headerView=nil;_table.rowHeight=32;_table.backgroundColor=NSColor.clearColor;_table.delegate=self;_table.dataSource=self;_table.target=self;_table.doubleAction=@selector(accept:);scroll.documentView=_table;[root addSubview:scroll];self.view=root;
-}
-- (void)setCommands:(NSArray<NSDictionary *> *)commands { _commands=commands;[self filter]; }
-- (void)controlTextDidChange:(NSNotification *)obj { [self filter]; }
-- (void)filter { NSString *q=_search.stringValue.lowercaseString?:@"";if(!q.length||[q hasPrefix:@">"])_filtered=_commands;else{NSString *needle=q;if([q hasPrefix:@"/"])needle=[q componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet].firstObject;NSPredicate *p=[NSPredicate predicateWithBlock:^BOOL(NSDictionary *c,NSDictionary *b){return [[c[@"title"] lowercaseString] containsString:needle]||[[c[@"id"] lowercaseString] containsString:needle]||[[c[@"slash"] lowercaseString] hasPrefix:needle];}];_filtered=[_commands filteredArrayUsingPredicate:p];}[_table reloadData];if(_filtered.count)[_table selectRowIndexes:[NSIndexSet indexSetWithIndex:0] byExtendingSelection:NO]; }
-- (NSInteger)numberOfRowsInTableView:(NSTableView *)tableView{return (NSInteger)_filtered.count;}
-- (NSTableRowView *)tableView:(NSTableView *)tableView rowViewForRow:(NSInteger)row{TCommandRow *v=[TCommandRow new];v.config=self.config;return v;}
-- (NSView *)tableView:(NSTableView *)tableView viewForTableColumn:(NSTableColumn *)tableColumn row:(NSInteger)row {NSTextField *v=[tableView makeViewWithIdentifier:@"cell" owner:self];if(!v){v=[NSTextField labelWithString:@""];v.identifier=@"cell";v.font=[NSFont fontWithName:self.config.fontName size:12]?:[NSFont monospacedSystemFontOfSize:12 weight:NSFontWeightMedium];v.textColor=self.config.foreground;}NSDictionary *c=_filtered[(NSUInteger)row];v.stringValue=[NSString stringWithFormat:@" > %@",[(c[@"title"]?:c[@"id"]) uppercaseString]];return v;}
-- (void)accept:(id)sender { if([_search.stringValue hasPrefix:@">"]){if(self.execute)self.execute(@{@"id":@"terminal.send"},[_search.stringValue substringFromIndex:1]);return;}NSInteger row=_table.selectedRow;if(row<0&&_filtered.count)row=0;if(row>=0&&row<(NSInteger)_filtered.count&&self.execute){NSString *query=_search.stringValue;if([query hasPrefix:@"/"]){NSRange space=[query rangeOfCharacterFromSet:NSCharacterSet.whitespaceCharacterSet];query=space.location==NSNotFound?@"":[query substringFromIndex:space.location+1];}self.execute(_filtered[(NSUInteger)row],query);} }
-@end
-
 @interface TExtensionHost : NSObject
 @property NSMutableArray<NSDictionary *> *commands;
 @property (copy) void (^commandsChanged)(void);
 @property(weak) TTerminalView *activeTerminal;
 - (void)loadExtensions;
+- (void)unloadExtensions;
 - (void)executeCommand:(NSDictionary *)command context:(NSDictionary *)context terminal:(TTerminalView *)terminal;
 @end
 
 @implementation TExtensionHost { NSMutableDictionary<NSString *,NSPipe *> *_inputs; NSMutableDictionary<NSString *,NSTask *> *_tasks; }
 - (instancetype)init { if((self=[super init])){_commands=[NSMutableArray array];_inputs=[NSMutableDictionary dictionary];_tasks=[NSMutableDictionary dictionary];}return self; }
 - (NSString *)directory { return [TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"]; }
+- (void)unloadExtensions {for(NSTask *task in _tasks.allValues){[(NSPipe *)task.standardOutput fileHandleForReading].readabilityHandler=nil;if(task.isRunning)[task terminate];}[_tasks removeAllObjects];[_inputs removeAllObjects];[_commands removeAllObjects];self.activeTerminal=nil;if(self.commandsChanged)self.commandsChanged();}
 - (void)loadExtensions {
-    for (NSTask *task in _tasks.allValues) if (task.isRunning) [task terminate];
-    [_tasks removeAllObjects]; [_inputs removeAllObjects]; [_commands removeAllObjects];
+    [self unloadExtensions];
     NSFileManager *fm = NSFileManager.defaultManager;
     [fm createDirectoryAtPath:self.directory withIntermediateDirectories:YES attributes:nil error:nil];
     for (NSString *name in [fm contentsOfDirectoryAtPath:self.directory error:nil] ?: @[]) {
@@ -816,7 +806,7 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
         if ([task launchAndReturnError:&error]) {
             _tasks[identifier] = task; _inputs[identifier] = input;
             [self send:@{@"jsonrpc":@"2.0", @"method":@"initialize",
-                         @"params":@{@"protocolVersion":@1, @"appVersion":@"0.2.0"}} to:identifier];
+                         @"params":@{@"protocolVersion":@1, @"appVersion":@"0.3.0"}} to:identifier];
         } else TLog(@"extension %@ failed to launch: %@", identifier, error.localizedDescription);
     }
     if (self.commandsChanged) self.commandsChanged();
@@ -825,55 +815,58 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
 - (void)executeCommand:(NSDictionary *)command context:(NSDictionary *)context terminal:(TTerminalView *)terminal {NSString *ext=command[@"extension"];if(!ext)return;self.activeTerminal=terminal;NSMutableDictionary *params=[context mutableCopy];params[@"id"]=command[@"id"]?:@"";[self send:@{@"jsonrpc":@"2.0",@"method":@"command.execute",@"params":params} to:ext];}
 @end
 
+@interface TTabRailView : NSView
+@property TConfig *config;
+@end
+
+@implementation TTabRailView
+- (BOOL)isFlipped{return YES;}
+- (void)drawRect:(NSRect)dirtyRect {[[self.config.background colorWithAlphaComponent:0.98]setFill];NSRectFill(dirtyRect);[[self.config.muted colorWithAlphaComponent:0.28]setFill];NSRectFill(NSMakeRect(self.bounds.size.width-1,0,1,self.bounds.size.height));}
+@end
+
 @interface TWindowController : NSWindowController <NSWindowDelegate>
 @property TTerminalView *terminal;
+@property NSMutableArray<TTerminalView *> *terminals;
 @property TConfig *config;
 @property TExtensionHost *extensions;
 - (instancetype)initWithConfig:(TConfig *)config extensions:(TExtensionHost *)extensions;
-- (void)showPalette;
+- (void)addTab;
+- (void)closeTab;
+- (void)selectTabNumber:(NSInteger)number;
 - (void)reloadConfig;
-- (void)refreshPaletteIfShown;
+- (BOOL)executeExtensionNamed:(NSString *)name query:(NSString *)query;
 @end
 
-@implementation TWindowController { NSPopover *_popover; TPaletteController *_palette; NSString *_cwd; NSView *_root; NSVisualEffectView *_effect; }
+@implementation TWindowController { NSString *_cwd; NSView *_root; NSVisualEffectView *_effect; TTabRailView *_tabRail; NSMutableArray<NSButton *> *_tabButtons; }
 - (instancetype)initWithConfig:(TConfig *)config extensions:(TExtensionHost *)extensions {
     NSWindow *window=[[NSWindow alloc]initWithContentRect:NSMakeRect(0,0,920,600) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];
-    if((self=[super initWithWindow:window])){_config=config;_extensions=extensions;window.delegate=(id)self;window.title=@"Termatica";window.titleVisibility=NSWindowTitleHidden;window.titlebarAppearsTransparent=YES;window.styleMask|=NSWindowStyleMaskFullSizeContentView;window.minSize=NSMakeSize(480,280);window.tabbingMode=NSWindowTabbingModeDisallowed;window.movableByWindowBackground=NO;[window center];
+    if((self=[super initWithWindow:window])){_config=config;_extensions=extensions;_terminals=[NSMutableArray array];_tabButtons=[NSMutableArray array];window.delegate=(id)self;window.title=@"Termatica";window.titleVisibility=NSWindowTitleHidden;window.titlebarAppearsTransparent=YES;window.styleMask|=NSWindowStyleMaskFullSizeContentView;window.minSize=NSMakeSize(480,280);window.tabbingMode=NSWindowTabbingModeDisallowed;window.movableByWindowBackground=NO;[window center];
         _root=[[NSView alloc]initWithFrame:window.contentView.bounds];_root.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;window.contentView=_root;
-        _effect=[[NSVisualEffectView alloc]initWithFrame:_root.bounds];_effect.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;_effect.blendingMode=NSVisualEffectBlendingModeBehindWindow;[_root addSubview:_effect];
-        _terminal=[[TTerminalView alloc]initWithFrame:_root.bounds config:config];_terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;[_root addSubview:_terminal positioned:NSWindowAbove relativeTo:_effect];
-        __weak typeof(self) weakSelf=self;_terminal.titleChanged=^(NSString *title){weakSelf.window.title=title.length?title:@"Termatica";};_terminal.cwdChanged=^(NSString *cwd){__strong typeof(weakSelf) self=weakSelf;if(self)self->_cwd=cwd;};
-        [self applyAppearance];[_terminal resizeGrid];
-        [_terminal startShell];[window makeFirstResponder:_terminal];
+        _tabRail=[[TTabRailView alloc]initWithFrame:NSZeroRect];_tabRail.config=config;_tabRail.autoresizingMask=NSViewHeightSizable;[_root addSubview:_tabRail];
+        [self applyAppearance];[self addTab];
     }return self;
 }
+- (TTerminalView *)newTerminal {
+    TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:_root.bounds config:self.config];terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;__weak typeof(self) weakSelf=self;__weak TTerminalView *weakTerminal=terminal;terminal.titleChanged=^(NSString *title){__strong typeof(weakSelf) self=weakSelf;if(self&&self.terminal==weakTerminal)self.window.title=title.length?title:@"Termatica";};terminal.cwdChanged=^(NSString *cwd){__strong typeof(weakSelf) self=weakSelf;if(self&&self.terminal==weakTerminal)self->_cwd=cwd;};return terminal;
+}
+- (void)addTab {TTerminalView *terminal=[self newTerminal];[_terminals addObject:terminal];[_root addSubview:terminal positioned:NSWindowBelow relativeTo:_tabRail];self.terminal=terminal;[self rebuildTabs];[self layoutTabs];[terminal startShell];[self.window makeFirstResponder:terminal];}
+- (void)closeTab {if(_terminals.count<=1){[self.window close];return;}NSUInteger index=[_terminals indexOfObject:self.terminal];TTerminalView *closing=self.terminal;[_terminals removeObjectAtIndex:index];[closing removeFromSuperview];self.terminal=_terminals[MIN(index,_terminals.count-1)];[self rebuildTabs];[self layoutTabs];[self.window makeFirstResponder:self.terminal];}
+- (void)selectTabButton:(NSButton *)sender {[self selectTabNumber:sender.tag+1];}
+- (void)selectTabNumber:(NSInteger)number {NSInteger index=number-1;if(index<0||index>=(NSInteger)_terminals.count)return;self.terminal=_terminals[(NSUInteger)index];_cwd=[self.terminal workingDirectory];[self rebuildTabs];[self layoutTabs];[self.window makeFirstResponder:self.terminal];}
+- (void)rebuildTabs {for(NSButton *button in _tabButtons)[button removeFromSuperview];[_tabButtons removeAllObjects];_tabRail.hidden=_terminals.count<2;if(_tabRail.hidden)return;NSUInteger active=[_terminals indexOfObject:self.terminal];for(NSUInteger i=0;i<_terminals.count;i++){NSButton *button=[NSButton buttonWithTitle:[NSString stringWithFormat:@"%lu",(unsigned long)i+1] target:self action:@selector(selectTabButton:)];button.tag=(NSInteger)i;button.bordered=NO;button.wantsLayer=YES;button.layer.cornerRadius=3;button.layer.backgroundColor=i==active?[self.config.selection colorWithAlphaComponent:0.72].CGColor:NSColor.clearColor.CGColor;button.font=[NSFont monospacedDigitSystemFontOfSize:11 weight:i==active?NSFontWeightSemibold:NSFontWeightRegular];button.contentTintColor=i==active?self.config.foreground:self.config.muted;button.accessibilityLabel=[NSString stringWithFormat:@"Terminal tab %lu",(unsigned long)i+1];[_tabRail addSubview:button];[_tabButtons addObject:button];}}
+- (void)layoutTabs {CGFloat rail=_terminals.count>1?self.config.tabRailWidth:0,w=_root.bounds.size.width,h=_root.bounds.size.height;_tabRail.frame=NSMakeRect(0,0,rail,h);CGFloat top=_tabRail.safeAreaInsets.top+6;for(NSUInteger i=0;i<_tabButtons.count;i++)_tabButtons[i].frame=NSMakeRect(3,top+i*30,rail-6,24);for(TTerminalView *terminal in _terminals){terminal.hidden=terminal!=self.terminal;terminal.frame=NSMakeRect(rail,0,MAX(1,w-rail),h);}[self.terminal resizeGrid];[_tabRail setNeedsDisplay:YES];}
+- (void)windowDidResize:(NSNotification *)notification {[self layoutTabs];}
 - (void)applyAppearance {
-    self.window.alphaValue=self.config.windowOpacity;self.window.opaque=NO;self.window.backgroundColor=NSColor.clearColor;
-    _effect.hidden=getenv("TERMATICA_NO_BLUR")!=NULL;_effect.state=self.config.blur?NSVisualEffectStateActive:NSVisualEffectStateInactive;
+    self.window.alphaValue=self.config.windowOpacity;self.window.opaque=NO;self.window.backgroundColor=NSColor.clearColor;_tabRail.config=self.config;
+    if(!self.config.skeleterm&&!_effect){_effect=[[NSVisualEffectView alloc]initWithFrame:_root.bounds];_effect.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;_effect.blendingMode=NSVisualEffectBlendingModeBehindWindow;[_root addSubview:_effect positioned:NSWindowBelow relativeTo:nil];}
+    _effect.hidden=self.config.skeleterm||getenv("TERMATICA_NO_BLUR")!=NULL;_effect.state=self.config.blur?NSVisualEffectStateActive:NSVisualEffectStateInactive;
     if([self.config.blurMaterial isEqual:@"sidebar"])_effect.material=NSVisualEffectMaterialSidebar;else if([self.config.blurMaterial isEqual:@"menu"])_effect.material=NSVisualEffectMaterialMenu;else if([self.config.blurMaterial isEqual:@"popover"])_effect.material=NSVisualEffectMaterialPopover;else _effect.material=NSVisualEffectMaterialHUDWindow;
-    [self.terminal setNeedsDisplay:YES];
+    for(TTerminalView *terminal in _terminals)[terminal setNeedsDisplay:YES];[self rebuildTabs];[self layoutTabs];
 }
-- (NSArray<NSDictionary *> *)allCommands {NSMutableArray *a=[@[@{@"id":@"marketplace.open",@"title":@"MODULES :: OPEN IN TERMINAL"},@{@"id":@"config.open",@"title":@"CONFIG :: OPEN JSON"},@{@"id":@"config.reload",@"title":@"CONFIG :: RELOAD"},@{@"id":@"themes.open",@"title":@"THEMES :: OPEN FOLDER"},@{@"id":@"extensions.open",@"title":@"PLUGINS :: OPEN FOLDER"},@{@"id":@"extensions.reload",@"title":@"PLUGINS :: RELOAD"},@{@"id":@"terminal.clear",@"title":@"TERMINAL :: CLEAR GRID"},@{@"id":@"terminal.zoomIn",@"title":@"FONT :: SIZE +1"},@{@"id":@"terminal.zoomOut",@"title":@"FONT :: SIZE -1"}] mutableCopy];for(NSString *theme in self.config.installedThemeNames)[a addObject:@{@"id":@"theme.apply",@"title":[NSString stringWithFormat:@"THEME :: %@",theme.uppercaseString],@"theme":theme}];[a addObjectsFromArray:self.extensions.commands];return a;}
-- (void)showPalette {TLog(@"show command palette");if(!_palette){_palette=[TPaletteController new];_palette.config=self.config;_popover=[NSPopover new];_popover.contentViewController=_palette;_popover.behavior=NSPopoverBehaviorTransient;_popover.contentSize=NSMakeSize(520,350);__weak typeof(self) weakSelf=self;_palette.execute=^(NSDictionary *c,NSString *q){[weakSelf executeCommand:c query:q];};}_palette.commands=[self allCommands];NSRect rect=NSMakeRect(NSMidX(_terminal.bounds)-1,self.terminal.safeAreaInsets.top+4,2,2);[_popover showRelativeToRect:rect ofView:_terminal preferredEdge:NSRectEdgeMaxY];dispatch_async(dispatch_get_main_queue(),^{[self->_palette.search becomeFirstResponder];});}
-- (void)executeCommand:(NSDictionary *)c query:(NSString *)query {
-    NSString *identifier=c[@"id"];[_popover close];
-    if([identifier isEqual:@"terminal.send"]){[self.terminal sendString:query];return;}
-    if([identifier isEqual:@"marketplace.open"]){TPostCLICommand(@"all");return;}
-    if(c[@"extension"]){NSDictionary *ctx=@{@"query":query?:@"",@"cwd":_cwd?:[self.terminal workingDirectory],@"selection":[self.terminal selectedText]?:@"",@"screen":[self.terminal visibleText]?:@""};[self.extensions executeCommand:c context:ctx terminal:self.terminal];return;}
-    if([identifier isEqual:@"config.open"]){[self.config ensureEditableFile];[NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:self.config.path]];}
-    else if([identifier isEqual:@"config.reload"])[self reloadConfig];
-    else if([identifier isEqual:@"themes.open"]){NSString *path=[TConfigDirectoryPath() stringByAppendingPathComponent:@"themes"];[NSFileManager.defaultManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];[NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];}
-    else if([identifier isEqual:@"theme.apply"]){[self.config useThemeNamed:c[@"theme"]];[self.terminal reloadAppearance];[self applyAppearance];}
-    else if([identifier isEqual:@"extensions.open"]){NSString *path=[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"];[NSFileManager.defaultManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];[NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:path]];}
-    else if([identifier isEqual:@"extensions.reload"])[self.extensions loadExtensions];
-    else if([identifier isEqual:@"terminal.clear"])[self.terminal clearTerminal];
-    else if([identifier isEqual:@"terminal.zoomIn"]){self.config.fontSize=MIN(48,self.config.fontSize+1);[self.terminal reloadAppearance];}
-    else if([identifier isEqual:@"terminal.zoomOut"]){self.config.fontSize=MAX(8,self.config.fontSize-1);[self.terminal reloadAppearance];}
-}
-- (void)reloadConfig {[self.config reload];[self.terminal reloadAppearance];[self applyAppearance];if(_popover.shown)[_popover close];_palette=nil;_popover=nil;}
-- (void)refreshPaletteIfShown { if (_popover.shown) _palette.commands=[self allCommands]; }
+- (void)reloadConfig {[self.config reload];for(TTerminalView *terminal in _terminals)[terminal reloadAppearance];[self applyAppearance];}
+- (BOOL)executeExtensionNamed:(NSString *)name query:(NSString *)query {NSString *needle=[name hasPrefix:@"/"]?name:[@"/" stringByAppendingString:name];for(NSDictionary *command in self.extensions.commands){if([command[@"slash"] isEqual:needle]||[command[@"id"] isEqual:name]){NSDictionary *ctx=@{@"query":query?:@"",@"cwd":_cwd?:[self.terminal workingDirectory],@"selection":[self.terminal selectedText]?:@"",@"screen":[self.terminal visibleText]?:@""};[self.extensions executeCommand:command context:ctx terminal:self.terminal];return YES;}}return NO;}
 @end
-
+static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length){item.keyEquivalent=@"";item.keyEquivalentModifierMask=0;return;}NSArray<NSString *> *parts=[spec.lowercaseString componentsSeparatedByString:@"+"];NSEventModifierFlags mask=0;NSString *key=parts.lastObject;for(NSString *part in parts){if([part isEqual:@"cmd"]||[part isEqual:@"command"])mask|=NSEventModifierFlagCommand;else if([part isEqual:@"shift"])mask|=NSEventModifierFlagShift;else if([part isEqual:@"option"]||[part isEqual:@"alt"])mask|=NSEventModifierFlagOption;else if([part isEqual:@"control"]||[part isEqual:@"ctrl"])mask|=NSEventModifierFlagControl;}if([key isEqual:@"plus"])key=@"+";else if([key isEqual:@"space"])key=@" ";item.keyEquivalent=key?:@"";item.keyEquivalentModifierMask=mask;}
 @interface TAppDelegate : NSObject <NSApplicationDelegate>
 @property TConfig *config;
 @property TExtensionHost *extensions;
@@ -881,32 +874,33 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
 @end
 
 @implementation TAppDelegate
-- (void)applicationDidFinishLaunching:(NSNotification *)notification {_config=[TConfig new];_extensions=[TExtensionHost new];_windows=[NSMutableArray array];[self buildMenu];[NSDistributedNotificationCenter.defaultCenter addObserver:self selector:@selector(handleCLICommand:) name:TCLICommandNotification object:nil suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];__weak typeof(self) weakSelf=self;_extensions.commandsChanged=^{TWindowController *w=weakSelf.windows.lastObject;[w refreshPaletteIfShown];};[_extensions loadExtensions];[self newWindow:nil];}
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {_config=[TConfig new];_extensions=[TExtensionHost new];_windows=[NSMutableArray array];[self buildMenu];[NSDistributedNotificationCenter.defaultCenter addObserver:self selector:@selector(handleCLICommand:) name:TCLICommandNotification object:nil suspensionBehavior:NSNotificationSuspensionBehaviorDeliverImmediately];if(!self.config.skeleterm)[_extensions loadExtensions];[self newWindow:nil];}
 - (void)dealloc {[NSDistributedNotificationCenter.defaultCenter removeObserver:self];}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return YES;}
-- (void)newWindow:(id)sender {TWindowController *c=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions];[self.windows addObject:c];[c showWindow:nil];c.window.initialFirstResponder=c.terminal;[c.window makeFirstResponder:c.terminal];}
+- (void)newWindow:(id)sender {TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions];[self.windows addObject:controller];[controller showWindow:nil];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];}
 - (TWindowController *)active {return (TWindowController *)NSApp.keyWindow.windowController?:self.windows.lastObject;}
-- (void)showPalette:(id)sender{[[self active] showPalette];}
-- (void)reloadConfig:(id)sender{[[self active] reloadConfig];}
+- (void)newTab:(id)sender {[[self active] addTab];}
+- (void)closeTab:(id)sender {[[self active] closeTab];}
+- (void)selectTab:(NSMenuItem *)sender {[[self active] selectTabNumber:sender.tag];}
+- (void)reloadConfig:(id)sender{[self reloadAll];}
 - (void)clearTerminal:(id)sender{[[self active].terminal clearTerminal];}
-- (void)zoomIn:(id)sender{self.config.fontSize=MIN(48,self.config.fontSize+1);[[self active].terminal reloadAppearance];}
-- (void)zoomOut:(id)sender{self.config.fontSize=MAX(8,self.config.fontSize-1);[[self active].terminal reloadAppearance];}
-- (void)zoomReset:(id)sender{self.config.fontSize=13;[[self active].terminal reloadAppearance];}
+- (void)zoomIn:(id)sender{self.config.fontSize=MIN(48,self.config.fontSize+1);for(TTerminalView *terminal in [self active].terminals)[terminal reloadAppearance];}
+- (void)zoomOut:(id)sender{self.config.fontSize=MAX(8,self.config.fontSize-1);for(TTerminalView *terminal in [self active].terminals)[terminal reloadAppearance];}
+- (void)zoomReset:(id)sender{self.config.fontSize=11;for(TTerminalView *terminal in [self active].terminals)[terminal reloadAppearance];}
 - (void)openConfig:(id)sender{[self.config ensureEditableFile];[NSWorkspace.sharedWorkspace openURL:[NSURL fileURLWithPath:self.config.path]];}
-- (void)openMarketplaceCategory:(NSString *)category {NSString *command=[category isEqual:@"plugins"]?@"plugins":([category isEqual:@"themes"]?@"themes":@"marketplace");[[self active].terminal sendString:[NSString stringWithFormat:@"termatica %@\r",command]];[[self active].window makeFirstResponder:[self active].terminal];}
+- (void)openMarketplaceCategory:(NSString *)category {NSString *command=[category isEqual:@"plugins"]?@"plugins":([category isEqual:@"themes"]?@"themes":([category isEqual:@"profiles"]?@"profiles":@"marketplace"));[[self active].terminal sendString:[NSString stringWithFormat:@"termatica %@\r",command]];[[self active].window makeFirstResponder:[self active].terminal];}
 - (void)openMarketplace:(id)sender {[self openMarketplaceCategory:@"all"];}
-- (void)reloadAll {for(TWindowController *window in self.windows)[window reloadConfig];[self.extensions loadExtensions];}
-- (void)handleCLICommand:(NSNotification *)note {NSString *command=note.userInfo[@"command"];dispatch_async(dispatch_get_main_queue(),^{if([command isEqual:@"reload"])[self reloadAll];else [self openMarketplaceCategory:command];});}
+- (void)reloadAll {[self.config reload];[self buildMenu];if(self.config.skeleterm)[self.extensions unloadExtensions];else[self.extensions loadExtensions];for(TWindowController *window in self.windows)[window reloadConfig];}
+- (void)handleCLICommand:(NSNotification *)note {NSDictionary *request=note.userInfo;dispatch_async(dispatch_get_main_queue(),^{NSString *command=request[@"command"];if([command isEqual:@"reload"])[self reloadAll];else if([command isEqual:@"run"]){if(![[self active] executeExtensionNamed:request[@"name"] query:request[@"query"]])TLog(@"extension command not found: %@",request[@"name"]);}else [self openMarketplaceCategory:command];});}
 - (void)buildMenu {
-    NSMenu *main=[NSMenu new];NSApp.mainMenu=main;
-    NSMenuItem *appItem=[NSMenuItem new];[main addItem:appItem];NSMenu *app=[NSMenu new];appItem.submenu=app;[app addItemWithTitle:@"About Termatica" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];[app addItem:NSMenuItem.separatorItem];[app addItemWithTitle:@"Open Configuration…" action:@selector(openConfig:) keyEquivalent:@","];[app addItem:NSMenuItem.separatorItem];[app addItemWithTitle:@"Hide Termatica" action:@selector(hide:) keyEquivalent:@"h"];[app addItemWithTitle:@"Quit Termatica" action:@selector(terminate:) keyEquivalent:@"q"];
-    NSMenuItem *shellItem=[NSMenuItem new];[main addItem:shellItem];NSMenu *shell=[[NSMenu alloc]initWithTitle:@"Shell"];shellItem.submenu=shell;[shell addItemWithTitle:@"New Window" action:@selector(newWindow:) keyEquivalent:@"n"];[shell addItemWithTitle:@"Command Palette…" action:@selector(showPalette:) keyEquivalent:@"k"];[shell addItemWithTitle:@"Module Bay…" action:@selector(openMarketplace:) keyEquivalent:@"m"];[shell addItemWithTitle:@"Reload Configuration" action:@selector(reloadConfig:) keyEquivalent:@"r"];[shell addItemWithTitle:@"Clear" action:@selector(clearTerminal:) keyEquivalent:@"l"];
-    NSMenuItem *editItem=[NSMenuItem new];[main addItem:editItem];NSMenu *edit=[[NSMenu alloc]initWithTitle:@"Edit"];editItem.submenu=edit;[edit addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@"c"];[edit addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@"v"];[edit addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@"a"];
-    NSMenuItem *viewItem=[NSMenuItem new];[main addItem:viewItem];NSMenu *view=[[NSMenu alloc]initWithTitle:@"View"];viewItem.submenu=view;[view addItemWithTitle:@"Increase Text Size" action:@selector(zoomIn:) keyEquivalent:@"+"];[view addItemWithTitle:@"Decrease Text Size" action:@selector(zoomOut:) keyEquivalent:@"-"];[view addItemWithTitle:@"Reset Text Size" action:@selector(zoomReset:) keyEquivalent:@"0"];
-    for(NSMenuItem *item in main.itemArray)for(NSMenuItem *child in item.submenu.itemArray)if(child.action&&![NSStringFromSelector(child.action) hasPrefix:@"copy"]&&![NSStringFromSelector(child.action) hasPrefix:@"paste"]&&![NSStringFromSelector(child.action) hasPrefix:@"select"]&&child.target==nil)child.target=self;
+    NSDictionary *keys=self.config.keybindings;NSMenu *main=[NSMenu new];NSApp.mainMenu=main;
+    NSMenuItem *appItem=[NSMenuItem new];[main addItem:appItem];NSMenu *app=[NSMenu new];appItem.submenu=app;[app addItemWithTitle:@"About Termatica" action:@selector(orderFrontStandardAboutPanel:) keyEquivalent:@""];[app addItem:NSMenuItem.separatorItem];NSMenuItem *config=[app addItemWithTitle:@"Open Configuration…" action:@selector(openConfig:) keyEquivalent:@""];TApplyMenuShortcut(config,keys[@"openConfig"]);[app addItem:NSMenuItem.separatorItem];[app addItemWithTitle:@"Hide Termatica" action:@selector(hide:) keyEquivalent:@"h"];[app addItemWithTitle:@"Quit Termatica" action:@selector(terminate:) keyEquivalent:@"q"];
+    NSMenuItem *shellItem=[NSMenuItem new];[main addItem:shellItem];NSMenu *shell=[[NSMenu alloc]initWithTitle:@"Shell"];shellItem.submenu=shell;NSMenuItem *newWindow=[shell addItemWithTitle:@"New Window" action:@selector(newWindow:) keyEquivalent:@""];TApplyMenuShortcut(newWindow,keys[@"newWindow"]);NSMenuItem *newTab=[shell addItemWithTitle:@"New Tab" action:@selector(newTab:) keyEquivalent:@""];TApplyMenuShortcut(newTab,keys[@"newTab"]);NSMenuItem *closeTab=[shell addItemWithTitle:@"Close Tab" action:@selector(closeTab:) keyEquivalent:@""];TApplyMenuShortcut(closeTab,keys[@"closeTab"]);[shell addItem:NSMenuItem.separatorItem];NSMenuItem *clear=[shell addItemWithTitle:@"Clear Terminal" action:@selector(clearTerminal:) keyEquivalent:@""];TApplyMenuShortcut(clear,keys[@"clearTerminal"]);NSMenuItem *modules=[shell addItemWithTitle:@"Terminal Modules…" action:@selector(openMarketplace:) keyEquivalent:@""];TApplyMenuShortcut(modules,keys[@"modules"]);NSMenuItem *reload=[shell addItemWithTitle:@"Reload Configuration" action:@selector(reloadConfig:) keyEquivalent:@""];TApplyMenuShortcut(reload,keys[@"reload"]);[shell addItem:NSMenuItem.separatorItem];for(NSInteger i=1;i<=9;i++){NSMenuItem *tab=[shell addItemWithTitle:[NSString stringWithFormat:@"Select Tab %ld",(long)i] action:@selector(selectTab:) keyEquivalent:@""];tab.tag=i;tab.target=self;NSString *name=[NSString stringWithFormat:@"tab%ld",(long)i],*fallback=[NSString stringWithFormat:@"cmd+%ld",(long)i];TApplyMenuShortcut(tab,keys[name]?:fallback);}
+    NSMenuItem *editItem=[NSMenuItem new];[main addItem:editItem];NSMenu *edit=[[NSMenu alloc]initWithTitle:@"Edit"];editItem.submenu=edit;NSMenuItem *copy=[edit addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@""];TApplyMenuShortcut(copy,keys[@"copy"]);NSMenuItem *paste=[edit addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@""];TApplyMenuShortcut(paste,keys[@"paste"]);NSMenuItem *selectAll=[edit addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@""];TApplyMenuShortcut(selectAll,keys[@"selectAll"]);
+    NSMenuItem *viewItem=[NSMenuItem new];[main addItem:viewItem];NSMenu *view=[[NSMenu alloc]initWithTitle:@"View"];viewItem.submenu=view;NSMenuItem *zoomIn=[view addItemWithTitle:@"Increase Text Size" action:@selector(zoomIn:) keyEquivalent:@""];TApplyMenuShortcut(zoomIn,keys[@"zoomIn"]);NSMenuItem *zoomOut=[view addItemWithTitle:@"Decrease Text Size" action:@selector(zoomOut:) keyEquivalent:@""];TApplyMenuShortcut(zoomOut,keys[@"zoomOut"]);NSMenuItem *zoomReset=[view addItemWithTitle:@"Reset Text Size" action:@selector(zoomReset:) keyEquivalent:@""];TApplyMenuShortcut(zoomReset,keys[@"zoomReset"]);
+    for(NSMenuItem *item in main.itemArray)for(NSMenuItem *child in item.submenu.itemArray)if(child.action&&child.target==nil&&child.action!=@selector(copy:)&&child.action!=@selector(paste:)&&child.action!=@selector(selectAll:))child.target=self;
 }
 @end
-
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         TProcessStartedAt = CFAbsoluteTimeGetCurrent();

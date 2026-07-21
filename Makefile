@@ -56,7 +56,7 @@ install: release
 check: release
 	@tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.2.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'plugins'; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  printf 'q\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \

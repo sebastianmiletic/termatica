@@ -16,11 +16,11 @@ Success means the terminal launches almost instantly, presents only the shell by
 
 ## Brand Personality
 
-Raw, fast, and unmistakably retro. Termatica should feel like an amber phosphor terminal recovered from an alternate 1980s: pixel-minded monospace typography, ASCII symbols, deliberate glow, and restrained CRT texture. The app icon is the same instrument reduced to a `>_` prompt inside an ASCII frame.
+Raw, fast, and terminal-native. Termatica starts as a restrained neutral terminal with a complete ANSI palette. Optional phosphor themes add pixel-minded monospace typography, glow, and CRT texture. The app icon reduces the instrument to a lightning prompt inside a terminal frame.
 
 ## Anti-references
 
-Avoid Electron chrome, IDE density, dashboards, permanent toolbars, tab furniture, oversized controls, rounded web cards, candy gradients, and generic neon cyberpunk decoration. The default window must never compete with the shell.
+Avoid Electron chrome, IDE density, dashboards, permanent toolbars, horizontal tab bars, oversized controls, rounded web cards, candy gradients, and generic neon cyberpunk decoration. The tiny numbered tab rail appears only when more than one shell exists; the default window must never compete with the shell.
 
 ## Design Principles
 

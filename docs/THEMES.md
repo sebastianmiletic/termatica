@@ -6,10 +6,10 @@ Themes are open JSON files. Termatica searches bundled themes first and then `~/
 
 1. Create `~/.config/termatica/themes/`.
 2. Copy a theme such as `my-crt.json` into that folder.
-3. Set `"theme": "my-crt"` in `~/.config/termatica/config.json`, or press Command-K and choose its **THEME ::** command.
+3. Set `"theme": "my-crt"` in `~/.config/termatica/config.json`, or run `termatica themes` and choose it with the arrow keys and Enter.
 4. Press Command-R if the change is not already visible.
 
-The three bundled starting points are `amber-crt`, `ghost-glass`, and `green-screen`.
+The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, and `green-screen`. `terminal-default` is the neutral, opaque default with standard ANSI colors; the phosphor themes are optional.
 
 ## Theme format
 

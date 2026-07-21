@@ -8,7 +8,7 @@ termatica themes
 termatica marketplace
 ```
 
-Type a row number or module id to install. For automation, bypass the browser:
+Use Up/Down or J/K to move, Enter to install, and Q to exit. When input is redirected, type a row number or module id. For automation, bypass the browser:
 
 ```sh
 termatica install editor-deck

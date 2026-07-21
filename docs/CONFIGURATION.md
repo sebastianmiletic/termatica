@@ -9,24 +9,37 @@ Termatica reads `~/.config/termatica/config.json`. Press Command-, to create/ope
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
   "fontName": "Monaco",
-  "fontSize": 13,
+  "fontSize": 11,
   "padding": 12,
   "scrollback": 5000,
-  "theme": "amber-crt",
+  "theme": "terminal-default",
   "appearance": {
-    "backgroundOpacity": 0.91,
+    "backgroundOpacity": 1.0,
     "windowOpacity": 1.0,
-    "blur": true,
+    "blur": false,
     "blurMaterial": "hud",
-    "glow": 0.16,
-    "scanlines": 0.08,
-    "vignette": 0.12,
+    "glow": 0,
+    "scanlines": 0,
+    "vignette": 0,
     "cursorStyle": "block"
   },
+  "tabs": {
+    "railWidth": 34
+  },
   "keybindings": {
-    "commandPalette": "cmd+k",
+    "openConfig": "cmd+,",
+    "newWindow": "cmd+n",
+    "newTab": "cmd+t",
+    "closeTab": "cmd+w",
+    "clearTerminal": "cmd+k",
+    "modules": "cmd+m",
+    "reload": "cmd+r",
     "copy": "cmd+c",
-    "paste": "cmd+v"
+    "paste": "cmd+v",
+    "selectAll": "cmd+a",
+    "zoomIn": "cmd+plus",
+    "zoomOut": "cmd+-",
+    "zoomReset": "cmd+0"
   }
 }
 ```
@@ -42,6 +55,7 @@ Termatica reads `~/.config/termatica/config.json`. Press Command-, to create/ope
 | `padding` | 0–40 points inside the terminal canvas. |
 | `scrollback` | 100–100000 retained lines. |
 | `theme` | Installed theme filename without `.json`, or an inline theme object. |
+| `tabs.railWidth` | 28–64 point numbered rail width; the rail is hidden with one tab. |
 
 Appearance values:
 
@@ -58,4 +72,6 @@ Appearance values:
 
 Configuration appearance values override the same values supplied by the selected theme. This lets you keep a theme’s colors but change its transparency or effects locally.
 
-Keybinding names are reserved by the v1 format. The current app uses the standard macOS menu shortcuts shown in the README; full remapping is planned for a later core revision.
+Each `keybindings` value uses modifiers joined with `+`, such as `cmd+k`, `cmd+shift+t`, or `control+space`. Set a value to an empty string to leave that menu action unbound. Tab selection defaults to `cmd+1` through `cmd+9` and can be overridden with `tab1` through `tab9`.
+
+Every visible characteristic is file-controlled: font, font size, padding, theme colors, ANSI palette, transparency, blur, glow, scanlines, vignette, cursor, tab width, and menu shortcuts. Command-K clears the terminal by default; it does not open application UI.

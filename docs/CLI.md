@@ -9,7 +9,9 @@ Every shell opened by Termatica receives the app's `Contents/MacOS` directory at
 | `termatica plugins` | Browse and install plugins in an ANSI terminal interface |
 | `termatica themes` | Browse and install themes in an ANSI terminal interface |
 | `termatica marketplace` | Browse all plugins, themes, and profiles |
+| `termatica profiles` | Browse resource and appearance profiles |
 | `termatica install <id>` | Install a known module directly |
+| `termatica run <name> [query]` | Invoke a command registered by an installed extension |
 | `termatica editor <name> [file ...]` | Run a supported editor in the current terminal |
 | `termatica editor list` | List supported editor adapters |
 | `termatica reload` | Reload configuration and extensions in the running app |
@@ -22,6 +24,8 @@ Every shell opened by Termatica receives the app's `Contents/MacOS` directory at
 | `termatica skeleterm` | Apply the lowest-resource profile |
 
 Legacy flag spellings such as `termatica --plugins` remain supported.
+
+Interactive module lists use Up/Down or J/K to move, Enter to install, and Q to exit. When input is redirected, the browser accepts a row number or module id instead.
 
 ## Editor adapter
 
