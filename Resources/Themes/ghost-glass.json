@@ -1,0 +1,27 @@
+{
+  "name": "Ghost Glass",
+  "background": "#080B0D",
+  "foreground": "#C7D7D4",
+  "cursor": "#E6FBF5",
+  "accent": "#8FBDB2",
+  "panel": "#0A0F11",
+  "muted": "#63827C",
+  "selection": "#26433E",
+  "appearance": {
+    "backgroundOpacity": 0.54,
+    "windowOpacity": 0.96,
+    "blur": true,
+    "blurMaterial": "popover",
+    "glow": 0.06,
+    "scanlines": 0.03,
+    "vignette": 0.08,
+    "cursorStyle": "bar",
+    "ribbonHeight": 38
+  },
+  "palette": [
+    "#101719", "#D77874", "#83B38C", "#C8B97A",
+    "#75A6BB", "#A68CB8", "#77B4AF", "#D7E2DF",
+    "#506064", "#E4938E", "#9DCCA5", "#DDD092",
+    "#8EBFD2", "#BCA3CE", "#8CCAC4", "#F0F7F5"
+  ]
+}

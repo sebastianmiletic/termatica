@@ -1,0 +1,6 @@
+{
+  "id": "dev.termatica.hello",
+  "name": "Hello Termatica",
+  "version": "1.0.0",
+  "entry": "extension.py"
+}

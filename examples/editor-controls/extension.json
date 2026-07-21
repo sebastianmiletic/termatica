@@ -1,0 +1,6 @@
+{
+  "id": "dev.termatica.editor-controls",
+  "name": "Termatica Editor Controls",
+  "version": "1.0.0",
+  "entry": "extension.py"
+}

@@ -1,0 +1,27 @@
+{
+  "name": "Amber CRT",
+  "background": "#100B08",
+  "foreground": "#FFAD42",
+  "cursor": "#FFD17A",
+  "accent": "#FFAD42",
+  "panel": "#160E09",
+  "muted": "#9A5D24",
+  "selection": "#56300F",
+  "appearance": {
+    "backgroundOpacity": 0.91,
+    "windowOpacity": 1,
+    "blur": true,
+    "blurMaterial": "hud",
+    "glow": 0.16,
+    "scanlines": 0.08,
+    "vignette": 0.12,
+    "cursorStyle": "block",
+    "ribbonHeight": 40
+  },
+  "palette": [
+    "#140C08", "#E45B3D", "#B7B84B", "#FFAD42",
+    "#D48745", "#C66D82", "#D7A05D", "#FFD19A",
+    "#6B3C1E", "#FF7656", "#D4D56A", "#FFD17A",
+    "#E79C61", "#E1889A", "#F0BB75", "#FFF0D0"
+  ]
+}

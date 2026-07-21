@@ -1,0 +1,34 @@
+name: Bug report
+description: Report reproducible terminal or extension behavior
+title: "[Bug]: "
+labels: [bug]
+body:
+  - type: input
+    id: macos
+    attributes:
+      label: macOS version and Mac model
+    validations:
+      required: true
+  - type: input
+    id: shell
+    attributes:
+      label: Shell and command
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior and reproduction steps
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Verbose logs
+      description: Launch with TERMATICA_VERBOSE=1 and remove sensitive data.

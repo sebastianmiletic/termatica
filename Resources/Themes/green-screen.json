@@ -1,0 +1,27 @@
+{
+  "name": "Green Screen",
+  "background": "#061007",
+  "foreground": "#79E66D",
+  "cursor": "#C6FF9D",
+  "accent": "#79E66D",
+  "panel": "#08160A",
+  "muted": "#478A43",
+  "selection": "#1B4B1C",
+  "appearance": {
+    "backgroundOpacity": 0.94,
+    "windowOpacity": 1,
+    "blur": false,
+    "blurMaterial": "hud",
+    "glow": 0.22,
+    "scanlines": 0.12,
+    "vignette": 0.16,
+    "cursorStyle": "underline",
+    "ribbonHeight": 40
+  },
+  "palette": [
+    "#061007", "#D56A68", "#79E66D", "#CEDB65",
+    "#5AAE8C", "#9D83AC", "#62C6A0", "#BFE6B8",
+    "#315535", "#EF8581", "#9BFA8D", "#EAF080",
+    "#75CBA7", "#B69CC5", "#80DFBA", "#E1FFDA"
+  ]
+}
