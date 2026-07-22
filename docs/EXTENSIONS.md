@@ -2,6 +2,8 @@
 
 Termatica extensions are executable folders. The host has no language runtime requirement and communicates over stdin/stdout using one JSON object per line.
 
+The plugins shipped in Termatica's own catalog are recognized by identifier and registered natively, avoiding a persistent helper process. Custom and downloaded extensions use the complete protocol below without reduced capabilities.
+
 ## Package layout
 
 ```text
@@ -31,7 +33,7 @@ The entry file must be executable. It may be a compiled program or a script with
 Termatica starts each valid extension and writes:
 
 ```json
-{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.1"}}
+{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.2"}}
 ```
 
 An extension registers a terminal command by writing:

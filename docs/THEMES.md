@@ -24,10 +24,12 @@ The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, 
   "muted": "#8B6AA8",
   "selection": "#44265F",
   "appearance": {
-    "backgroundOpacity": 0.52,
-    "windowOpacity": 0.96,
+    "backgroundOpacity": 0.50,
+    "windowOpacity": 1,
     "blur": true,
-    "blurMaterial": "popover",
+    "topBar": true,
+    "blurMaterial": "under-window",
+    "hyprlandBlur": true,
     "glow": 0.08,
     "scanlines": 0.02,
     "vignette": 0.08,
@@ -44,13 +46,17 @@ The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, 
 
 Colors use `#RRGGBB` or `#RRGGBBAA`. `palette` contains the standard 8 ANSI colors followed by their 8 bright variants.
 
+`appearance.hyprlandBlur` lets a transparent theme request the shared masked blur surface when terminals are tiled. An explicit `tabs.hyprlandBlur` setting in `config.json` always wins.
+
 ## Transparency recipes
 
 - Solid and fastest: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: false`.
 - Dark glass: `backgroundOpacity: 0.55`, `windowOpacity: 1`, `blur: true`, `blurMaterial: "hud"`.
-- Nearly invisible: lower `backgroundOpacity`, keep foreground contrast high, and use `blurMaterial: "popover"`.
+- Stronger background separation: lower `backgroundOpacity`, keep `windowOpacity: 1`, and use `blurMaterial: "under-window"`.
 
 macOS accessibility settings can reduce transparency system-wide. A theme should remain readable when blur is unavailable. Set `scanlines`, `glow`, and `vignette` to `0` for a clean pixel-terminal look.
+
+The macOS titlebar uses the same window material and transparency as the terminal. Set `topBar` to `false` to remove the titlebar and all three traffic-light buttons; the window keeps rounded corners, remains resizable, and never turns the terminal surface into a drag target.
 
 ## Share themes
 

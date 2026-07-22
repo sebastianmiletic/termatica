@@ -9,7 +9,7 @@ THEMES := $(patsubst Resources/Themes/%,$(APP)/Contents/Resources/Themes/%,$(wil
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
-COMMON := -fobjc-arc -fmodules -Os -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -framework AppKit -framework Foundation -framework QuartzCore
+COMMON := -fobjc-arc -fmodules -Oz -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore
 
 .PHONY: all release run clean size install check package
 
@@ -54,15 +54,42 @@ install: release
 	ditto $(APP) /Applications/Termatica.app
 
 check: release
-	@tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
+	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.1$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.2$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'plugins'; \
+	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  printf 'q\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) install editor-deck >/dev/null; \
-	  test -x "$$tmp/extensions/editor-deck/extension.py"; \
-	  printf '%s\n' '{"method":"initialize"}' '{"method":"command.execute","params":{"id":"editor.vim","query":"README.md"}}' | "$$tmp/extensions/editor-deck/extension.py" | grep -q 'termatica editor vim README.md'; \
+	  for id in hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hyprland-layout; do \
+	    TERMATICA_CONFIG_DIR="$$tmp" $(CLI) install "$$id" >/dev/null; \
+	    test -x "$$tmp/extensions/$$id/extension.py"; \
+	    if test "$$id" != hyprland-layout; then \
+	      printf '%s\n' '{"method":"initialize"}' | "$$tmp/extensions/$$id/extension.py" >"$$tmp/$$id.out"; \
+	      grep -q 'command.register' "$$tmp/$$id.out"; \
+	    fi; \
+	  done; \
+	  printf '%s\n' '{"method":"initialize"}' '{"method":"command.execute","params":{"id":"editor.vim","query":"README.md"}}' | "$$tmp/extensions/editor-deck/extension.py" >"$$tmp/editor.out"; \
+	  grep -q 'termatica editor vim README.md' "$$tmp/editor.out"; \
+	  printf 'hello\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
+	  grep -q '"hello"' "$$tmp/config.json"; \
+	  printf 'hello\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
+	  ! grep -q '"hello"' "$$tmp/config.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) skeleterm >/dev/null; \
+	  grep -Eq '"skeleterm"[[:space:]]*:[[:space:]]*true' "$$tmp/config.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs save dev | grep -q 'SAVED + ACTIVE'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs list | grep -q '^active[[:space:]]dev$$'; \
+	  test "$$(stat -f '%Lp' "$$tmp/configs/dev.json")" = 600; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs rename dev work | grep -q 'RENAMED'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs use work | grep -q 'ACTIVE'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs delete work | grep -q 'DELETED'; \
+	  test ! -e "$$tmp/configs/work.json"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs path)" = "$$tmp/configs"; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) marketplace >/dev/null 2>&1; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) profiles >/dev/null 2>&1; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) catalog >/dev/null 2>&1; \
+	  printf 'amber-crt\nterminal-default\nq\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) themes >/dev/null; \
+	  grep -q '"terminal-default"' "$$tmp/config.json"; \
 	  echo "Termatica checks passed"
 
 package: check
@@ -73,7 +100,7 @@ package: check
 	ln -s /Applications build/dmg/Applications
 	ditto -c -k --sequesterRsrc --keepParent $(APP) $(ZIP)
 	hdiutil create -ov -volname Termatica -srcfolder build/dmg -format UDZO $(DMG)
-	shasum -a 256 $(DMG) $(ZIP) > dist/SHA256SUMS
+	cd dist && shasum -a 256 $(notdir $(DMG)) $(notdir $(ZIP)) > SHA256SUMS
 	@echo "Release artifacts written to dist/"
 
 clean:

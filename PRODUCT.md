@@ -16,7 +16,7 @@ Success means the terminal launches almost instantly, presents only the shell by
 
 ## Brand Personality
 
-Raw, fast, and terminal-native. Termatica starts as a restrained neutral terminal with a complete ANSI palette. Optional phosphor themes add pixel-minded monospace typography, glow, and CRT texture. The app icon reduces the instrument to a lightning prompt inside a terminal frame.
+Raw, fast, and terminal-native. Termatica starts as a restrained neutral terminal with a complete ANSI palette. Optional phosphor themes add pixel-minded monospace typography, glow, and CRT texture. The app icon is a single white lightning bolt with no frame or decorative container.
 
 ## Anti-references
 
