@@ -31,7 +31,7 @@ The entry file must be executable. It may be a compiled program or a script with
 Termatica starts each valid extension and writes:
 
 ```json
-{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.0"}}
+{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.1"}}
 ```
 
 An extension registers a terminal command by writing:

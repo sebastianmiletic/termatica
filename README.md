@@ -21,14 +21,13 @@
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript engine, bundled shell, package manager, or third-party framework. The default window is the shell itself. Themes, plugins, AI tools, and editor integrations live in user-owned files outside the app bundle.
 
 ```text
-┌──────────────┐
-│ ●  ●  ●      │
-├──────────────┤
-│     /\       │
-│    / /__  _  │
-│   /___ / |_| │
-│      /_/  ▔  │
-└──────────────┘
+╭────────────────╮
+│ ●  ●  ●        │
+├────────────────┤
+│ ⚡> termatica   │
+│    ✓ shell     │
+│    ~/code   _  │
+╰────────────────╯
 ```
 
 The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal.
@@ -56,7 +55,7 @@ module> editor-deck
 - Terminal-native plugin, theme, and profile browser
 - Arrow-key and Enter navigation in every module browser
 - Editor controls for Vim, Neovim, terminal-mode Emacs, Nano, Micro, and Helix
-- Minimal numbered vertical tabs that disappear when only one terminal is open
+- Compact connected numbered tabs that grow downward and disappear when only one terminal is open
 - Neutral dark default theme with the complete ANSI color palette
 - Skeleterm reduced-overhead profile with effects, extensions, and deep scrollback disabled
 - Language-neutral JSON-lines extension protocol

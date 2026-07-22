@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.3.1
+
+### Added
+
+- Compact connected tab capsule that grows with the number of terminal sessions.
+- Subtle tab hover and resize transitions using native AppKit animation.
+- Color-enabled defaults for standard macOS terminal commands.
+
+### Changed
+
+- Tabs now float at the top-left instead of occupying the full window height.
+- Command-K clears scrollback through the shell so the active prompt and path redraw correctly.
+- The app icon now combines a lightning prompt, terminal frame, and multicolor command output.
+
 ## 0.3.0
 
 ### Added
