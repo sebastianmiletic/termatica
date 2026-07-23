@@ -29,7 +29,7 @@ Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It ha
     V
 ```
 
-The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal. The v0.3.3 app bundle is **600,266 bytes / 586.2 KiB** before DMG/ZIP packaging.
+The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal. The v0.3.4 app bundle is **600,586 bytes / 586.5 KiB** before DMG/ZIP packaging.
 
 ```text
 +------------------------------------------------------------------+
@@ -63,6 +63,8 @@ module> editor-deck
 - Command-Shift-T splits the focused terminal downward, with or without Hyprland Layout
 - Fair round-robin PTY output scheduling so one noisy process cannot starve the other terminals or keyboard input
 - Direct active-PTY keyboard routing, with no full-canvas focus/layout pass on each tiled keystroke
+- Immediate shell, output-queue, and restore-snapshot cleanup when a terminal closes
+- Cached 1× tile motion with burst throttling, so rapid terminal creation does not redraw every cell at 60 FPS
 - Restored terminal layout, working directories, and bounded scrollback after an ordinary app restart
 - User- and AI-readable JSON config profiles managed entirely inside the terminal
 - Optional Hidden Path prompt showing `;` at home/root and relative paths such as `Coding/OpenCloud ;`
@@ -94,7 +96,7 @@ Use `make check` for command and plugin protocol tests, `make size` for the bund
 
 ## Size and memory
 
-- Universal `.app` bundle: **600,266 bytes / 586.2 KiB**
+- Universal `.app` bundle: **600,586 bytes / 586.5 KiB**
 - Clean one-tab physical footprint measured on Apple Silicon/macOS 26: **39.8 MiB**
 - Skeleterm one-tab physical footprint with no titlebar: **37.0 MiB**
 - Three live Hyprland PTYs at 1434×793: **65.8 MiB** physical footprint

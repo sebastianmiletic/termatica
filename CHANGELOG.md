@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.4
+
+- Closed terminals now stop their shell and discard queued PTY output immediately, even when a rapid follow-up action interrupts the closing animation.
+- Command-W on the final terminal removes it from the controller before the app exits, so it cannot be written back into the next session.
+- Closing any terminal invalidates the previous restore snapshot at once; a crash before the next ordinary quit can no longer resurrect already-closed terminals.
+- Hyprland tile motion now animates cached terminal snapshots instead of re-rendering every cell in every terminal at 60 FPS.
+- Animation snapshots use bounded 1× buffers, and rapid bursts or layouts above six terminals switch directly to their final geometry instead of allocating repeated transient frames.
+- Rapid tile actions cancel their previous transient animation state cleanly, preventing retained exit tiles and stale geometry.
+- PTY read callbacks verify that their source is still live before queuing data, and the global fair-drain queue releases terminated terminals.
+
 ## 0.3.3
 
 ### Added

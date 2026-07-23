@@ -56,9 +56,13 @@ install: release
 check: release
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.3$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.4$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'plugins'; \
 	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
+	  grep -Fq '[closing stopShellTerminating:YES];[closing removeFromSuperview];TInvalidateSessionSnapshot();' src/main.m; \
+	  grep -Fq 'if(controller.terminals.count)TWriteSession' src/main.m; \
+	  grep -Fq 'if(terminate)TCancelTerminalDrain(self)' src/main.m; \
+	  grep -Fq '_canvas.animationSnapshots=snapshots' src/main.m; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  printf 'q\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
 	  for id in hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hidden-path hyprland-layout; do \
