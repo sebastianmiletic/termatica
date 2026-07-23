@@ -113,6 +113,8 @@ The installed app keeps user state outside its signed bundle:
 
 All files are plain JSON or source-readable extension files, so users and coding agents can edit them directly. `termatica config-path` prints the active file and `termatica configs path` prints the profile folder. `TERMATICA_CONFIG_DIR=/some/folder` redirects every one of these files for portable setups or automation.
 
+Prompt integrations are plugins rather than themes. Hidden Path stores its readable Zsh/Bash integration at `extensions/hidden-path/prompt.sh`; the module browser maintains its enabled state through `disabledPlugins`.
+
 Open `termatica configs` to manage named configurations without leaving the terminal. The browser uses Up/Down or J/K, Enter, S, R, D, and Q. Direct subcommands are documented in [the CLI reference](CLI.md).
 
 Session restoration intentionally starts fresh login shells and replays only saved terminal text. It cannot preserve the in-memory state of a running editor, AI CLI, or other child process.

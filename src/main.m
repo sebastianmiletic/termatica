@@ -267,7 +267,8 @@ static NSArray<NSDictionary *> *TModuleItems(void) {
       @{@"id":@"emacs-control",@"kind":@"plugins",@"icon":@"[EM]",@"title":@"EMACS CONTROL",@"detail":@"/emacs opens terminal-mode Emacs with no GUI"},
       @{@"id":@"nano-control",@"kind":@"plugins",@"icon":@"[NA]",@"title":@"NANO CONTROL",@"detail":@"/nano opens files in Nano inside the active terminal"},
       @{@"id":@"micro-control",@"kind":@"plugins",@"icon":@"[MI]",@"title":@"MICRO CONTROL",@"detail":@"/micro opens files in Micro inside the active terminal"},
-      @{@"id":@"helix-control",@"kind":@"plugins",@"icon":@"[HX]",@"title":@"HELIX CONTROL",@"detail":@"/hx opens files in Helix inside the active terminal"}
+      @{@"id":@"helix-control",@"kind":@"plugins",@"icon":@"[HX]",@"title":@"HELIX CONTROL",@"detail":@"/hx opens files in Helix inside the active terminal"},
+      @{@"id":@"hidden-path",@"kind":@"plugins",@"icon":@"[;/]",@"title":@"HIDDEN PATH",@"detail":@"short prompt paths such as Coding/OpenCloud ;"}
       ,@{@"id":@"hyprland-layout",@"kind":@"plugins",@"icon":@"[HY]",@"title":@"HYPRLAND LAYOUT",@"detail":@"tiles terminal sessions with native snapping and motion"}
     ];
 }
@@ -298,6 +299,45 @@ static NSString *TEditorControlsScript(NSString *identifier) {
     return [NSString stringWithFormat:@"#!/usr/bin/env python3\nimport json,sys,shlex\neditors=%@\nfor line in sys.stdin:\n try:\n  m=json.loads(line)\n  if m.get('method')=='initialize':\n   for key,item in editors.items(): print(json.dumps({'jsonrpc':'2.0','method':'command.register','params':{'id':'editor.'+key,'title':'Editor: '+item['title']+' (terminal)','slash':'/'+key}}),flush=True)\n  elif m.get('method')=='command.execute':\n   key=m.get('params',{}).get('id','').split('.')[-1]; query=m.get('params',{}).get('query',''); item=editors.get(key)\n   if item:\n    text='termatica editor '+shlex.quote(key)+((' '+shlex.quote(query)) if query else '')+'\\n'\n    print(json.dumps({'jsonrpc':'2.0','method':'terminal.sendText','params':{'text':text}}),flush=True)\n except Exception as error:\n  print(json.dumps({'jsonrpc':'2.0','method':'ui.notify','params':{'message':'editor control: '+str(error)}}),flush=True)\n",encoded];
 }
 
+static NSString *THiddenPathPromptScript(void) {
+    return @"# Termatica Hidden Path prompt integration\n"
+    @"_termatica_hidden_path_value() {\n"
+    @"  local path=\"$PWD\"\n"
+    @"  if [ \"$path\" = \"$HOME\" ] || [ \"$path\" = \"/\" ]; then TERMATICA_HIDDEN_PATH_VALUE=\"\"\n"
+    @"  elif [ \"${path#\"$HOME\"/}\" != \"$path\" ]; then TERMATICA_HIDDEN_PATH_VALUE=\"${path#\"$HOME\"/}\"\n"
+    @"  else TERMATICA_HIDDEN_PATH_VALUE=\"${path#/}\"\n"
+    @"  fi\n"
+    @"}\n"
+    @"_termatica_hidden_path_precmd() {\n"
+    @"  _termatica_hidden_path_value\n"
+    @"  if [ -n \"$TERMATICA_HIDDEN_PATH_VALUE\" ]; then PS1=\"$TERMATICA_HIDDEN_PATH_VALUE ; \"; else PS1=\"; \"; fi\n"
+    @"  if [ -n \"${ZSH_VERSION:-}\" ]; then PROMPT=\"$PS1\"; fi\n"
+    @"}\n"
+    @"_termatica_hidden_path_action=\"${1:-on}\"\n"
+    @"if [ \"$_termatica_hidden_path_action\" = \"on\" ]; then\n"
+    @"  if [ -n \"${ZSH_VERSION:-}\" ]; then\n"
+    @"    if [ -z \"${TERMATICA_HIDDEN_PATH_SAVED_PROMPT+x}\" ]; then typeset -g TERMATICA_HIDDEN_PATH_SAVED_PROMPT=\"$PROMPT\"; fi\n"
+    @"    autoload -Uz add-zsh-hook\n"
+    @"    add-zsh-hook -d precmd _termatica_hidden_path_precmd 2>/dev/null\n"
+    @"    add-zsh-hook precmd _termatica_hidden_path_precmd\n"
+    @"    _termatica_hidden_path_precmd\n"
+    @"  elif [ -n \"${BASH_VERSION:-}\" ]; then\n"
+    @"    if [ -z \"${TERMATICA_HIDDEN_PATH_SAVED_PS1+x}\" ]; then TERMATICA_HIDDEN_PATH_SAVED_PS1=\"$PS1\"; TERMATICA_HIDDEN_PATH_SAVED_PROMPT_COMMAND=\"${PROMPT_COMMAND:-}\"; fi\n"
+    @"    PROMPT_COMMAND=\"_termatica_hidden_path_precmd${TERMATICA_HIDDEN_PATH_SAVED_PROMPT_COMMAND:+;$TERMATICA_HIDDEN_PATH_SAVED_PROMPT_COMMAND}\"\n"
+    @"    _termatica_hidden_path_precmd\n"
+    @"  fi\n"
+    @"else\n"
+    @"  if [ -n \"${ZSH_VERSION:-}\" ]; then\n"
+    @"    autoload -Uz add-zsh-hook\n"
+    @"    add-zsh-hook -d precmd _termatica_hidden_path_precmd 2>/dev/null\n"
+    @"    if [ -n \"${TERMATICA_HIDDEN_PATH_SAVED_PROMPT+x}\" ]; then PROMPT=\"$TERMATICA_HIDDEN_PATH_SAVED_PROMPT\"; PS1=\"$PROMPT\"; unset TERMATICA_HIDDEN_PATH_SAVED_PROMPT; fi\n"
+    @"  elif [ -n \"${BASH_VERSION:-}\" ]; then\n"
+    @"    if [ -n \"${TERMATICA_HIDDEN_PATH_SAVED_PS1+x}\" ]; then PS1=\"$TERMATICA_HIDDEN_PATH_SAVED_PS1\"; PROMPT_COMMAND=\"$TERMATICA_HIDDEN_PATH_SAVED_PROMPT_COMMAND\"; unset TERMATICA_HIDDEN_PATH_SAVED_PS1 TERMATICA_HIDDEN_PATH_SAVED_PROMPT_COMMAND; fi\n"
+    @"  fi\n"
+    @"fi\n"
+    @"unset _termatica_hidden_path_action TERMATICA_HIDDEN_PATH_VALUE\n";
+}
+
 static BOOL TWritePlugin(NSString *identifier,NSDictionary *manifest,NSData *script,NSError **error) {NSString *entry=[manifest[@"entry"] isKindOfClass:NSString.class]?manifest[@"entry"]:@"extension";if(!TSafeIdentifier(identifier)||[entry containsString:@"/"]||[entry containsString:@".."]||!script.length){if(error)*error=[NSError errorWithDomain:@"TermaticaModules" code:1 userInfo:@{NSLocalizedDescriptionKey:@"invalid plugin package"}];return NO;}NSString *root=[TEnsureDirectory(@"extensions") stringByAppendingPathComponent:identifier];NSFileManager *fm=NSFileManager.defaultManager;if(![fm createDirectoryAtPath:root withIntermediateDirectories:YES attributes:nil error:error])return NO;NSData *json=[NSJSONSerialization dataWithJSONObject:manifest options:NSJSONWritingPrettyPrinted error:error];if(![json writeToFile:[root stringByAppendingPathComponent:@"extension.json"] options:NSDataWritingAtomic error:error])return NO;NSString *path=[root stringByAppendingPathComponent:entry];if(![script writeToFile:path options:NSDataWritingAtomic error:error])return NO;return [fm setAttributes:@{NSFilePosixPermissions:@0755} ofItemAtPath:path error:error];}
 
 static BOOL TInstallModule(NSDictionary *item,TConfig *config,NSError **error) {
@@ -307,9 +347,11 @@ static BOOL TInstallModule(NSDictionary *item,TConfig *config,NSError **error) {
     if(![kind isEqual:@"plugins"])return NO;
     NSDictionary *manifest=@{@"id":[NSString stringWithFormat:@"com.termatica.%@",identifier],@"name":identifier,@"version":@"1.0.0",@"entry":@"extension.py"};NSString *script=nil;
     if([identifier isEqual:@"editor-deck"]||[identifier hasSuffix:@"-control"]){script=TEditorControlsScript(identifier);}
-    else if([identifier isEqual:@"hyprland-layout"]){script=@"#!/usr/bin/env python3\nimport sys\nfor line in sys.stdin: pass\n";}
+    else if([identifier isEqual:@"hyprland-layout"]||[identifier isEqual:@"hidden-path"]){script=@"#!/usr/bin/env python3\nimport sys\nfor line in sys.stdin: pass\n";}
     else {NSString *command=[identifier isEqual:@"pi-bridge"]?@"pi":@"printf '\\033[38;2;122;162;247mTermatica\\033[0m %s\\n'";NSString *slash=[identifier isEqual:@"pi-bridge"]?@"/pi":@"/hello";NSString *title=[identifier isEqual:@"pi-bridge"]?@"Pi: send prompt":@"Hello: write into shell";script=[NSString stringWithFormat:@"#!/usr/bin/env python3\nimport json,sys,shlex\nfor line in sys.stdin:\n try:\n  m=json.loads(line)\n  if m.get('method')=='initialize': print(json.dumps({'jsonrpc':'2.0','method':'command.register','params':{'id':'%@.run','title':'%@','slash':'%@'}}),flush=True)\n  elif m.get('method')=='command.execute':\n   q=m.get('params',{}).get('query',''); print(json.dumps({'jsonrpc':'2.0','method':'terminal.sendText','params':{'text':\"%@ \"+shlex.quote(q)+\"\\n\"}}),flush=True)\n except Exception: pass\n",identifier,title,slash,command];}
-    BOOL ok=TWritePlugin(identifier,manifest,[script dataUsingEncoding:NSUTF8StringEncoding],error);if(ok)[config setPlugin:identifier enabled:YES];return ok;
+    BOOL ok=TWritePlugin(identifier,manifest,[script dataUsingEncoding:NSUTF8StringEncoding],error);
+    if(ok&&[identifier isEqual:@"hidden-path"]){NSString *path=[[[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"] stringByAppendingPathComponent:identifier] stringByAppendingPathComponent:@"prompt.sh"];ok=[[THiddenPathPromptScript() dataUsingEncoding:NSUTF8StringEncoding] writeToFile:path options:NSDataWritingAtomic error:error];}
+    if(ok)[config setPlugin:identifier enabled:YES];return ok;
 }
 
 static BOOL TThemeInstalled(NSString *identifier) {NSString *user=[[TConfigDirectoryPath() stringByAppendingPathComponent:@"themes"] stringByAppendingPathComponent:[identifier stringByAppendingPathExtension:@"json"]];NSString *bundled=[NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:[NSString stringWithFormat:@"Themes/%@.json",identifier]];return [NSFileManager.defaultManager fileExistsAtPath:user]||[NSFileManager.defaultManager fileExistsAtPath:bundled];}
@@ -369,9 +411,9 @@ static int TRunEditorCLI(int argc,const char *argv[]) {
 static int TRunCLI(int argc, const char *argv[]) {
     NSString *arg=argc>1?[NSString stringWithUTF8String:argv[1]]:@"--help";
     if([arg isEqual:@"--help"]||[arg isEqual:@"-h"]||[arg isEqual:@"help"]){
-        fputs("Termatica 0.3.2\n\nUSAGE\n  termatica <command> [arguments]\n\nTERMINAL COMMANDS\n  plugins            Browse plugins with arrow keys\n  themes             Browse themes with arrow keys\n  configs            Manage portable saved configurations\n  install <id>       Install a built-in module\n  run <name> [text]  Run an installed extension command\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro or Helix\n  reload             Reload config and installed extensions\n\nFILES AND MODES\n  config             Open editable config.json\n  config-path        Print the active config path for users and agents\n  config-dir         Open the Termatica data folder\n  plugins-dir        Open installed extensions\n  themes-dir         Open installed themes\n  skeleterm          Apply minimum-memory mode\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n\nLong commands also accept their legacy --command spelling.\n",stdout);return 0;
+        fputs("Termatica 0.3.3\n\nUSAGE\n  termatica <command> [arguments]\n\nTERMINAL COMMANDS\n  plugins            Browse plugins with arrow keys\n  themes             Browse themes with arrow keys\n  configs            Manage portable saved configurations\n  install <id>       Install a built-in module\n  run <name> [text]  Run an installed extension command\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro or Helix\n  reload             Reload config and installed extensions\n\nFILES AND MODES\n  config             Open editable config.json\n  config-path        Print the active config path for users and agents\n  config-dir         Open the Termatica data folder\n  plugins-dir        Open installed extensions\n  themes-dir         Open installed themes\n  skeleterm          Apply minimum-memory mode\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n\nLong commands also accept their legacy --command spelling.\n",stdout);return 0;
     }
-    if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fputs("Termatica 0.3.2\n",stdout);return 0;}
+    if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fputs("Termatica 0.3.3\n",stdout);return 0;}
     if([arg isEqual:@"editor"]||[arg isEqual:@"--editor"]||[arg isEqual:@"edit"]||[arg isEqual:@"--edit"])return TRunEditorCLI(argc,argv);
     if([arg isEqual:@"run"]||[arg isEqual:@"--run"]){if(argc<3){fputs("termatica: run requires an extension command name\n",stderr);return 2;}NSMutableArray *parts=[NSMutableArray array];for(int i=3;i<argc;i++)[parts addObject:[NSString stringWithUTF8String:argv[i]]];BOOL sent=TPostCLIRequest(@{@"command":@"run",@"name":[NSString stringWithUTF8String:argv[2]],@"query":[parts componentsJoinedByString:@" "]});if(!sent){fputs("termatica: the Termatica app is not running\n",stderr);return 1;}return 0;}
     TConfig *config=[TConfig new];
@@ -427,6 +469,7 @@ enum { TParseText, TParseEscape, TParseCSI, TParseOSC, TParseOSCEscape };
 - (NSString *)visibleText;
 - (NSString *)sessionTextWithMaximumLines:(NSUInteger)maximumLines;
 - (void)restoreSessionText:(NSString *)text;
+- (void)setHiddenPathEnabled:(BOOL)enabled;
 - (NSString *)workingDirectory;
 @end
 
@@ -468,11 +511,14 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
     int _utf8Needed;
     NSPoint _selectionStart, _selectionEnd;
     BOOL _selecting, _hasSelection, _tileDragging;
+    BOOL _hiddenPathDesired;
+    NSInteger _hiddenPathApplied;
+    NSUInteger _hiddenPathGeneration;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config {
     if ((self = [super initWithFrame:frame])) {
-        _config = config; _master = -1; _pid = -1; _history = [NSMutableArray array];_scratchLine=[NSMutableData data];_pendingData=[NSMutableData data];
+        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_scratchLine=[NSMutableData data];_pendingData=[NSMutableData data];
         _osc = [NSMutableString string];_attributeCache=[NSMutableDictionary dictionary];_parseState = TParseText; _cursorVisible = YES;
         _currentFG = _currentBG = TDefaultColor;
         [self reloadAppearance];
@@ -548,7 +594,9 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
         setenv("CLICOLOR", "1", 0);
         setenv("LSCOLORS", "Gxfxcxdxbxegedabagacad", 0);
         setenv("TERM_PROGRAM", "Termatica", 1);
-        setenv("TERM_PROGRAM_VERSION", "0.3.2", 1);
+        setenv("TERM_PROGRAM_VERSION", "0.3.3", 1);
+        NSString *hiddenPathScript=[[[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"] stringByAppendingPathComponent:@"hidden-path"] stringByAppendingPathComponent:@"prompt.sh"];
+        setenv("TERM_HP",hiddenPathScript.fileSystemRepresentation,1);
         if(launchDirectory.length)chdir(launchDirectory.fileSystemRepresentation);
         NSString *bin=NSBundle.mainBundle.executablePath.stringByDeletingLastPathComponent;
         NSString *path=NSProcessInfo.processInfo.environment[@"PATH"]?:@"/usr/bin:/bin:/usr/sbin:/sbin";
@@ -582,6 +630,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
     });
     dispatch_source_set_cancel_handler(source, ^{});
     dispatch_resume(source);
+    [self setHiddenPathEnabled:[self.config isPluginEnabled:@"hidden-path"]];
     return YES;
 }
 - (void)stopShellTerminating:(BOOL)terminate {dispatch_source_t source=nil;@synchronized(self){source=_readSource;_readSource=nil;if(source&&_readPaused){_readPaused=NO;dispatch_resume(source);}}if(source)dispatch_source_cancel(source);int master=_master;_master=-1;if(master>=0)close(master);pid_t child=_pid;_pid=-1;if(child>0){if(terminate)kill(child,SIGHUP);dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{int status=0;while(waitpid(child,&status,0)<0&&errno==EINTR){}});}}
@@ -612,6 +661,22 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
 - (void)sendString:(NSString *)string {
     NSData *data = [string dataUsingEncoding:NSUTF8StringEncoding];
     [self sendBytes:data.bytes length:data.length];
+}
+- (void)applyHiddenPathGeneration:(NSUInteger)generation attempt:(NSUInteger)attempt {
+    if(generation!=_hiddenPathGeneration||_master<0||_pid<=0)return;
+    pid_t foreground=tcgetpgrp(_master);
+    if(foreground!=_pid&&attempt<600){__weak typeof(self) weakSelf=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[weakSelf applyHiddenPathGeneration:generation attempt:attempt+1];});return;}
+    NSInteger desired=_hiddenPathDesired?1:0;if(_hiddenPathApplied==desired)return;
+    NSString *path=[[[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"] stringByAppendingPathComponent:@"hidden-path"] stringByAppendingPathComponent:@"prompt.sh"];
+    if(![NSFileManager.defaultManager fileExistsAtPath:path]){if(!desired)_hiddenPathApplied=0;return;}
+    NSString *command=[NSString stringWithFormat:@" . \"$TERM_HP\" %@; printf '\\033[2J\\033[H'\r",desired?@"on":@"off"];
+    [self sendString:command];
+    _hiddenPathApplied=desired;TLog(@"hidden path prompt %@",desired?@"enabled":@"disabled");
+}
+- (void)setHiddenPathEnabled:(BOOL)enabled {
+    _hiddenPathDesired=enabled;NSUInteger generation=++_hiddenPathGeneration;
+    if(_hiddenPathApplied==(enabled?1:0))return;
+    [self applyHiddenPathGeneration:generation attempt:0];
 }
 - (void)consumeData:(NSData *)data {
     static BOOL reportedFirstShellOutput = NO;
@@ -839,7 +904,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
 - (NSPoint)cellForPoint:(NSPoint)p { NSInteger x=floor((p.x-self.config.padding-self.leadingOverlayInset)/_cellWidth),y=floor((p.y-self.config.padding-self.safeAreaInsets.top)/_cellHeight); return NSMakePoint(MAX(0,MIN((NSInteger)_cols-1,x)),MAX(0,MIN((NSInteger)_rows-1,y))); }
 - (void)mouseDown:(NSEvent *)event {
     if(self.focused)self.focused();
-    [self.window makeFirstResponder:self];
+    if(!self.tiledRendering)[self.window makeFirstResponder:self];
     NSPoint local=[self convertPoint:event.locationInWindow fromView:nil];
     BOOL commandDrag=(event.modifierFlags&NSEventModifierFlagCommand)!=0;
     BOOL paddingDrag=local.y<=MAX(10,self.config.padding);
@@ -949,7 +1014,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
         NSString *entry = manifest[@"entry"];
         NSString *identifier = manifest[@"id"] ?: name;
         if (!entry.length) continue;
-        NSArray *builtIn=TBuiltInCommands(name);if(builtIn.count||[name isEqual:@"hyprland-layout"]){for(NSDictionary *definition in builtIn){NSMutableDictionary *command=[definition mutableCopy];command[@"extension"]=identifier;[_commands addObject:command];}TLog(@"plugin %@ loaded declaratively without a helper process",name);continue;}
+        NSArray *builtIn=TBuiltInCommands(name);if(builtIn.count||[name isEqual:@"hyprland-layout"]||[name isEqual:@"hidden-path"]){for(NSDictionary *definition in builtIn){NSMutableDictionary *command=[definition mutableCopy];command[@"extension"]=identifier;[_commands addObject:command];}TLog(@"plugin %@ loaded declaratively without a helper process",name);continue;}
         NSString *path = [root stringByAppendingPathComponent:entry];
         if (![fm isExecutableFileAtPath:path]) continue;
 
@@ -1000,7 +1065,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
         if ([task launchAndReturnError:&error]) {
             _tasks[identifier] = task; _inputs[identifier] = input;
             [self send:@{@"jsonrpc":@"2.0", @"method":@"initialize",
-                         @"params":@{@"protocolVersion":@1, @"appVersion":@"0.3.2"}} to:identifier];
+                         @"params":@{@"protocolVersion":@1, @"appVersion":@"0.3.3"}} to:identifier];
         } else TLog(@"extension %@ failed to launch: %@", identifier, error.localizedDescription);
     }
     if (self.commandsChanged) self.commandsChanged();
@@ -1166,10 +1231,10 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
     [_tileAnimationTimer invalidate];_tileAnimationFrom=fromFrames;_tileAnimationTo=toFrames;_tileAnimationStarted=CACurrentMediaTime();NSMutableDictionary *initial=[NSMutableDictionary dictionaryWithCapacity:_terminals.count],*initialOpacity=[NSMutableDictionary dictionary];NSUInteger initialCount=MIN(_terminals.count,fromFrames.count);for(NSUInteger i=0;i<initialCount;i++)initial[[NSValue valueWithNonretainedObject:_terminals[i]]]=fromFrames[i];if(_enteringTerminal)initialOpacity[[NSValue valueWithNonretainedObject:_enteringTerminal]]=@0;_canvas.frameOverrides=initial;_canvas.opacityOverrides=initialOpacity;_canvas.exitingTerminal=_closingTerminal;_canvas.exitingFrame=_closingTileFrom;_canvas.exitingAlpha=_closingTerminal?1:0;[_canvas setNeedsDisplay:YES];CFTimeInterval duration=[self animationDuration:0.24];__weak typeof(self) weakSelf=self;
     _tileAnimationTimer=[NSTimer timerWithTimeInterval:1.0/60.0 repeats:YES block:^(NSTimer *timer){__strong typeof(weakSelf) self=weakSelf;if(!self){[timer invalidate];return;}CGFloat t=MIN(1,(CACurrentMediaTime()-self->_tileAnimationStarted)/duration),p=1-pow(1-t,5);NSMutableDictionary *overrides=[NSMutableDictionary dictionaryWithCapacity:self->_terminals.count],*opacities=[NSMutableDictionary dictionary];NSUInteger count=MIN(self->_terminals.count,MIN(self->_tileAnimationFrom.count,self->_tileAnimationTo.count));for(NSUInteger i=0;i<count;i++){NSRect a=self->_tileAnimationFrom[i].rectValue,b=self->_tileAnimationTo[i].rectValue,r=NSMakeRect(a.origin.x+(b.origin.x-a.origin.x)*p,a.origin.y+(b.origin.y-a.origin.y)*p,a.size.width+(b.size.width-a.size.width)*p,a.size.height+(b.size.height-a.size.height)*p);overrides[[NSValue valueWithNonretainedObject:self->_terminals[i]]]=[NSValue valueWithRect:r];}if(self->_enteringTerminal)opacities[[NSValue valueWithNonretainedObject:self->_enteringTerminal]]=@(MIN(1,t*1.7));if(self->_closingTerminal){NSRect a=self->_closingTileFrom,b=self->_closingTileTo;self->_canvas.exitingFrame=NSMakeRect(a.origin.x+(b.origin.x-a.origin.x)*p,a.origin.y+(b.origin.y-a.origin.y)*p,a.size.width+(b.size.width-a.size.width)*p,a.size.height+(b.size.height-a.size.height)*p);self->_canvas.exitingAlpha=pow(1-t,1.35);}self->_canvas.frameOverrides=overrides;self->_canvas.opacityOverrides=opacities;[self->_canvas setNeedsDisplay:YES];if(t>=1){[timer invalidate];self->_tileAnimationTimer=nil;TTerminalView *closed=self->_closingTerminal;self->_closingTerminal=nil;self->_enteringTerminal=nil;self->_canvas.frameOverrides=nil;self->_canvas.opacityOverrides=nil;self->_canvas.exitingTerminal=nil;self->_canvas.exitingAlpha=0;if(closed)[closed stopShellTerminating:YES];[self layoutTabs];[self->_canvas setNeedsDisplay:YES];}}];[NSRunLoop.mainRunLoop addTimer:_tileAnimationTimer forMode:NSRunLoopCommonModes];
 }
-- (void)addTabWithVerticalSplit:(BOOL)verticalSplit {BOOL animate=_terminals.count>0,wasTiled=[self usesTiledLayout];TTerminalView *anchor=self.terminal,*terminal=[self newTerminal];terminal.verticalSplit=verticalSplit;terminal.splitAnchor=verticalSplit?anchor:nil;if(verticalSplit&&anchor){NSUInteger index=[_terminals indexOfObject:anchor];[_terminals insertObject:terminal atIndex:index==NSNotFound?_terminals.count:index+1];}else [_terminals addObject:terminal];if(animate&&self.config.tabAnimations&&[self usesTiledLayout])_enteringTerminal=terminal;[_root addSubview:terminal positioned:NSWindowBelow relativeTo:_tabRail];self.terminal=terminal;self.extensions.activeTerminal=terminal;[self rebuildTabs];_animateTabLayout=animate;BOOL changedTiling=wasTiled!=[self usesTiledLayout];if(changedTiling)[self applyAppearance];else [self layoutTabs];[terminal startShell];if(animate)[self animateNewTerminal:terminal];[self focusTerminal:terminal];}
+- (void)addTabWithVerticalSplit:(BOOL)verticalSplit {BOOL animate=_terminals.count>0,wasTiled=[self usesTiledLayout];TTerminalView *anchor=self.terminal,*terminal=[self newTerminal];terminal.verticalSplit=verticalSplit;terminal.splitAnchor=verticalSplit?anchor:nil;if(verticalSplit&&anchor){NSUInteger index=[_terminals indexOfObject:anchor];[_terminals insertObject:terminal atIndex:index==NSNotFound?_terminals.count:index+1];}else [_terminals addObject:terminal];if(animate&&self.config.tabAnimations&&[self usesTiledLayout])_enteringTerminal=terminal;[_root addSubview:terminal positioned:NSWindowBelow relativeTo:_tabRail];self.terminal=terminal;self.extensions.activeTerminal=terminal;_animateTabLayout=animate;BOOL changedTiling=wasTiled!=[self usesTiledLayout];if(changedTiling)[self applyAppearance];else{[self rebuildTabs];[self layoutTabs];}[terminal startShell];if(animate)[self animateNewTerminal:terminal];[self focusTerminal:terminal];}
 - (void)addTab {[self addTabWithVerticalSplit:NO];}
 - (void)addVerticalTab {[self addTabWithVerticalSplit:YES];}
-- (void)closeTab {if(_terminals.count<=1){[self.window close];return;}BOOL wasTiled=[self usesTiledLayout];NSUInteger index=[_terminals indexOfObject:self.terminal];TTerminalView *closing=self.terminal;if(wasTiled&&self.config.tabAnimations){NSValue *override=_canvas.frameOverrides[[NSValue valueWithNonretainedObject:closing]];_closingTerminal=closing;_closingTileFrom=override?override.rectValue:closing.frame;_closingTileTo=NSInsetRect(_closingTileFrom,NSWidth(_closingTileFrom)*0.035,NSHeight(_closingTileFrom)*0.06);_canvas.exitingTerminal=closing;}for(TTerminalView *item in _terminals)if(item.splitAnchor==closing)item.splitAnchor=closing.splitAnchor;[_terminals removeObjectAtIndex:index];[closing removeFromSuperview];self.terminal=_terminals[MIN(index,_terminals.count-1)];self.extensions.activeTerminal=self.terminal;[self rebuildTabs];_animateTabLayout=YES;if(wasTiled!=[self usesTiledLayout])[self applyAppearance];else [self layoutTabs];[self focusTerminal:self.terminal];}
+- (void)closeTab {if(_terminals.count<=1){[self.window close];return;}BOOL wasTiled=[self usesTiledLayout];NSUInteger index=[_terminals indexOfObject:self.terminal];TTerminalView *closing=self.terminal;if(wasTiled&&self.config.tabAnimations){NSValue *override=_canvas.frameOverrides[[NSValue valueWithNonretainedObject:closing]];_closingTerminal=closing;_closingTileFrom=override?override.rectValue:closing.frame;_closingTileTo=NSInsetRect(_closingTileFrom,NSWidth(_closingTileFrom)*0.035,NSHeight(_closingTileFrom)*0.06);_canvas.exitingTerminal=closing;}for(TTerminalView *item in _terminals)if(item.splitAnchor==closing)item.splitAnchor=closing.splitAnchor;[_terminals removeObjectAtIndex:index];[closing removeFromSuperview];self.terminal=_terminals[MIN(index,_terminals.count-1)];self.extensions.activeTerminal=self.terminal;_animateTabLayout=YES;if(wasTiled!=[self usesTiledLayout])[self applyAppearance];else{[self rebuildTabs];[self layoutTabs];}[self focusTerminal:self.terminal];}
 - (void)selectTabButton:(NSButton *)sender {[self selectTabNumber:sender.tag+1];}
 - (void)selectTabNumber:(NSInteger)number {
     NSInteger index=number-1;if(index<0||index>=(NSInteger)_terminals.count)return;NSUInteger oldIndex=[_terminals indexOfObject:self.terminal];if((NSUInteger)index==oldIndex){[self focusTerminal:self.terminal];return;}
@@ -1202,7 +1267,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
 }
 - (void)windowDidResize:(NSNotification *)notification {[self layoutTabs];}
 - (void)windowDidBecomeKey:(NSNotification *)notification {if(self.terminal)[self focusTerminal:self.terminal];}
-- (void)routeKeyEvent:(NSEvent *)event {if(!self.terminal)return;[self focusTerminal:self.terminal];[self.terminal keyDown:event];}
+- (void)routeKeyEvent:(NSEvent *)event {if(self.terminal)[self.terminal keyDown:event];}
 - (void)applyAppearance {
     BOOL tiled=[self usesTiledLayout];
     BOOL wantsBlur=self.config.blur&&!self.config.skeleterm&&(!tiled||self.config.hyprlandBlur)&&getenv("TERMATICA_NO_BLUR")==NULL;
@@ -1216,7 +1281,7 @@ static void TScheduleTerminalDrain(TTerminalView *terminal) {
     if([self.config.blurMaterial isEqual:@"sidebar"])_effect.material=NSVisualEffectMaterialSidebar;else if([self.config.blurMaterial isEqual:@"menu"])_effect.material=NSVisualEffectMaterialMenu;else if([self.config.blurMaterial isEqual:@"popover"])_effect.material=NSVisualEffectMaterialPopover;else if([self.config.blurMaterial isEqual:@"under-window"])_effect.material=NSVisualEffectMaterialUnderWindowBackground;else _effect.material=NSVisualEffectMaterialHUDWindow;
     for(TTerminalView *terminal in _terminals)[terminal setNeedsDisplay:YES];[self rebuildTabs];[self layoutTabs];if(self.terminal)[self focusTerminal:self.terminal];
 }
-- (void)reloadConfig {[self.config reload];for(TTerminalView *terminal in _terminals)[terminal reloadAppearance];[self applyAppearance];}
+- (void)reloadConfig {[self.config reload];BOOL hiddenPath=[self.config isPluginEnabled:@"hidden-path"];for(TTerminalView *terminal in _terminals){[terminal reloadAppearance];[terminal setHiddenPathEnabled:hiddenPath];}[self applyAppearance];}
 - (BOOL)executeExtensionNamed:(NSString *)name query:(NSString *)query {NSString *needle=[name hasPrefix:@"/"]?name:[@"/" stringByAppendingString:name];for(NSDictionary *command in self.extensions.commands){if([command[@"slash"] isEqual:needle]||[command[@"id"] isEqual:name]){NSDictionary *ctx=@{@"query":query?:@"",@"cwd":_cwd?:[self.terminal workingDirectory],@"selection":[self.terminal selectedText]?:@"",@"screen":[self.terminal visibleText]?:@""};[self.extensions executeCommand:command context:ctx terminal:self.terminal];return YES;}}return NO;}
 @end
 static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length){item.keyEquivalent=@"";item.keyEquivalentModifierMask=0;return;}NSArray<NSString *> *parts=[spec.lowercaseString componentsSeparatedByString:@"+"];NSEventModifierFlags mask=0;NSString *key=parts.lastObject;for(NSString *part in parts){if([part isEqual:@"cmd"]||[part isEqual:@"command"])mask|=NSEventModifierFlagCommand;else if([part isEqual:@"shift"])mask|=NSEventModifierFlagShift;else if([part isEqual:@"option"]||[part isEqual:@"alt"])mask|=NSEventModifierFlagOption;else if([part isEqual:@"control"]||[part isEqual:@"ctrl"])mask|=NSEventModifierFlagControl;}if([key isEqual:@"plus"])key=@"+";else if([key isEqual:@"space"])key=@" ";item.keyEquivalent=key?:@"";item.keyEquivalentModifierMask=mask;}
@@ -1231,7 +1296,7 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 @end
 
 @implementation TApplication
-- (void)sendEvent:(NSEvent *)event {if(event.type==NSEventTypeKeyDown){NSEventModifierFlags mods=event.modifierFlags&NSEventModifierFlagDeviceIndependentFlagsMask,command=NSEventModifierFlagCommand,commandShift=NSEventModifierFlagCommand|NSEventModifierFlagShift,relevant=mods&(NSEventModifierFlagCommand|NSEventModifierFlagShift|NSEventModifierFlagOption|NSEventModifierFlagControl);NSString *key=event.charactersIgnoringModifiers.lowercaseString;if(event.isARepeat&&[key isEqual:@"t"]&&(relevant==command||relevant==commandShift))return;if(relevant==commandShift&&[key isEqual:@"t"]&&[self sendAction:@selector(newVerticalTab:) to:self.delegate from:self])return;if(relevant==command){if([key isEqual:@"t"]&&[self sendAction:@selector(newTab:) to:self.delegate from:self])return;if([key isEqual:@"w"]&&[self sendAction:@selector(closeTab:) to:self.delegate from:self])return;if([key isEqual:@"k"]&&[self sendAction:@selector(clearTerminal:) to:self.delegate from:self])return;if(key.length==1&&[key characterAtIndex:0]>='1'&&[key characterAtIndex:0]<='9'){NSMenuItem *sender=[NSMenuItem new];sender.tag=[key integerValue];if([self sendAction:@selector(selectTab:) to:self.delegate from:sender])return;}}if(!(mods&NSEventModifierFlagCommand)){TWindowController *controller=[(TAppDelegate *)self.delegate active];if(controller&&event.window==controller.window&&controller.window.firstResponder!=controller.terminal){[controller routeKeyEvent:event];return;}}}[super sendEvent:event];}
+- (void)sendEvent:(NSEvent *)event {if(event.type==NSEventTypeKeyDown){NSEventModifierFlags mods=event.modifierFlags&NSEventModifierFlagDeviceIndependentFlagsMask,command=NSEventModifierFlagCommand,commandShift=NSEventModifierFlagCommand|NSEventModifierFlagShift,relevant=mods&(NSEventModifierFlagCommand|NSEventModifierFlagShift|NSEventModifierFlagOption|NSEventModifierFlagControl);NSString *key=event.charactersIgnoringModifiers.lowercaseString;if(event.isARepeat&&[key isEqual:@"t"]&&(relevant==command||relevant==commandShift))return;if(relevant==commandShift&&[key isEqual:@"t"]&&[self sendAction:@selector(newVerticalTab:) to:self.delegate from:self])return;if(relevant==command){if([key isEqual:@"t"]&&[self sendAction:@selector(newTab:) to:self.delegate from:self])return;if([key isEqual:@"w"]&&[self sendAction:@selector(closeTab:) to:self.delegate from:self])return;if([key isEqual:@"k"]&&[self sendAction:@selector(clearTerminal:) to:self.delegate from:self])return;if(key.length==1&&[key characterAtIndex:0]>='1'&&[key characterAtIndex:0]<='9'){NSMenuItem *sender=[NSMenuItem new];sender.tag=[key integerValue];if([self sendAction:@selector(selectTab:) to:self.delegate from:sender])return;}}if(!(mods&NSEventModifierFlagCommand)){TWindowController *controller=[(TAppDelegate *)self.delegate active];if(controller&&event.window==controller.window){[controller routeKeyEvent:event];return;}}}[super sendEvent:event];}
 @end
 
 @implementation TAppDelegate {int _cliSocket;dispatch_source_t _cliSource;}

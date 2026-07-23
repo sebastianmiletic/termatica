@@ -56,19 +56,27 @@ install: release
 check: release
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.2$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.3$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'plugins'; \
 	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  printf 'q\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  for id in hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hyprland-layout; do \
+	  for id in hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hidden-path hyprland-layout; do \
 	    TERMATICA_CONFIG_DIR="$$tmp" $(CLI) install "$$id" >/dev/null; \
 	    test -x "$$tmp/extensions/$$id/extension.py"; \
-	    if test "$$id" != hyprland-layout; then \
+	    if test "$$id" != hyprland-layout && test "$$id" != hidden-path; then \
 	      printf '%s\n' '{"method":"initialize"}' | "$$tmp/extensions/$$id/extension.py" >"$$tmp/$$id.out"; \
 	      grep -q 'command.register' "$$tmp/$$id.out"; \
 	    fi; \
 	  done; \
+	  test -f "$$tmp/extensions/hidden-path/prompt.sh"; \
+	  mkdir -p "$$tmp/home/Coding/OpenCloud"; \
+	  HOME="$$tmp/home" zsh -f -c 'cd "$$HOME"; PROMPT="original "; . "$$1" on; _termatica_hidden_path_precmd; test "$$PROMPT" = "; "; . "$$1" off; test "$$PROMPT" = "original "' zsh "$$tmp/extensions/hidden-path/prompt.sh"; \
+	  HOME="$$tmp/home" zsh -f -c 'cd "$$HOME/Coding/OpenCloud"; . "$$1" on; _termatica_hidden_path_precmd; test "$$PROMPT" = "Coding/OpenCloud ; "' zsh "$$tmp/extensions/hidden-path/prompt.sh"; \
+	  printf 'hidden-path\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
+	  grep -q '"hidden-path"' "$$tmp/config.json"; \
+	  printf 'hidden-path\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
+	  ! grep -q '"hidden-path"' "$$tmp/config.json"; \
 	  printf '%s\n' '{"method":"initialize"}' '{"method":"command.execute","params":{"id":"editor.vim","query":"README.md"}}' | "$$tmp/extensions/editor-deck/extension.py" >"$$tmp/editor.out"; \
 	  grep -q 'termatica editor vim README.md' "$$tmp/editor.out"; \
 	  printf 'hello\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \

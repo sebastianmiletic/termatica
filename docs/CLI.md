@@ -31,6 +31,8 @@ Legacy flag spellings such as `termatica --plugins` remain supported.
 
 Interactive plugin and theme lists use Up/Down or J/K to move, Enter to install or toggle, and Q to exit. State is shown as `GET`, `ON`, or `OFF`. Changes reload immediately and the menu remains open for additional actions. The two lists never mix categories. When input is redirected, the browser accepts multiple row numbers or module ids and closes on `q` or end-of-file.
 
+The built-in `hidden-path` plugin replaces long Zsh/Bash prompts with `;` at home/root and a home-relative path elsewhere, such as `Coding/OpenCloud ;`. Install or toggle it from `termatica plugins`, or install it directly with `termatica install hidden-path`.
+
 The configuration browser also remains open for multiple actions. Use Up/Down or J/K to move, Enter to activate, S to save, R to rename, D to delete with confirmation, and Q to exit. Names may contain letters, numbers, dots, dashes, and underscores. Files live in `~/.config/termatica/configs`, remain readable after installing or replacing the app, and are suitable for scripts or coding agents. Set `TERMATICA_CONFIG_DIR` when a portable or isolated configuration root is required.
 
 ## Editor adapter

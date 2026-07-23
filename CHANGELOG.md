@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.3.3
+
+### Added
+
+- Hidden Path plugin with a prompt that shows `;` at home/root and relative locations such as `Coding/OpenCloud ;` after `cd`.
+
+### Changed
+
+- Tiled keyboard input now goes directly to the active PTY without repeating focus/layout work or invalidating the complete shared canvas on every keypress.
+- New and closed terminals rebuild the tab rail once instead of twice when entering or leaving tiled layout.
+- Hidden Path runs natively without a persistent helper process and applies to existing shells after the plugin browser returns control.
+
+### Fixed
+
+- Clicking a Hyprland tile no longer transfers focus to its invisible backing terminal view.
+- Rapid terminal creation no longer causes key events to stall behind redundant full-canvas redraws.
+- Hidden Path activation clears its one-time integration line before presenting the shortened prompt.
+
 ## 0.3.2
 
 ### Added

@@ -29,7 +29,7 @@ Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It ha
     V
 ```
 
-The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal. The v0.3.2 app bundle is **586.2 KiB** before DMG/ZIP packaging.
+The universal release supports Apple Silicon and Intel, targets a complete app size below 1 MB, and launches terminal tools where they belong: inside the terminal. The v0.3.3 app bundle is **600,266 bytes / 586.2 KiB** before DMG/ZIP packaging.
 
 ```text
 +------------------------------------------------------------------+
@@ -62,8 +62,10 @@ module> editor-deck
 - Optional Hyprland Layout plugin that tiles and snaps terminal sessions in one window
 - Command-Shift-T splits the focused terminal downward, with or without Hyprland Layout
 - Fair round-robin PTY output scheduling so one noisy process cannot starve the other terminals or keyboard input
+- Direct active-PTY keyboard routing, with no full-canvas focus/layout pass on each tiled keystroke
 - Restored terminal layout, working directories, and bounded scrollback after an ordinary app restart
 - User- and AI-readable JSON config profiles managed entirely inside the terminal
+- Optional Hidden Path prompt showing `;` at home/root and relative paths such as `Coding/OpenCloud ;`
 - Neutral dark default theme with the complete ANSI color palette
 - Skeleterm low-memory mode with effects, extensions, and deep scrollback disabled
 - Helper-free built-in plugins, compact terminal cells, and an on-demand blur compositor
@@ -92,7 +94,7 @@ Use `make check` for command and plugin protocol tests, `make size` for the bund
 
 ## Size and memory
 
-- Universal `.app` bundle: **600,218 bytes / 586.2 KiB**
+- Universal `.app` bundle: **600,266 bytes / 586.2 KiB**
 - Clean one-tab physical footprint measured on Apple Silicon/macOS 26: **39.8 MiB**
 - Skeleterm one-tab physical footprint with no titlebar: **37.0 MiB**
 - Three live Hyprland PTYs at 1434×793: **65.8 MiB** physical footprint
@@ -143,6 +145,8 @@ Run `termatica run vim README.md`, `termatica run nvim src/main.m`, `termatica r
 Focused plugins such as `vim-control`, `neovim-control`, and `helix-control` are available when the full deck is unnecessary. The source-readable reference implementation lives in [`examples/editor-controls`](examples/editor-controls).
 
 Install `hyprland-layout` from `termatica plugins` for native automatic tiling. The first terminal fills the window; Command-T snaps additional terminal sessions into a compact grid. Command-Shift-T splits the focused terminal and places the new live PTY directly beneath it, even when Hyprland Layout is disabled. Command-1 through Command-9 changes focus without hiding visible tiles. Command-drag anywhere in a tile, or drag its top padding, to move that live PTY to another position. Disabling the plugin restores normal tab view unless an explicit focused split is open.
+
+Install `hidden-path` from the same plugin browser for a shorter shell prompt. Home and `/` display only `;`. Directories beneath your home folder are relative, so `/Users/you/Coding/OpenCloud` displays `Coding/OpenCloud ;`. The prompt updates after every `cd`, applies to existing shells after the plugin browser returns control, and restores the previous prompt when toggled off. The built-in integration supports Zsh and Bash without a persistent helper process.
 
 ## Keyboard
 
