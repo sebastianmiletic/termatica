@@ -1,5 +1,82 @@
 # Changelog
 
+## 0.5.0
+
+- Added `termatica update` and `termatica update check` backed by the public GitHub release API.
+- Added SHA-256 release-asset verification, bundle identity/version validation, strict code-signature verification, staged installation, and rollback on replacement failure.
+- Added an asynchronous launch update check with a macOS notification, Dock badge, and visible update title.
+- Replaced the separate plugin, theme, config-profile, code, marketplace, and directory menus with one categorized `termatica config` terminal UI.
+- Added terminal config-file management for creating, activating, renaming, and deleting named JSON configs.
+- Added categorized controls for themes, text and ANSI colors, appearance, tab motion, plugins, shell/system behavior, updates, and every keybinding.
+- Added `termatica config-file` for opening the authoritative JSON and `termatica config-file path` for scripts and coding agents.
+- Added scriptable dot-path get/set and named-config actions plus complete Zsh, Bash, and Fish completions for the new command surface.
+- Changed the tab rail to a true overlay so showing, hiding, or resizing it never changes terminal columns or moves prompt text.
+
+## 0.4.2
+
+- Made `config.json` the only settings surface: `termatica code` now opens or prints the authoritative file and no longer mutates appearance through a second UI.
+- Expanded generated configs with every built-in plugin boolean, all installed theme choices, complete appearance/color inheritance keys, tabs, and keybindings.
+- Added the helper-free Borderless Window plugin and migrated legacy `appearance.topBar` settings automatically.
+- Added a native center-out reveal for app launch and new terminals, including Hyprland tiles.
+- Removed session persistence. Every launch deletes legacy terminal snapshots and starts one fresh login shell while configs, themes, plugins, and named configs remain saved.
+
+## 0.4.1
+
+- Rounded the native blur mask around every Hyprland tile so internal corners remain visibly rounded across transparent gaps.
+- Made `termatica completions install` activate Zsh completions directly, bypass stale completion caches, and preserve the shell's normal completion search paths.
+
+## 0.4.0
+
+- Added the helper-free Full Unicode plugin with combining-mark composition, emoji and ZWJ graphemes, regional-indicator flags, and double-width CJK rendering.
+- Added the helper-free OSC Integration plugin with OSC 7 working directories, OSC 8 clickable links, and bounded OSC 133 command marks.
+- Added negotiated Kitty keyboard protocol and xterm modifyOtherKeys support for reliable modified keys in modern terminal applications.
+- Expanded `termatica code` with cursor color/style, foreground, ANSI palette, exact per-index ANSI colors, tile gap, animation speed, scrollback, and reset-to-default controls.
+- Added complete generated Zsh, Bash, and Fish completions through `termatica completions`.
+- Kept ordinary terminal text and the ANSI palette separate so themes and explicit color overrides remain predictable.
+
+## 0.3.10
+
+- Changed the Ghost Glass typing cursor from cyan to a high-contrast softly tinted white.
+- Updated both the bundled and active user theme so the cursor change applies immediately.
+
+## 0.3.9
+
+- Restored normal terminal color semantics: ordinary text uses the theme foreground, while shells, editors, and CLI tools control color through the complete ANSI palette.
+- Removed automatic per-word coloring from Ghost Glass; spectrum coloring is now an explicit opt-in rather than a theme side effect.
+- Added `termatica code`, a keyboard-navigable terminal settings editor for text color mode, theme, font size, transparency, blur, and titlebar visibility.
+- Added scriptable `termatica code` subcommands so users and coding agents can inspect and change the same settings directly.
+
+## 0.3.8
+
+- Added configurable full-spectrum coloring for ordinary terminal text, rather than limiting color to ANSI-styled output.
+- Kept explicit ANSI foregrounds authoritative so CLI tools, editors, and syntax highlighting retain their intended colors.
+- Enabled a balanced six-color plain-text palette in Ghost Glass and updated the active user theme immediately.
+- Reused renderer scratch storage so the additional styling does not allocate per cell or add a second rendering pass.
+
+## 0.3.7
+
+- Lowered Ghost Glass background opacity from 0.50 to 0.28 while keeping terminal text at full opacity.
+- Replaced its muted near-monochrome colors with 16 distinct full-spectrum ANSI and bright ANSI colors.
+- Shifted the base foreground from near-white to a cool blue-gray, with blue accent and cyan cursor colors.
+- Updated the user-installed Ghost Glass copy alongside the bundled theme so the change takes effect immediately.
+
+## 0.3.6
+
+- Fixed accumulated glyph-spacing drift in the batched renderer so the visual cursor remains directly beside the typed text at every prompt length and font size.
+- Added a restrained compositor-only tab-rail fold that compresses into the edge handle as it disappears.
+- Added the inverse unfold motion on reveal and a quick edge-handle scale-in, without resizing PTYs or repainting terminal contents.
+
+## 0.3.5
+
+- Fixed a global PTY drain starvation bug that could leave the third or later busy terminal permanently queued and unable to accept more output.
+- Replaced per-cell NSString/CoreText painting with dirty-row, style-run batching and coalesced refreshes.
+- Removed the shared Hyprland canvas, synchronous terminal snapshots, and its manual 60 FPS redraw path; every tile is now a live, independently rendered PTY view.
+- Bounded main-thread parser slices to keep input, tab changes, and window events responsive under simultaneous high-output workloads.
+- Made PTY input asynchronous, ordered, retrying, and lossless under nonblocking backpressure.
+- Stabilized the tab overlay inset so tab-rail auto-hide no longer resizes PTYs or triggers avoidable full-screen TUI redraws.
+- Tiled focus changes now update only focus and selection instead of rebuilding the complete tab layout.
+- Verified eight simultaneous terminals in both normal and Hyprland modes with finite and unlimited output, including Ctrl-C recovery in every PTY.
+
 ## 0.3.4
 
 - Closed terminals now stop their shell and discard queued PTY output immediately, even when a rapid follow-up action interrupts the closing animation.

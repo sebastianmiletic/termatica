@@ -56,52 +56,103 @@ install: release
 check: release
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.3.4$$'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'plugins'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.5.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
+	  config_path=$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config-file path); \
+	  test "$$config_path" = "$$tmp/config.json"; \
+	  grep -Eq '"textColorMode"[[:space:]]*:[[:space:]]*"ansi"' "$$tmp/config.json"; \
+	  grep -Eq '"backgroundOpacity"[[:space:]]*:[[:space:]]*"theme"' "$$tmp/config.json"; \
+	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*false' "$$tmp/config.json"; \
+	  grep -Eq '"checkOnLaunch"[[:space:]]*:[[:space:]]*true' "$$tmp/config.json"; \
+	  test "$$(plutil -extract updates.repository raw "$$tmp/config.json")" = sebastianmiletic/termatica; \
+	  grep -q '"themeOptions"' "$$tmp/config.json"; \
+	  ! grep -q '"disabledPlugins"' "$$tmp/config.json"; \
+	  ! grep -q '"session"' "$$tmp/config.json"; \
+	  ! grep -q '"topBar"' "$$tmp/config.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set fontSize 13 | grep -q '^fontSize'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 13; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set appearance.backgroundOpacity 0.42 >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.backgroundOpacity)" = 0.42; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set plugins.hidden-path true >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = ON; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'SAVED + ACTIVE'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^active[[:space:]]dev$$'; \
+	  test "$$(stat -f '%Lp' "$$tmp/configs/dev.json")" = 600; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config rename dev work | grep -q 'RENAMED'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use work | grep -q 'ACTIVE'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config delete work | grep -q 'DELETED'; \
+	  test ! -e "$$tmp/configs/work.json"; \
+	  for removed in code configs plugins themes install skeleterm marketplace profiles catalog config-dir plugins-dir themes-dir; do \
+	    ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) "$$removed" >/dev/null 2>&1; \
+	  done; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'config-file'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions bash | grep -q 'update'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions fish | grep -q 'rename'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'plugins'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions install >/dev/null; \
+	  test -f "$$tmp/completions/_termatica"; \
+	  test -f "$$tmp/completions/termatica.zsh"; \
+	  test -f "$$tmp/completions/termatica.bash"; \
+	  test -f "$$tmp/completions/termatica.fish"; \
+	  zsh -n "$$tmp/completions/_termatica"; \
+	  zsh -n "$$tmp/completions/termatica.zsh"; \
+	  bash -n "$$tmp/completions/termatica.bash"; \
+	  TERM_COMPLETION_DIR="$$tmp/completions" FPATH="$$tmp/completions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions" zsh -flic 'source "$$TERM_COMPLETION_DIR/termatica.zsh"; test "$${_comps[termatica]}" = _termatica'; \
+	  grep -Fq 'CGPathAddRoundedRect(path,NULL,NSRectToCGRect(terminal.frame),14,14)' src/main.m; \
+	  grep -Fq 'terminal.layer.cornerRadius=tile?14:0' src/main.m; \
+	  grep -Fq 'terminal.leadingOverlayInset=0' src/main.m; \
+	  ! grep -Fq 'terminal.leadingOverlayInset=overlayInset' src/main.m; \
+	  grep -Fq '_kittyKeyboardFlags' src/main.m; \
+	  grep -Fq '_modifyOtherKeys' src/main.m; \
+	  grep -Fq 'TUnicodeWide' src/main.m; \
+	  grep -Fq 'OSC 7' src/main.m; \
+	  grep -Fq 'OSC 8' src/main.m; \
+	  grep -Fq 'OSC 133' src/main.m; \
 	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
 	  grep -Fq '[closing stopShellTerminating:YES];[closing removeFromSuperview];TInvalidateSessionSnapshot();' src/main.m; \
-	  grep -Fq 'if(controller.terminals.count)TWriteSession' src/main.m; \
+	  ! grep -Fq 'TWriteSession' src/main.m; \
+	  ! grep -Fq 'TLoadSession' src/main.m; \
+	  grep -Fq 'TAnimateCenterReveal' src/main.m; \
 	  grep -Fq 'if(terminate)TCancelTerminalDrain(self)' src/main.m; \
-	  grep -Fq '_canvas.animationSnapshots=snapshots' src/main.m; \
+	  grep -Fq 'TArmTerminalDrain();' src/main.m; \
+	  grep -Fq 'take=MIN((NSUInteger)4096,available)' src/main.m; \
+	  grep -Fq 'poll(&descriptor,1,20)' src/main.m; \
+	  grep -Fq 'NSKernAttributeName:@(cellKern)' src/main.m; \
+	  grep -Fq 'termatica.rail.fold' src/main.m; \
+	  grep -Fq '"backgroundOpacity": 0.28' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '"#FF6B6B"' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '"#7CE38B"' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '"#67B7F7"' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '"cursor": "#F2FAF8"' Resources/Themes/ghost-glass.json; \
+	  ! grep -Fq '"colorizePlainText": true' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '"plainTextPalette"' Resources/Themes/ghost-glass.json; \
+	  grep -Fq '_colorScratch' src/main.m; \
+	  ! grep -Fq 'THyprlandCanvasView' src/main.m; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
-	  printf 'q\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  for id in hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hidden-path hyprland-layout; do \
-	    TERMATICA_CONFIG_DIR="$$tmp" $(CLI) install "$$id" >/dev/null; \
-	    test -x "$$tmp/extensions/$$id/extension.py"; \
-	    if test "$$id" != hyprland-layout && test "$$id" != hidden-path; then \
-	      printf '%s\n' '{"method":"initialize"}' | "$$tmp/extensions/$$id/extension.py" >"$$tmp/$$id.out"; \
-	      grep -q 'command.register' "$$tmp/$$id.out"; \
-	    fi; \
-	  done; \
-	  test -f "$$tmp/extensions/hidden-path/prompt.sh"; \
-	  mkdir -p "$$tmp/home/Coding/OpenCloud"; \
-	  HOME="$$tmp/home" zsh -f -c 'cd "$$HOME"; PROMPT="original "; . "$$1" on; _termatica_hidden_path_precmd; test "$$PROMPT" = "; "; . "$$1" off; test "$$PROMPT" = "original "' zsh "$$tmp/extensions/hidden-path/prompt.sh"; \
-	  HOME="$$tmp/home" zsh -f -c 'cd "$$HOME/Coding/OpenCloud"; . "$$1" on; _termatica_hidden_path_precmd; test "$$PROMPT" = "Coding/OpenCloud ; "' zsh "$$tmp/extensions/hidden-path/prompt.sh"; \
-	  printf 'hidden-path\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  grep -q '"hidden-path"' "$$tmp/config.json"; \
-	  printf 'hidden-path\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  ! grep -q '"hidden-path"' "$$tmp/config.json"; \
-	  printf '%s\n' '{"method":"initialize"}' '{"method":"command.execute","params":{"id":"editor.vim","query":"README.md"}}' | "$$tmp/extensions/editor-deck/extension.py" >"$$tmp/editor.out"; \
-	  grep -q 'termatica editor vim README.md' "$$tmp/editor.out"; \
-	  printf 'hello\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  grep -q '"hello"' "$$tmp/config.json"; \
-	  printf 'hello\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) plugins >/dev/null; \
-	  ! grep -q '"hello"' "$$tmp/config.json"; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) skeleterm >/dev/null; \
-	  grep -Eq '"skeleterm"[[:space:]]*:[[:space:]]*true' "$$tmp/config.json"; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs save dev | grep -q 'SAVED + ACTIVE'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs list | grep -q '^active[[:space:]]dev$$'; \
-	  test "$$(stat -f '%Lp' "$$tmp/configs/dev.json")" = 600; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs rename dev work | grep -q 'RENAMED'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs use work | grep -q 'ACTIVE'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs delete work | grep -q 'DELETED'; \
-	  test ! -e "$$tmp/configs/work.json"; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) configs path)" = "$$tmp/configs"; \
-	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) marketplace >/dev/null 2>&1; \
-	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) profiles >/dev/null 2>&1; \
-	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) catalog >/dev/null 2>&1; \
-	  printf 'amber-crt\nterminal-default\nq\n' | TERMATICA_CONFIG_DIR="$$tmp" $(CLI) themes >/dev/null; \
-	  grep -q '"terminal-default"' "$$tmp/config.json"; \
+	  fixture="$$tmp/release-fixture"; \
+	  mkdir -p "$$fixture" "$$tmp/install-target"; \
+	  ditto $(APP) "$$fixture/Termatica.app"; \
+	  plutil -replace CFBundleShortVersionString -string 9.9.9 "$$fixture/Termatica.app/Contents/Info.plist"; \
+	  plutil -replace CFBundleVersion -string 999 "$$fixture/Termatica.app/Contents/Info.plist"; \
+	  codesign --force --sign - "$$fixture/Termatica.app"; \
+	  ditto -c -k --keepParent "$$fixture/Termatica.app" "$$fixture/Termatica-macOS-universal.zip"; \
+	  digest=$$(shasum -a 256 "$$fixture/Termatica-macOS-universal.zip" | awk '{print $$1}'); \
+	  fixture_url="file://$$fixture/Termatica-macOS-universal.zip"; \
+	  printf '{"tag_name":"v9.9.9","assets":[{"name":"Termatica-macOS-universal.zip","browser_download_url":"%s","digest":"sha256:%s"}]}\n' "$$fixture_url" "$$digest" > "$$fixture/release.json"; \
+	  set +e; \
+	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" $(CLI) update check >"$$tmp/update-check.out"; \
+	  update_status=$$?; \
+	  set -e; \
+	  test "$$update_status" = 10; \
+	  grep -q 'Update available: 0.5.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
+	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
+	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
+	  printf '{"tag_name":"v9.9.9","assets":[{"name":"Termatica-macOS-universal.zip","browser_download_url":"%s","digest":"sha256:%064d"}]}\n' "$$fixture_url" 0 > "$$fixture/bad-release.json"; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/bad-release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >/dev/null 2>&1; \
+	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  echo "Termatica checks passed"
 
 package: check

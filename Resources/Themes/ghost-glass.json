@@ -1,14 +1,14 @@
 {
   "name": "Ghost Glass",
   "background": "#080B0D",
-  "foreground": "#C7D7D4",
-  "cursor": "#E6FBF5",
-  "accent": "#8FBDB2",
-  "panel": "#0A0F11",
-  "muted": "#63827C",
-  "selection": "#26433E",
+  "foreground": "#BFD3DE",
+  "cursor": "#F2FAF8",
+  "accent": "#67B7F7",
+  "panel": "#0A1016",
+  "muted": "#668092",
+  "selection": "#23445A",
   "appearance": {
-    "backgroundOpacity": 0.50,
+    "backgroundOpacity": 0.28,
     "windowOpacity": 1,
     "blur": true,
     "blurMaterial": "under-window",
@@ -20,9 +20,13 @@
     "ribbonHeight": 38
   },
   "palette": [
-    "#101719", "#D77874", "#83B38C", "#C8B97A",
-    "#75A6BB", "#A68CB8", "#77B4AF", "#D7E2DF",
-    "#506064", "#E4938E", "#9DCCA5", "#DDD092",
-    "#8EBFD2", "#BCA3CE", "#8CCAC4", "#F0F7F5"
+    "#182024", "#FF6B6B", "#7CE38B", "#F4C95D",
+    "#67B7F7", "#C792EA", "#5DE4C7", "#D6E4E8",
+    "#52616B", "#FF8787", "#9AF0A7", "#FFE083",
+    "#8CCBFF", "#DDB2F4", "#82F0DD", "#F2FAF8"
+  ],
+  "plainTextPalette": [
+    "#8CCBFF", "#DDB2F4", "#82F0DD",
+    "#9AF0A7", "#FFE083", "#FF8787"
   ]
 }

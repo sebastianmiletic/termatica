@@ -2,7 +2,9 @@
 
 Termatica extensions are executable folders. The host has no language runtime requirement and communicates over stdin/stdout using one JSON object per line.
 
-The plugins shipped in Termatica's own catalog are recognized by identifier and registered natively, avoiding a persistent helper process. Custom and downloaded extensions use the complete protocol below without reduced capabilities.
+Built-in capabilities are recognized by identifier and registered natively, avoiding a persistent helper process. Enable or disable them in the Plugins section of `termatica config` or through `plugins.<id>` in `config.json`. There is no separate plugin browser, marketplace, or install command.
+
+Custom extensions placed in `~/.config/termatica/extensions` use the complete protocol below without reduced capabilities.
 
 ## Package layout
 
@@ -33,7 +35,7 @@ The entry file must be executable. It may be a compiled program or a script with
 Termatica starts each valid extension and writes:
 
 ```json
-{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.3.4"}}
+{"jsonrpc":"2.0","method":"initialize","params":{"protocolVersion":1,"appVersion":"0.5.0"}}
 ```
 
 An extension registers a terminal command by writing:
@@ -94,4 +96,4 @@ Keep destructive commands behind explicit user confirmation in your extension. T
 
 ## Security boundary
 
-An installed extension is local executable code. It can access anything available to the logged-in user, independently of this protocol. Review the source, pin versions, and install only trusted extensions. Termatica never downloads or installs code automatically in protocol v1.
+An installed extension is local executable code. It can access anything available to the logged-in user, independently of this protocol. Review the source, pin versions, and place only trusted extensions in the extension directory. Built-in configuration entries may create Termatica's bundled source-readable helper files, but Termatica does not fetch third-party protocol extensions automatically.
