@@ -1,5 +1,37 @@
 # Changelog
 
+## Unreleased
+
+## 0.5.1
+
+- Fixed wheel and trackpad scrolling inside Codex CLI and other alternate-screen applications that do not advertise DEC 1007 alternate-scroll; Termatica now sends alternate-screen navigation sequences whenever no application mouse mode is active, while Shift-wheel remains local scrollback.
+- Routed every wheel and trackpad event through window-level terminal-frame hit testing, so normal and Hyprland panes scroll independently even below effect layers or hidden overlays.
+- Increased precision-gesture sensitivity, flushes sub-line motion at gesture end, clamps momentum bursts, and forwards wheel buttons to mouse-aware TUIs such as Codex even when they remain on the primary screen; Shift-wheel always accesses local history.
+- Added combined DEC private-mode handling plus legacy, UTF-8, SGR, urxvt, and SGR-pixel mouse coordinate encodings.
+- Moved each terminal's parser and screen mutations onto an independent serial core queue, protected presentation snapshots from concurrent mutation, and added cell-bounded damage invalidation.
+- Added safe workspace restoration for window geometry, terminal layout, active pane, and working directories without attempting to serialize live shell processes.
+- Added automatic Zsh and Fish shell integration, Bash integration hooks, inherited working directories, OSC 133 prompt navigation, and OSC 10/11/12 color queries.
+- Added permission-controlled OSC 52 clipboard access, unsafe multiline-paste confirmation, automatic macOS Secure Keyboard Entry while PTY echo is disabled, and terminal notifications.
+- Improved composed-grapheme detection through Foundation's Unicode segmentation and enabled native ligature shaping and font fallback across complete style runs.
+- Added an experience benchmark for offscreen scroll-paint duration, parse-to-paint duration, sustained-output stability, and process CPU time as a clearly labeled energy proxy.
+- Fixed arrow keys in Codex and other Kitty-keyboard-aware TUIs by emitting enhanced functional-key sequences instead of private-use `CSI u` codes.
+- Restored native terminal click behavior when a TUI requests mouse tracking: ordinary clicks now focus or begin text selection without forwarding a fake application click; Option-click remains available for explicit application mouse input.
+- Fixed mouse-wheel and precision-trackpad scrollback, including momentum accumulation, visible position feedback, keyboard paging, and stable anchoring while new output arrives.
+- Added alternate-screen save/restore, application cursor keys, focus reporting, alternate scrolling, SGR mouse reporting, autowrap control, and synchronized-output mode.
+- Made terminal surfaces permanently layer-backed and accelerated output with printable-ASCII batching, reusable history lines, adaptive 8 ms refreshes, 32 KiB fair PTY slices, and performance-oriented LTO builds.
+- Hardened control sockets, extension executable containment/ownership, extension output limits, updater download limits, SHA-256 parsing, and ZIP path/count/expanded-size validation.
+- Added an internal terminal state self-test plus a reproducible Kitty/Ghostty benchmark suite covering parser throughput, rendering-enabled throughput, memory, startup, bundle size, and Termatica's core.
+- Suppressed the numbered tab rail, hover target, and hidden edge arrow whenever Hyprland mode is enabled.
+- Rebuilt the app-loading reveal as a clip-only transition on settled window geometry, removing glyph scaling, redraw overlap, and the competing pre-show Hyprland resize.
+- Limited Hyprland new-tab motion to the entering terminal; existing tiles now adopt their new frames without replaying the entry animation.
+- Added six points of top content spacing in borderless mode.
+- Consolidated the config-file screen around one CURRENT row and removed the duplicate ACTIVE entry.
+- Fixed borderless mode losing macOS key-window status, which left a live shell unable to receive typing or Enter.
+- Added the bundled `t` command with compact `c`, `cf`, `u`, `r`, `e`, `x`, `h`, and `v` routes plus completions.
+- Changed `termatica config` to open on the config-file manager before any settings categories.
+- Enter now opens settings for the current config, makes a saved config current before opening it, or moves directly into a newly created config.
+- Q from settings returns to the config-file manager, while Q from the file manager exits.
+
 ## 0.5.0
 
 - Added `termatica update` and `termatica update check` backed by the public GitHub release API.

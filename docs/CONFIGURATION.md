@@ -6,7 +6,7 @@ Termatica keeps appearance, terminal behavior, tabs, plugins, updates, and short
 ~/.config/termatica/config.json
 ```
 
-Run `termatica config` for the categorized terminal UI or `termatica config-file` to open the JSON itself. Command-, opens the same terminal config UI. Configuration survives app replacement; terminals, terminal text, processes, layouts, and working directories do not.
+Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or `termatica config-file`) to open the JSON itself. Command-, opens the same terminal config UI. Configuration survives app replacement. Workspace restoration recreates window geometry, terminal layout, focus, and working directories, but never terminal output or live processes.
 
 ## Complete generated config
 
@@ -63,6 +63,14 @@ Run `termatica config` for the categorized terminal UI or `termatica config-file
     "screenInset": 18,
     "hyprlandBlur": false
   },
+  "system": {
+    "restoreSession": true,
+    "pasteProtection": true,
+    "secureKeyboard": true,
+    "shellIntegration": true,
+    "clipboardRead": "ask",
+    "clipboardWrite": "allow"
+  },
   "updates": {
     "checkOnLaunch": true,
     "repository": "sebastianmiletic/termatica"
@@ -74,6 +82,8 @@ Run `termatica config` for the categorized terminal UI or `termatica config-file
     "newVerticalTab": "cmd+shift+t",
     "closeTab": "cmd+w",
     "clearTerminal": "cmd+k",
+    "previousPrompt": "cmd+shift+p",
+    "nextPrompt": "cmd+option+p",
     "reload": "cmd+r",
     "copy": "cmd+c",
     "paste": "cmd+v",
@@ -104,6 +114,10 @@ Termatica merges missing default keys into older configs without overwriting use
 | `colors.palette` | `theme` or 16 `#RRGGBB` values |
 
 The tab rail is drawn as an overlay. Changing its visibility or width never reduces terminal columns or moves the prompt.
+
+Mouse wheels and precision trackpads scroll terminal history. Wheel events are hit-tested against live terminal frames at the window level, so the pane under the pointer scrolls independently in normal, split, and Hyprland layouts. When Codex or another TUI enables mouse tracking, unmodified wheel events are forwarded to that application even on the primary screen. Shift-wheel always accesses Termatica's local history. Trackpad deltas accumulate below one text row, flush at gesture end so slow gestures are not discarded, and clamp momentum bursts. New output preserves the viewed position instead of snapping to the prompt. Shift-Page Up/Down pages through history; Shift-Home moves to the oldest retained line; Shift-End returns to live output. Typing also returns to live output.
+
+An ordinary click focuses the terminal and a drag selects text; it never moves the shell cursor or sends a click position to Codex or another TUI. When terminal software explicitly requests mouse reporting, Option-click/Option-drag forwards mouse input to it. Full-screen applications may request alternate-screen wheel scrolling independently.
 
 ## Appearance
 
@@ -146,6 +160,12 @@ Important built-ins include `hidden-path`, `hyprland-layout`, `unicode-rendering
 | `shell` | Absolute shell executable |
 | `shellArguments` | JSON argument array; `["-l"]` starts a login shell |
 | `skeleterm` | Reduces scrollback and disables expensive effects/extensions |
+| `system.restoreSession` | Restore window geometry, terminal layout, focus, and working directories |
+| `system.pasteProtection` | Confirm multiline pastes that may immediately execute commands |
+| `system.secureKeyboard` | Enable macOS Secure Keyboard Entry whenever the active PTY disables echo |
+| `system.shellIntegration` | Inject prompt marks and working-directory reporting for supported shells |
+| `system.clipboardRead` | OSC 52 clipboard reads: `ask`, `allow`, or `deny` |
+| `system.clipboardWrite` | OSC 52 clipboard writes: `ask`, `allow`, or `deny` |
 | `updates.checkOnLaunch` | Asynchronously check for a newer GitHub release at app launch |
 | `updates.repository` | GitHub `owner/repository` used by the updater |
 
@@ -155,11 +175,11 @@ The default updater repository is `sebastianmiletic/termatica`. Disable the laun
 
 Each keybinding is a string with modifiers joined by `+`. All application shortcuts appear under Keybindings in the config UI.
 
-Command-K clears scrollback and leaves a fresh shell prompt. `newVerticalTab` creates a terminal below the focused terminal. `tab1` through `tab9` may be added to override numbered selection shortcuts.
+Command-K clears scrollback and leaves a fresh shell prompt. Command-Shift-P and Command-Option-P navigate OSC 133 prompt marks. `newVerticalTab` creates a terminal below the focused terminal, inheriting its working directory. `tab1` through `tab9` may be added to override numbered selection shortcuts.
 
 ## Saved configs
 
-Named configs live in `~/.config/termatica/configs/*.json`. Open Config Files at the top of `termatica config` to create, activate, rename, or delete them.
+Named configs live in `~/.config/termatica/configs/*.json`. Config Files is always the first screen opened by `termatica config`. The current config appears once, followed only by other saved files. Create, select, rename, or delete files there, then press Enter to continue into the selected config's categorized settings. Q returns from settings to the file list.
 
 ```sh
 termatica config create focused

@@ -2,15 +2,31 @@
 
 Every shell opened by Termatica receives the app's `Contents/MacOS` directory at the front of `PATH`. No separate CLI installation is required.
 
+## Quick commands
+
+Use `t` instead of typing `termatica`. The common paths are deliberately short:
+
+| Quick command | Full command |
+|---|---|
+| `t c` | `termatica config` |
+| `t cf` | `termatica config-file` |
+| `t u [check]` | `termatica update [check]` |
+| `t r` | `termatica reload` |
+| `t e <name> [files]` | `termatica editor <name> [files]` |
+| `t x <name> [text]` | `termatica run <name> [text]` |
+| `t h` / `t v` | Help / version |
+
+Running `t` by itself prints the quick guide. The full commands remain stable for scripts.
+
 ## Public commands
 
 | Command | Result |
 |---|---|
 | `termatica config` | Open the categorized terminal config UI |
-| `termatica config list` | Print the active config and every saved config |
+| `termatica config list` | Print the current config and every other saved config |
 | `termatica config get <path>` | Print a dot-separated setting |
 | `termatica config set <path> <value>` | Set a JSON value or string and reload |
-| `termatica config create <name>` | Save current settings as a named config and activate it |
+| `termatica config create <name>` | Save current settings as a named config and make it current |
 | `termatica config use <name>` | Activate a named config |
 | `termatica config rename <old> <new>` | Rename a saved config |
 | `termatica config delete <name>` | Delete a saved config |
@@ -32,17 +48,19 @@ The separate `plugins`, `themes`, `configs`, `code`, `marketplace`, profile, and
 
 ## Config UI
 
-The root screen contains Config Files, Themes, Text & Colour, Appearance, Tabs & Motion, Plugins, System & Updates, and Keybindings.
+The first screen is always Config Files. It shows the current config once, followed only by other saved JSON configs. Enter on the current row opens its settings. Enter on a saved config makes it current and then opens settings. Creating a config also makes it current and opens settings immediately.
+
+The next screen contains Themes, Text & Colour, Appearance, Tabs & Motion, Plugins, System & Updates, and Keybindings.
 
 | Key | Action |
 |---|---|
 | Up / Down or J / K | Move |
 | Left / Right or H / L | Change a switch, option, or number |
-| Enter | Open a section, toggle an option, or edit a value |
-| N | Create a config in Config Files |
+| Enter | Open settings for the current/selected config, open a section, or edit a value |
+| N | Create and open a new config |
 | R | Rename the selected config |
 | D | Delete the selected config after confirmation |
-| Q | Return or close |
+| Q | Return to Config Files, or quit from Config Files |
 
 Changes are saved and sent to the running app immediately. Config names may contain letters, numbers, dots, dashes, and underscores.
 
@@ -82,6 +100,12 @@ If an executable is unavailable, Termatica exits with status 127 and reports it.
 
 ## Completions
 
-`termatica completions install` writes Zsh, Bash, and Fish definitions below `~/.config/termatica/completions`. They cover the complete public command set, config actions, updater actions, and editor names.
+`termatica completions install` writes Zsh, Bash, and Fish definitions below `~/.config/termatica/completions`. They cover both `termatica` and `t`, including the complete public command set, quick aliases, config actions, updater actions, and editor names.
 
 Set `TERMATICA_CONFIG_DIR=/some/folder` to redirect configuration and completion files for portable setups or automation.
+
+## Benchmarks
+
+`make benchmark-core` measures Termatica's parser and screen model without PTY or presentation overhead. `make benchmark-experience` measures offscreen scroll-paint duration, parse-to-paint duration, sustained-output stability, and process CPU time. `make benchmark` runs the full local comparison against installed Kitty and Ghostty builds and writes raw results below `/tmp/termatica-benchmark-results`.
+
+Use `KITTY_APP`, `GHOSTTY_APP`, `BENCHMARK_REPETITIONS`, and `BENCHMARK_OUTPUT` to select apps and control the run. Methodology and current measurements are in [Terminal benchmarks](BENCHMARKS.md).
