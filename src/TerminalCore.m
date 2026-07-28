@@ -1,6 +1,6 @@
 #import "TerminalCore.h"
 
-enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDecodeDCS, TDecodeDCSEscape };
+enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape };
 
 NSUInteger TAppendUTF16(unichar *buffer,NSUInteger length,uint32_t codepoint) {
     if(!codepoint)codepoint=' ';
@@ -18,35 +18,9 @@ BOOL TUnicodeCombining(uint32_t cp) {
 
 BOOL TUnicodeRegional(uint32_t cp){return cp>=0x1F1E6&&cp<=0x1F1FF;}
 
-static inline uint8_t TWidthFast(uint32_t cp) {
-    if(cp<0x1100) return 1;
-    if(cp<=0x115F) return 2;
-    if(cp<0x2329) return 1;
-    if(cp<=0x232A) return 2;
-    if(cp<0x2E80) return 1;
-    if(cp<=0x303E) return 2;
-    if(cp==0x303F) return 1;
-    if(cp<=0xA4CF) return 2;
-    if(cp<0xAC00) return 1;
-    if(cp<=0xD7A3) return 2;
-    if(cp<0xF900) return 1;
-    if(cp<=0xFAFF) return 2;
-    if(cp<0xFE10) return 1;
-    if(cp<=0xFE19) return 2;
-    if(cp<0xFE30) return 1;
-    if(cp<=0xFE6F) return 2;
-    if(cp<0xFF00) return 1;
-    if(cp<=0xFF60) return 2;
-    if(cp<0xFFE0) return 1;
-    if(cp<=0xFFE6) return 2;
-    if(cp<0x1F000) return 1;
-    if(cp<=0x1FAFF) return 2;
-    if(cp<0x20000) return 1;
-    if(cp<=0x3FFFD) return 2;
-    return 1;
+BOOL TUnicodeWide(uint32_t cp) {
+    return cp>=0x1100&&((cp<=0x115F)||(cp==0x2329||cp==0x232A)||(cp>=0x2E80&&cp<=0xA4CF&&cp!=0x303F)||(cp>=0xAC00&&cp<=0xD7A3)||(cp>=0xF900&&cp<=0xFAFF)||(cp>=0xFE10&&cp<=0xFE19)||(cp>=0xFE30&&cp<=0xFE6F)||(cp>=0xFF00&&cp<=0xFF60)||(cp>=0xFFE0&&cp<=0xFFE6)||(cp>=0x1F000&&cp<=0x1FAFF)||(cp>=0x20000&&cp<=0x3FFFD));
 }
-
-BOOL TUnicodeWide(uint32_t cp) { return TWidthFast(cp)==2; }
 
 @implementation TTerminalDecoder {
     int _state;
@@ -72,15 +46,14 @@ BOOL TUnicodeWide(uint32_t cp) { return TWidthFast(cp)==2; }
     else codepoint(0xFFFD);
 }
 
-- (void)consumeData:(const uint8_t *)bytes length:(NSUInteger)length ascii:(TASCIIHandler)ascii codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control escape:(TEscapeHandler)escape csi:(TCSIHandler)csi osc:(TOSCHandler)osc {
-    for(NSUInteger index=0;index<length;index++){
+- (void)consumeData:(NSData *)data ascii:(TASCIIHandler)ascii codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control escape:(TEscapeHandler)escape csi:(TCSIHandler)csi osc:(TOSCHandler)osc {
+    const uint8_t *bytes=data.bytes;
+    for(NSUInteger index=0;index<data.length;index++){
         uint8_t byte=bytes[index];
-        if(_state==TDecodeText&&!_utf8Needed&&byte>=32&&byte<127){NSUInteger start=index;while(index+1<length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;ascii(bytes+start,index-start+1);continue;}
+        if(_state==TDecodeText&&!_utf8Needed&&byte>=32&&byte<127){NSUInteger start=index;while(index+1<data.length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;ascii(bytes+start,index-start+1);continue;}
         if(_state==TDecodeOSC){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeOSCEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
         if(_state==TDecodeOSCEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeOSC;continue;}
-        if(_state==TDecodeDCS){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeDCSEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
-        if(_state==TDecodeDCSEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeDCS;}else _state=TDecodeDCS;continue;}
-        if(_state==TDecodeEscape){_state=TDecodeText;if(byte=='['){_state=TDecodeCSI;memset(_parameters,0,sizeof(_parameters));_parameterIndex=0;_prefix=0;}else if(byte==']'){[_osc setString:@""];_state=TDecodeOSC;}else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){[_osc setString:@""];_state=TDecodeDCS;}else escape(byte);continue;}
+        if(_state==TDecodeEscape){_state=TDecodeText;if(byte=='['){_state=TDecodeCSI;memset(_parameters,0,sizeof(_parameters));_parameterIndex=0;_prefix=0;}else if(byte==']'){[_osc setString:@""];_state=TDecodeOSC;}else escape(byte);continue;}
         if(_state==TDecodeCSI){if(byte=='?'||byte=='>'||byte=='<'||byte=='='){_prefix=byte;continue;}if(byte>='0'&&byte<='9'){_parameters[_parameterIndex]=_parameters[_parameterIndex]*10+byte-'0';continue;}if(byte==';'||byte==':'){if(_parameterIndex<19)_parameterIndex++;continue;}if(byte>=0x40&&byte<=0x7E){csi(byte,_prefix,_parameters,_parameterIndex+1);_state=TDecodeText;}continue;}
         [self consumeTextByte:byte codepoint:codepoint control:control];
     }

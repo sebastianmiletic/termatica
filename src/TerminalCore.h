@@ -22,12 +22,12 @@ typedef void (^TCSIHandler)(uint8_t finalByte,uint8_t prefix,const int *paramete
 typedef void (^TOSCHandler)(NSString *value);
 
 @interface TTerminalDecoder : NSObject
-- (void)consumeData:(const uint8_t *)bytes length:(NSUInteger)length
-               ascii:(TASCIIHandler)ascii
-           codepoint:(TCodepointHandler)codepoint
-             control:(TControlHandler)control
-              escape:(TEscapeHandler)escape
-                 csi:(TCSIHandler)csi
-                 osc:(TOSCHandler)osc;
+- (void)consumeData:(NSData *)data
+              ascii:(TASCIIHandler)ascii
+          codepoint:(TCodepointHandler)codepoint
+            control:(TControlHandler)control
+             escape:(TEscapeHandler)escape
+                csi:(TCSIHandler)csi
+                osc:(TOSCHandler)osc;
 - (void)reset;
 @end
