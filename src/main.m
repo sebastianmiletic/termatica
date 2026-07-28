@@ -128,7 +128,6 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
 @property CGFloat fontSize;
 @property CGFloat padding;
 @property NSUInteger scrollback;
-@property BOOL skeleterm;
 @property BOOL hyprlandLayout;
 @property NSDictionary<NSString *,NSNumber *> *pluginStates;
 @property CGFloat tabRailWidth;
@@ -174,7 +173,6 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
 - (void)ensureEditableFile;
 - (NSArray<NSString *> *)installedThemeNames;
 - (void)useThemeNamed:(NSString *)name;
-- (void)applySkeleterm;
 - (BOOL)isPluginInstalled:(NSString *)identifier;
 - (BOOL)isPluginEnabled:(NSString *)identifier;
 - (void)setPlugin:(NSString *)identifier enabled:(BOOL)enabled;
@@ -196,7 +194,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
         @"padding": @12, @"scrollback": @2000,
         @"theme": @"terminal-default",
         @"themeOptions": @[@"terminal-default",@"amber-crt",@"ghost-glass",@"green-screen"],
-        @"textColorMode": @"ansi", @"skeleterm": @NO,
+        @"textColorMode": @"ansi",
         @"plugins": @{
             @"hello":@NO,@"pi-bridge":@NO,@"editor-deck":@NO,
             @"vim-control":@NO,@"neovim-control":@NO,@"emacs-control":@NO,
@@ -211,7 +209,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
         },
         @"colors": @{@"foreground":@"theme",@"cursor":@"theme",@"palette":@"theme"},
         @"tabs": @{@"railWidth":@34,@"animations":@YES,@"animationSpeed":@1.35,@"autoHide":@YES,@"hideDelay":@5,@"tileGap":@10,@"screenInset":@18,@"hyprlandBlur":@NO},
-        @"system": @{@"restoreSession":@YES,@"pasteProtection":@YES,@"secureKeyboard":@YES,@"shellIntegration":@YES,@"clipboardRead":@"ask",@"clipboardWrite":@"allow"},
+        @"system": @{@"restoreSession":@YES,@"pasteProtection":@NO,@"secureKeyboard":@YES,@"shellIntegration":@YES,@"clipboardRead":@"ask",@"clipboardWrite":@"allow"},
         @"updates": @{@"checkOnLaunch":@YES,@"repository":@"sebastianmiletic/termatica"},
         @"keybindings": @{@"openConfig":@"cmd+,",@"newWindow":@"cmd+n",@"newTab":@"cmd+t",@"newVerticalTab":@"cmd+shift+t",@"closeTab":@"cmd+w",@"clearTerminal":@"cmd+k",@"previousPrompt":@"cmd+shift+p",@"nextPrompt":@"cmd+option+p",@"reload":@"cmd+r",@"copy":@"cmd+c",@"paste":@"cmd+v",@"selectAll":@"cmd+a",@"zoomIn":@"cmd+plus",@"zoomOut":@"cmd+-",@"zoomReset":@"cmd+0"}
     };
@@ -245,8 +243,8 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
     self.fontSize = MAX(8, MIN(48, [d[@"fontSize"] doubleValue] ?: 11));
     self.padding = MAX(0, MIN(40, [d[@"padding"] doubleValue]));
     self.scrollback = MAX(100, MIN(100000, [d[@"scrollback"] unsignedIntegerValue] ?: 2000));
-    self.skeleterm=[d[@"skeleterm"] boolValue];
-    NSDictionary *system=[d[@"system"] isKindOfClass:NSDictionary.class]?d[@"system"]:@{};self.restoreSession=system[@"restoreSession"]?[system[@"restoreSession"] boolValue]:YES;self.pasteProtection=system[@"pasteProtection"]?[system[@"pasteProtection"] boolValue]:YES;self.secureKeyboard=system[@"secureKeyboard"]?[system[@"secureKeyboard"] boolValue]:YES;self.shellIntegration=system[@"shellIntegration"]?[system[@"shellIntegration"] boolValue]:YES;self.clipboardRead=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardRead"]]?system[@"clipboardRead"]:@"ask";self.clipboardWrite=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardWrite"]]?system[@"clipboardWrite"]:@"allow";
+    
+    NSDictionary *system=[d[@"system"] isKindOfClass:NSDictionary.class]?d[@"system"]:@{};self.restoreSession=system[@"restoreSession"]?[system[@"restoreSession"] boolValue]:YES;self.pasteProtection=system[@"pasteProtection"]?[system[@"pasteProtection"] boolValue]:NO;self.secureKeyboard=system[@"secureKeyboard"]?[system[@"secureKeyboard"] boolValue]:YES;self.shellIntegration=system[@"shellIntegration"]?[system[@"shellIntegration"] boolValue]:YES;self.clipboardRead=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardRead"]]?system[@"clipboardRead"]:@"ask";self.clipboardWrite=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardWrite"]]?system[@"clipboardWrite"]:@"allow";
     NSDictionary *updates=[d[@"updates"] isKindOfClass:NSDictionary.class]?d[@"updates"]:@{};self.updateCheckOnLaunch=updates[@"checkOnLaunch"]?[updates[@"checkOnLaunch"] boolValue]:YES;self.updateRepository=[updates[@"repository"] isKindOfClass:NSString.class]?updates[@"repository"]:@"sebastianmiletic/termatica";
     self.pluginStates=[d[@"plugins"] isKindOfClass:NSDictionary.class]?d[@"plugins"]:@{};
     self.unicodeRendering=[self isPluginEnabled:@"unicode-rendering"];
@@ -283,7 +281,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
     NSArray *plainRaw=[theme[@"plainTextPalette"] isKindOfClass:NSArray.class]?theme[@"plainTextPalette"]:@[];NSMutableArray *plainColors=[NSMutableArray arrayWithCapacity:8];for(NSUInteger i=0;i<MIN((NSUInteger)8,plainRaw.count);i++)if([plainRaw[i] isKindOfClass:NSString.class])[plainColors addObject:THexColor(plainRaw[i],self.foreground)];if(!plainColors.count){NSUInteger indexes[]={12,13,14,10,11,9};for(NSUInteger i=0;i<6;i++)[plainColors addObject:self.palette[indexes[i]]];}self.plainTextPalette=plainColors;self.colorizePlainText=[d[@"textColorMode"] isKindOfClass:NSString.class]&&[d[@"textColorMode"] isEqual:@"spectrum"];
 }
 - (NSArray<NSString *> *)installedThemeNames {NSMutableOrderedSet *names=[NSMutableOrderedSet orderedSet];for(NSString *root in @[[NSBundle.mainBundle.resourcePath stringByAppendingPathComponent:@"Themes"],[TConfigDirectoryPath() stringByAppendingPathComponent:@"themes"]])for(NSString *file in [NSFileManager.defaultManager contentsOfDirectoryAtPath:root error:nil]?:@[])if([file.pathExtension.lowercaseString isEqual:@"json"])[names addObject:file.stringByDeletingPathExtension];return names.array;}
-- (void)useThemeNamed:(NSString *)name {if(![self themeNamed:name])return;[self ensureEditableFile];NSData *data=[NSData dataWithContentsOfFile:self.path];NSMutableDictionary *d=[NSMutableDictionary dictionary];id parsed=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;if([parsed isKindOfClass:NSDictionary.class])[d addEntriesFromDictionary:parsed];d[@"theme"]=name;d[@"skeleterm"]=@NO;[d removeObjectForKey:@"profile"];[[NSJSONSerialization dataWithJSONObject:d options:NSJSONWritingPrettyPrinted error:nil] writeToFile:self.path atomically:YES];[self reload];}
+- (void)useThemeNamed:(NSString *)name {if(![self themeNamed:name])return;[self ensureEditableFile];NSData *data=[NSData dataWithContentsOfFile:self.path];NSMutableDictionary *d=[NSMutableDictionary dictionary];id parsed=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;if([parsed isKindOfClass:NSDictionary.class])[d addEntriesFromDictionary:parsed];d[@"theme"]=name;[d removeObjectForKey:@"profile"];[[NSJSONSerialization dataWithJSONObject:d options:NSJSONWritingPrettyPrinted error:nil] writeToFile:self.path atomically:YES];[self reload];}
 - (void)ensureEditableFile {
     NSFileManager *fm = NSFileManager.defaultManager;
     NSString *dir = self.path.stringByDeletingLastPathComponent;
@@ -331,9 +329,6 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
 }
 - (void)writeEditableDictionary:(NSDictionary *)dictionary {
     NSData *data=[NSJSONSerialization dataWithJSONObject:dictionary options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];if([data writeToFile:self.path options:NSDataWritingAtomic error:nil])[NSFileManager.defaultManager setAttributes:@{NSFilePosixPermissions:@0600} ofItemAtPath:self.path error:nil];[self ensureEditableFile];[self reload];
-}
-- (void)applySkeleterm {
-    NSMutableDictionary *d=[self editableDictionary];[d removeObjectForKey:@"profile"];d[@"skeleterm"]=@YES;d[@"theme"]=@"terminal-default";d[@"scrollback"]=@300;d[@"appearance"]=@{@"backgroundOpacity":@1,@"windowOpacity":@1,@"blur":@NO,@"glow":@0,@"scanlines":@0,@"vignette":@0,@"cursorStyle":@"block"};[self writeEditableDictionary:d];
 }
 - (BOOL)isPluginInstalled:(NSString *)identifier {return identifier.length&&[NSFileManager.defaultManager fileExistsAtPath:[[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"] stringByAppendingPathComponent:identifier]];}
 - (BOOL)isPluginEnabled:(NSString *)identifier {return [self isPluginInstalled:identifier]&&[self.pluginStates[identifier] boolValue];}
@@ -517,7 +512,7 @@ static NSArray<NSDictionary *> *TUnifiedConfigSections(TConfig *config) {
       @{@"title":@"PLUGINS",@"detail":@"all installed and built-in capabilities",@"rows":pluginRows},
       @{@"title":@"SYSTEM & UPDATES",@"detail":@"shell, memory mode and GitHub releases",@"rows":@[
         TSetting(@"Shell",@"shell",@"string",nil,nil,nil,nil),TSetting(@"Shell arguments",@"shellArguments",@"json",nil,nil,nil,nil),
-        TSetting(@"Skeleterm",@"skeleterm",@"bool",nil,nil,nil,nil),TSetting(@"Restore workspace",@"system.restoreSession",@"bool",nil,nil,nil,nil),
+        TSetting(@"Restore workspace",@"system.restoreSession",@"bool",nil,nil,nil,nil),
         TSetting(@"Unsafe paste protection",@"system.pasteProtection",@"bool",nil,nil,nil,nil),TSetting(@"Secure password input",@"system.secureKeyboard",@"bool",nil,nil,nil,nil),TSetting(@"Shell integration",@"system.shellIntegration",@"bool",nil,nil,nil,nil),TSetting(@"Clipboard reads",@"system.clipboardRead",@"option",@[@"ask",@"allow",@"deny"],nil,nil,nil),
         TSetting(@"Clipboard writes",@"system.clipboardWrite",@"option",@[@"ask",@"allow",@"deny"],nil,nil,nil),TSetting(@"Check on launch",@"updates.checkOnLaunch",@"bool",nil,nil,nil,nil),
         TSetting(@"Update repository",@"updates.repository",@"string",nil,nil,nil,nil)
@@ -586,7 +581,7 @@ static BOOL TCodeBoolean(NSString *value,BOOL *result){NSString *v=value.lowerca
 enum { TCodeRowCount=14 };
 static NSMutableDictionary *TCodeTabs(NSMutableDictionary *dictionary){NSDictionary *value=[dictionary[@"tabs"] isKindOfClass:NSDictionary.class]?dictionary[@"tabs"]:@{};NSMutableDictionary *tabs=[value mutableCopy];dictionary[@"tabs"]=tabs;return tabs;}
 static NSMutableDictionary *TCodeColors(NSMutableDictionary *dictionary){NSDictionary *value=[dictionary[@"colors"] isKindOfClass:NSDictionary.class]?dictionary[@"colors"]:@{};NSMutableDictionary *colors=[value mutableCopy];dictionary[@"colors"]=colors;return colors;}
-static void TCodeReset(NSMutableDictionary *d){d[@"theme"]=@"terminal-default";d[@"textColorMode"]=@"ansi";d[@"fontSize"]=@11;d[@"scrollback"]=@2000;d[@"skeleterm"]=@NO;[d removeObjectForKey:@"colors"];d[@"appearance"]=@{@"topBar":@YES};d[@"tabs"]=@{@"railWidth":@34,@"animations":@YES,@"animationSpeed":@1.35,@"autoHide":@YES,@"hideDelay":@5,@"tileGap":@10,@"screenInset":@18,@"hyprlandBlur":@NO};}
+
 static NSString *TCodeCycleColor(NSMutableDictionary *d,NSString *key,NSInteger direction){
     NSArray *choices=@[@"theme",@"#F2FAF8",@"#7DD3FC",@"#7CE38B",@"#FFE083",@"#FF8787",@"#DDB2F4"];NSMutableDictionary *colors=TCodeColors(d);NSString *current=[colors[key] isKindOfClass:NSString.class]?colors[key]:@"theme";NSInteger index=[choices indexOfObject:current];if(index==NSNotFound)index=0;index=(index+direction+(NSInteger)choices.count)%(NSInteger)choices.count;NSString *next=choices[(NSUInteger)index];if([next isEqual:@"theme"])[colors removeObjectForKey:key];else colors[key]=next;return next;
 }
@@ -684,7 +679,7 @@ static int TRunEditorCLI(int argc,const char *argv[]) {
 
 #if 0
 static NSString *TCompletionScript(NSString *shell) {
-    NSString *commands=@"code plugins themes configs install run editor reload config config-path config-dir plugins-dir themes-dir skeleterm completions help version";
+    NSString *commands=@"code plugins themes configs install run editor reload config config-path config-dir plugins-dir themes-dir completions help version";
     NSString *plugins=@"hello pi-bridge editor-deck vim-control neovim-control emacs-control nano-control micro-control helix-control hidden-path hyprland-layout unicode-rendering osc-integration borderless-window";
     NSString *themes=@"terminal-default amber-crt ghost-glass green-screen",*editors=@"vim nvim emacs nano micro hx";
     NSString *code=@"show path";
@@ -1053,6 +1048,7 @@ enum { TClusterBase = 0x110000 };
         }
         NSString *hiddenPathScript=[[[TConfigDirectoryPath() stringByAppendingPathComponent:@"extensions"] stringByAppendingPathComponent:@"hidden-path"] stringByAppendingPathComponent:@"prompt.sh"];
         setenv("TERM_HP",hiddenPathScript.fileSystemRepresentation,1);
+        if([self.config isPluginEnabled:@"hidden-path"])setenv("TERMATICA_HIDDEN_PATH","1",1);
         if(launchDirectory.length)chdir(launchDirectory.fileSystemRepresentation);
         NSString *bin=NSBundle.mainBundle.executablePath.stringByDeletingLastPathComponent;
         NSString *path=NSProcessInfo.processInfo.environment[@"PATH"]?:@"/usr/bin:/bin:/usr/sbin:/sbin";
@@ -1087,7 +1083,7 @@ enum { TClusterBase = 0x110000 };
     });
     dispatch_source_set_cancel_handler(source, ^{});
     dispatch_resume(source);
-    [self setHiddenPathEnabled:[self.config isPluginEnabled:@"hidden-path"]];
+    _hiddenPathDesired=[self.config isPluginEnabled:@"hidden-path"];_hiddenPathApplied=_hiddenPathDesired?1:0;
     return YES;
 }
 - (void)stopShellTerminating:(BOOL)terminate {[self disableSecureKeyboardInput];dispatch_source_t source=nil;@synchronized(self){source=_readSource;_readSource=nil;if(source&&_readPaused){_readPaused=NO;dispatch_resume(source);}if(terminate){[_pendingData setLength:0];_pendingOffset=0;_drainScheduled=NO;_backpressureReported=NO;}}if(source)dispatch_source_cancel(source);int master=_master;_master=-1;if(master>=0)close(master);pid_t child=_pid;_pid=-1;if(child>0){if(terminate)kill(child,SIGHUP);dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{int status=0;while(waitpid(child,&status,0)<0&&errno==EINTR){}});}}
@@ -1832,7 +1828,7 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
 }
 - (void)applyAppearance {
     BOOL tiled=[self usesTiledLayout];
-    BOOL wantsBlur=self.config.blur&&!self.config.skeleterm&&(!tiled||self.config.hyprlandBlur)&&getenv("TERMATICA_NO_BLUR")==NULL;
+    BOOL wantsBlur=self.config.blur&&(!tiled||self.config.hyprlandBlur)&&getenv("TERMATICA_NO_BLUR")==NULL;
     BOOL opaque=self.config.backgroundOpacity>=0.999&&self.config.windowOpacity>=0.999&&!wantsBlur,borderless=!self.config.topBar,transparentFrame=borderless||tiled;
     BOOL animateWindow=self.window.isVisible&&self.config.tabAnimations;
     if(self.config.hyprlandLayout){if(!_hyprlandApplied)_preHyprlandFrame=self.window.frame;NSRect target=NSInsetRect(NSScreen.mainScreen.visibleFrame,self.config.screenInset,self.config.screenInset);if(!NSEqualRects(self.window.frame,target))[self.window setFrame:target display:YES animate:animateWindow];_hyprlandApplied=YES;}else if(_hyprlandApplied){if(_preHyprlandFrame.size.width>0)[self.window setFrame:_preHyprlandFrame display:YES animate:animateWindow];_hyprlandApplied=NO;}
@@ -1875,7 +1871,7 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 }
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center shouldPresentNotification:(NSUserNotification *)notification{return YES;}
 #pragma clang diagnostic pop
-- (void)applicationDidFinishLaunching:(NSNotification *)notification {_cliSocket=-1;_config=[TConfig new];TInstallConfiguredPlugins(_config);[_config reload];_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];[self buildMenu];[self startCLIListener];if(!self.config.skeleterm)[_extensions loadExtensions];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}[self checkForUpdatesOnLaunch];}
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {_cliSocket=-1;_config=[TConfig new];TInstallConfiguredPlugins(_config);[_config reload];_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];[self buildMenu];[self startCLIListener];[_extensions loadExtensions];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}[self checkForUpdatesOnLaunch];}
 - (void)applicationWillTerminate:(NSNotification *)notification {if(self.config.restoreSession){NSMutableArray *states=[NSMutableArray array];for(TWindowController *controller in self.windows){NSDictionary *state=[controller sessionState];if(state)[states addObject:state];}TWriteSessionSnapshot(states);}else TInvalidateSessionSnapshot();if(_cliSource){dispatch_source_cancel(_cliSource);_cliSource=nil;}else if(_cliSocket>=0){close(_cliSocket);TRemoveOwnedSocket(TCLISocketPath());_cliSocket=-1;}}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return YES;}
 - (void)newWindow:(id)sender {TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}
@@ -1892,7 +1888,7 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 - (void)previousPrompt:(id)sender{[[self active].terminal jumpToPromptDirection:-1];}
 - (void)nextPrompt:(id)sender{[[self active].terminal jumpToPromptDirection:1];}
 - (void)openConfig:(id)sender{[[self active].terminal sendString:@"termatica config\n"];}
-- (void)reloadAll {NSDictionary *priorBindings=self.config.keybindings;[self.config ensureEditableFile];[self.config reload];TInstallConfiguredPlugins(self.config);[self.config reload];if(![priorBindings isEqualToDictionary:self.config.keybindings])[self buildMenu];if(self.config.skeleterm)[self.extensions unloadExtensions];else[self.extensions loadExtensions];for(TWindowController *window in self.windows)[window reloadConfig];}
+- (void)reloadAll {NSDictionary *priorBindings=self.config.keybindings;[self.config ensureEditableFile];[self.config reload];TInstallConfiguredPlugins(self.config);[self.config reload];if(![priorBindings isEqualToDictionary:self.config.keybindings])[self buildMenu];[self.extensions loadExtensions];for(TWindowController *window in self.windows)[window reloadConfig];}
 - (void)handleCLIRequest:(NSDictionary *)request {NSString *command=request[@"command"];if([command isEqual:@"reload"])[self reloadAll];else if([command isEqual:@"run"]&&![[self active] executeExtensionNamed:request[@"name"] query:request[@"query"]])TLog(@"extension command not found: %@",request[@"name"]);}
 - (void)buildMenu {
     NSDictionary *keys=self.config.keybindings;NSMenu *main=[NSMenu new];NSApp.mainMenu=main;
