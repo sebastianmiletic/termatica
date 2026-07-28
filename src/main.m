@@ -807,10 +807,10 @@ enum { TClusterBase = 0x110000 };
 - (void)consumeData:(NSData *)data;
 - (void)putASCIIBytes:(const uint8_t *)bytes length:(NSUInteger)length __attribute__((objc_direct));
 - (void)putCodepoint:(uint32_t)codepoint __attribute__((objc_direct));
-- (void)handleControl:(uint8_t)control __attribute__((objc_direct));
-- (void)handleEscape:(uint8_t)finalByte __attribute__((objc_direct));
-- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct));
-- (void)finishOSC:(NSString *)value __attribute__((objc_direct));
+- (void)handleControl:(uint8_t)control;
+- (void)handleEscape:(uint8_t)finalByte;
+- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count;
+- (void)finishOSC:(NSString *)value;
 - (void)sendString:(NSString *)string;
 - (void)scrollByLines:(NSInteger)lines;
 - (void)jumpToPromptDirection:(NSInteger)direction;
@@ -841,6 +841,11 @@ enum { TClusterBase = 0x110000 };
     NSUInteger _scrollTop, _scrollBottom;
     NSMutableArray<NSData *> *_history;
     NSUInteger _historyStart;
+    TCell *_historyCells;
+    TCell *_historyBlankRow;
+    NSUInteger _historyCapacity;
+    NSUInteger _historyCount;
+    NSUInteger _historyCols;
     NSMutableData *_scratchLine;
     NSMutableData *_glyphScratch;
     NSMutableData *_colorScratch;
@@ -891,11 +896,9 @@ enum { TClusterBase = 0x110000 };
     NSInteger _hiddenPathApplied;
     NSUInteger _hiddenPathGeneration;
     uint32_t _palette256[256];
-    CGFloat _cachedGlyphAdvance;
     BOOL _palette256Valid;
     BOOL _cachedUnicodeRendering;
     BOOL _cachedOscIntegration;
-    TCell *_historyBlankRow;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config {
@@ -914,7 +917,7 @@ enum { TClusterBase = 0x110000 };
 - (void)dealloc {
     [self stopShellTerminating:YES];
     free(_cells);
-    free(_historyBlankRow);
+    free(_historyCells);
 }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (void)disableSecureKeyboardInput {if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf disableSecureKeyboardInput];});return;}if(_secureInputEnabled){DisableSecureEventInput();_secureInputEnabled=NO;TLog(@"secure keyboard input disabled");}}
@@ -936,7 +939,10 @@ enum { TClusterBase = 0x110000 };
 }
 - (void)reloadAppearance {
     @synchronized(self) {
-    if(_historyStart||_history.count>self.config.scrollback){NSUInteger keep=MIN(_history.count,self.config.scrollback),first=_history.count-keep;NSMutableArray *ordered=[NSMutableArray arrayWithCapacity:keep];for(NSUInteger i=first;i<_history.count;i++)[ordered addObject:_history[(_historyStart+i)%_history.count]];_history=ordered;_historyStart=0;}
+    if(_historyCount>self.config.scrollback){
+        NSUInteger drop=_historyCount-self.config.scrollback;
+        _historyStart=(_historyStart+drop)%_historyCapacity;_historyCount=self.config.scrollback;
+    }
     [_attributeCache removeAllObjects];
     _cachedUnicodeRendering = self.config.unicodeRendering;
     _cachedOscIntegration = self.config.oscIntegration;
@@ -946,16 +952,13 @@ enum { TClusterBase = 0x110000 };
     _italicFont = [fm convertFont:_font toHaveTrait:NSItalicFontMask] ?: _font;
     NSDictionary *a = @{NSFontAttributeName:_font};
     NSSize size = [@"M" sizeWithAttributes:a];
-    _cachedGlyphAdvance = size.width;
     _cellWidth = ceil(size.width);
+    _cellHeight = ceil(_font.ascender - _font.descender + _font.leading + 2);
     for (NSUInteger i = 0; i < 16; i++) _palette256[i] = i < self.config.palette.count ? TRGB(self.config.palette[i]) : 0;
     const int levels[6] = {0,95,135,175,215,255};
     for (NSUInteger i = 16; i < 232; i++) { NSUInteger q=i-16,r=q/36,g=(q/6)%6,b=q%6; _palette256[i]=((uint32_t)levels[r]<<16)|((uint32_t)levels[g]<<8)|(uint32_t)levels[b]; }
     for (NSUInteger i = 232; i < 256; i++) { int v=8+(i-232)*10; _palette256[i]=((uint32_t)v<<16)|((uint32_t)v<<8)|(uint32_t)v; }
     _palette256Valid = YES;
-    [self ensureBlankRow];
-    [self markAllDamage];
-    _cellHeight = ceil(_font.ascender - _font.descender + _font.leading + 2);
     [self markAllDamage];
     [self resizeGrid];
     [self refreshTextView];
@@ -964,22 +967,47 @@ enum { TClusterBase = 0x110000 };
 }
 - (void)releaseAnimationLayer {if(self.layer.animationKeys.count){__weak TTerminalView *weakSelf=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,80*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[weakSelf releaseAnimationLayer];});return;}[self.layer removeAllAnimations];self.wantsLayer=YES;}
 - (TCell)blankCell { return (TCell){ .ch=' ', .fg=TDefaultColor, .bg=TDefaultColor, .flags=0 }; }
+- (TCell *)cellsForRow:(NSUInteger)row {return _cells+((_rowOffset+row)%_rows)*_cols;}
+- (void)normalizeRows {if(!_rowOffset||!_cells)return;TCell *ordered=malloc(_rows*_cols*sizeof(TCell));for(NSUInteger y=0;y<_rows;y++)memcpy(ordered+y*_cols,[self cellsForRow:y],_cols*sizeof(TCell));free(_cells);_cells=ordered;_rowOffset=0;}
 - (void)ensureBlankRow {
-    if(_historyBlankRow && _cols>0){BOOL match=YES;TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols;i++)if(_historyBlankRow[i].ch!=blank.ch||_historyBlankRow[i].fg!=blank.fg||_historyBlankRow[i].bg!=blank.bg||_historyBlankRow[i].flags!=blank.flags){match=NO;break;}if(match)return;}
+    if(_cols==0)return;
+    if(_historyBlankRow){TCell blank=[self blankCell];BOOL match=YES;for(NSUInteger i=0;i<_cols;i++){if(_historyBlankRow[i].ch!=blank.ch||_historyBlankRow[i].fg!=blank.fg||_historyBlankRow[i].bg!=blank.bg||_historyBlankRow[i].flags!=blank.flags){match=NO;break;}}if(match)return;}
     free(_historyBlankRow);_historyBlankRow=malloc(_cols*sizeof(TCell));
     if(_historyBlankRow){TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols;i++)_historyBlankRow[i]=blank;}
 }
-- (TCell *)cellsForRow:(NSUInteger)row __attribute__((objc_direct)) {return _cells+((_rowOffset+row)%_rows)*_cols;}
-- (void)normalizeRows {if(!_rowOffset||!_cells)return;TCell *ordered=malloc(_rows*_cols*sizeof(TCell));for(NSUInteger y=0;y<_rows;y++)memcpy(ordered+y*_cols,[self cellsForRow:y],_cols*sizeof(TCell));free(_cells);_cells=ordered;_rowOffset=0;}
-- (void)addHistoryCells:(const TCell *)cells count:(NSUInteger)count __attribute__((objc_direct)) {NSUInteger limit=self.config.scrollback;if(!limit)return;_historyGeneration++;NSUInteger length=count*sizeof(TCell);if(_history.count<limit){[_history addObject:[NSMutableData dataWithBytes:cells length:length]];return;}NSMutableData *line=(NSMutableData *)_history[_historyStart];[line setLength:length];if(length)memcpy(line.mutableBytes,cells,length);_historyStart=(_historyStart+1)%_history.count;}
-- (NSData *)historyLineAtIndex:(NSUInteger)index {return _history[(_historyStart+index)%_history.count];}
-- (void)clearHistory {[_history removeAllObjects];_historyStart=0;}
+- (void)addHistoryCells:(const TCell *)cells count:(NSUInteger)count __attribute__((objc_direct)) {
+    NSUInteger limit=self.config.scrollback;if(!limit){[self ensureBlankRow];return;}
+    NSUInteger cols=_cols,len=MIN(count,cols);
+    [self ensureBlankRow];
+    if(len==0)return;
+    _historyGeneration++;
+    if(_historyCells==NULL||_historyCapacity<limit||_historyCols!=cols){
+        if(_historyCells)free(_historyCells);
+        NSUInteger newCap=limit;_historyCapacity=newCap;_historyCols=cols;
+        _historyCells=malloc(newCap*cols*sizeof(TCell));_historyBlankRow=malloc(cols*sizeof(TCell));
+        if(!_historyCells||!_historyBlankRow){free(_historyCells);free(_historyBlankRow);_historyCells=NULL;_historyBlankRow=NULL;_historyCapacity=0;return;}
+        TCell blank=[self blankCell];TCell *b=_historyBlankRow;for(NSUInteger i=0;i<cols;i++)b[i]=blank;
+        TCell *c=_historyCells;for(NSUInteger i=0;i<newCap*cols;i++)c[i]=blank;
+        _historyCount=0;_historyStart=0;
+    }
+    NSUInteger dstIdx;
+    if(_historyCount<limit){dstIdx=_historyCount;_historyCount++;}
+    else{dstIdx=_historyStart;_historyStart=(_historyStart+1)%_historyCapacity;}
+    TCell *dst=_historyCells+dstIdx*cols;
+    if(len)memcpy(dst,cells,len*sizeof(TCell));
+    if(len<cols)memcpy(dst+len,_historyBlankRow+len,(cols-len)*sizeof(TCell));
+}
+- (NSData *)historyLineAtIndex:(NSUInteger)index {
+    if(!_historyCells||index>=_historyCount||_historyCols!=_cols)return _historyCount?[_history[(_historyStart+index)%_historyCount] copy]:nil;
+    return [NSData dataWithBytesNoCopy:_historyCells+(((_historyStart+index)%_historyCapacity)*_historyCols) length:_historyCols*sizeof(TCell) freeWhenDone:NO];
+}
+- (void)clearHistory {[_history removeAllObjects];_historyStart=0;if(_historyCells){TCell blank=[self blankCell];for(NSUInteger i=0;i<_historyCapacity*_historyCols;i++)_historyCells[i]=blank;}_historyCount=0;}
 - (void)resizeGrid {
     @synchronized(self) {
     CGFloat topInset=self.safeAreaInsets.top+self.topContentInset,bottomInset=self.safeAreaInsets.bottom;
     NSUInteger cols = MAX(2, (NSUInteger)floor((self.bounds.size.width - self.config.padding * 2 - self.leadingOverlayInset) / MAX(1, _cellWidth)));
     NSUInteger rows = MAX(2, (NSUInteger)floor((self.bounds.size.height - self.config.padding * 2 - topInset - bottomInset) / MAX(1, _cellHeight)));
-    if (cols == _cols && rows == _rows) return;
+    if(cols == _cols && rows == _rows) return;
     TCell *next = calloc(cols * rows, sizeof(TCell));
     TCell blank = [self blankCell];
     for (NSUInteger i = 0; i < cols * rows; i++) next[i] = blank;
@@ -1115,7 +1143,7 @@ enum { TClusterBase = 0x110000 };
     __unsafe_unretained TTerminalView *terminal=self;
     [_decoder consumeData:data ascii:^(const uint8_t *bytes,NSUInteger length){[terminal putASCIIBytes:bytes length:length];} codepoint:^(uint32_t codepoint){[terminal putCodepoint:codepoint];} control:^(uint8_t control){[terminal handleControl:control];} escape:^(uint8_t finalByte){[terminal handleEscape:finalByte];} csi:^(uint8_t finalByte,uint8_t prefix,const int *parameters,NSUInteger count){[terminal executeCSI:finalByte prefix:prefix parameters:parameters count:count];} osc:^(NSString *value){[terminal finishOSC:value];}];
     if(followOutput)_historyOffset=0;
-    else _historyOffset=MIN((NSInteger)_history.count,_historyOffset+(NSInteger)(_historyGeneration-historyGeneration));
+    else _historyOffset=MIN((NSInteger)_historyCount,_historyOffset+(NSInteger)(_historyGeneration-historyGeneration));
     [self markDamageX:oldCursorX y:oldCursorY width:1 height:1];[self markDamageX:_cursorX y:_cursorY width:1 height:1];
     [self refreshTextView];
     }
@@ -1136,14 +1164,14 @@ enum { TClusterBase = 0x110000 };
         else{[self markDamageX:startX y:startY width:_cols-startX height:1];if(endY>startY+1)[self markDamageX:0 y:startY+1 width:_cols height:(endY-(startY+1))];[self markDamageX:0 y:endY width:endX height:1];}
     }
 }
-- (void)handleControl:(uint8_t)control __attribute__((objc_direct)) {
+- (void)handleControl:(uint8_t)control {
     if(control==7){dispatch_async(dispatch_get_main_queue(),^{NSBeep();});return;}
     if(control==8){if(_cursorX)_cursorX--;return;}
     if(control==9){_cursorX=MIN(((_cursorX/8)+1)*8,_cols-1);return;}
     if(control==10||control==11||control==12){[self lineFeed];return;}
     if(control==13)_cursorX=0;
 }
-- (void)handleEscape:(uint8_t)finalByte __attribute__((objc_direct)) {
+- (void)handleEscape:(uint8_t)finalByte {
     if(finalByte=='7'){_savedX=_cursorX;_savedY=_cursorY;}
     else if(finalByte=='8'){_cursorX=MIN(_savedX,_cols-1);_cursorY=MIN(_savedY,_rows-1);}
     else if(finalByte=='D')[self lineFeed];
@@ -1152,7 +1180,7 @@ enum { TClusterBase = 0x110000 };
     else if(finalByte=='c')[self resetTerminal];
 }
 static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index,int defaultValue){return index<count&&parameters[index]?parameters[index]:defaultValue;}
-- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct)) {
+- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count {
     int n=TCSIParameter(parameters,count,0,1);
     if((prefix=='>'||prefix=='=')&&command=='u'){_kittyKeyboardFlags=(NSUInteger)MAX(0,parameters[0]);return;}
     if(prefix=='<'&&command=='u'){_kittyKeyboardFlags=0;return;}
@@ -1218,7 +1246,6 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     }
 }
 - (uint32_t)colorFor256:(int)i __attribute__((objc_direct)) {
-    if (_palette256Valid) return i >= 0 && i < 256 ? _palette256[i] : 0;
     if (i < 16) return TRGB(self.config.palette[MAX(0, i)]);
     if (i < 232) { int q=i-16, r=q/36, g=(q/6)%6, b=q%6; int levels[]={0,95,135,175,215,255}; return (levels[r]<<16)|(levels[g]<<8)|levels[b]; }
     int v = 8 + (i - 232) * 10; return (v<<16)|(v<<8)|v;
@@ -1276,27 +1303,26 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if (_scrollTop == 0 && _scrollBottom == _rows - 1) {
         TCell *top=[self cellsForRow:0];NSUInteger used=_cols;TCell blank=[self blankCell];while(used){TCell cell=top[used-1];if(cell.ch!=blank.ch||cell.flags!=blank.flags||cell.fg!=blank.fg||cell.bg!=blank.bg)break;used--;}
         [self addHistoryCells:top count:used];
-        _rowOffset=(_rowOffset+1)%_rows;TCell *bottom=[self cellsForRow:_rows-1];NSUInteger physical=(_rowOffset+_rows-1)%_rows;
-        if(_historyBlankRow)memcpy(bottom,_historyBlankRow,_cols*sizeof(TCell));
-        if(_cachedOscIntegration)for(NSUInteger x=0;x<_cols;x++)[_linksByCell removeObjectForKey:@(physical*_cols+x)];
-        return;
+        _rowOffset=(_rowOffset+1)%_rows;TCell *bottom=[self cellsForRow:_rows-1];NSUInteger physical=(_rowOffset+_rows-1)%_rows;for(NSUInteger x=0;x<_cols;x++){bottom[x]=blank;if(_cachedOscIntegration)[_linksByCell removeObjectForKey:@(physical*_cols+x)];}return;
     }
     [self normalizeRows];
     memmove(_cells + _scrollTop * _cols, _cells + (_scrollTop + 1) * _cols, (_scrollBottom - _scrollTop) * _cols * sizeof(TCell));
-    if(_historyBlankRow)memcpy(_cells+_scrollBottom*_cols,_historyBlankRow,_cols*sizeof(TCell));
+    TCell blank = [self blankCell];
+    for (NSUInteger x=0; x<_cols; x++) _cells[_scrollBottom*_cols+x]=blank;
 }
 - (void)reverseIndex {
     [self markDamageX:0 y:_scrollTop width:_cols height:_scrollBottom-_scrollTop+1];
     if (_cursorY > _scrollTop) { _cursorY--; return; }
-    if(_scrollTop==0&&_scrollBottom==_rows-1){_rowOffset=(_rowOffset+_rows-1)%_rows;TCell *top=[self cellsForRow:0];NSUInteger physical=_rowOffset;if(_historyBlankRow)memcpy(top,_historyBlankRow,_cols*sizeof(TCell));if(_cachedOscIntegration)for(NSUInteger x=0;x<_cols;x++)[_linksByCell removeObjectForKey:@(physical*_cols+x)];return;}
+    if(_scrollTop==0&&_scrollBottom==_rows-1){_rowOffset=(_rowOffset+_rows-1)%_rows;TCell blank=[self blankCell],*top=[self cellsForRow:0];NSUInteger physical=_rowOffset;for(NSUInteger x=0;x<_cols;x++){top[x]=blank;if(_cachedOscIntegration)[_linksByCell removeObjectForKey:@(physical*_cols+x)];}return;}
     [self normalizeRows];
     memmove(_cells + (_scrollTop + 1) * _cols, _cells + _scrollTop * _cols, (_scrollBottom - _scrollTop) * _cols * sizeof(TCell));
-    if(_historyBlankRow)memcpy(_cells+_scrollTop*_cols,_historyBlankRow,_cols*sizeof(TCell));
+    TCell blank=[self blankCell]; for(NSUInteger x=0;x<_cols;x++) _cells[_scrollTop*_cols+x]=blank;
 }
 - (void)eraseDisplay:(int)mode {
-    if (mode==2 || mode==3) { if(_historyBlankRow){for(NSUInteger i=0;i<_rows;i++)memcpy(_cells+i*_cols,_historyBlankRow,_cols*sizeof(TCell));}else{TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols*_rows;i++)_cells[i]=blank;}_rowOffset=0;if(mode==3)[self clearHistory];[self markAllDamage]; }
-    else if(mode==0){TCell blank=[self blankCell];for(NSUInteger y=_cursorY;y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger start=y==_cursorY?_cursorX:0;if(start==0&&_historyBlankRow)memcpy(row,_historyBlankRow,_cols*sizeof(TCell));else for(NSUInteger x=start;x<_cols;x++)row[x]=blank;}[self markDamageX:0 y:_cursorY width:_cols height:_rows-_cursorY];}
-    else if(mode==1){TCell blank=[self blankCell];for(NSUInteger y=0;y<=_cursorY&&y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger end=y==_cursorY?MIN(_cols,_cursorX+1):_cols;if(end==_cols&&_historyBlankRow)memcpy(row,_historyBlankRow,_cols*sizeof(TCell));else for(NSUInteger x=0;x<end;x++)row[x]=blank;}[self markDamageX:0 y:0 width:_cols height:MIN(_rows,_cursorY+1)];}
+    TCell blank=[self blankCell];
+    if (mode==2 || mode==3) { for(NSUInteger i=0;i<_cols*_rows;i++) _cells[i]=blank;_rowOffset=0;if(mode==3)[self clearHistory];[self markAllDamage]; }
+    else if(mode==0){for(NSUInteger y=_cursorY;y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger start=y==_cursorY?_cursorX:0;for(NSUInteger x=start;x<_cols;x++)row[x]=blank;}[self markDamageX:0 y:_cursorY width:_cols height:_rows-_cursorY];}
+    else if(mode==1){for(NSUInteger y=0;y<=_cursorY&&y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger end=y==_cursorY?MIN(_cols,_cursorX+1):_cols;for(NSUInteger x=0;x<end;x++)row[x]=blank;}[self markDamageX:0 y:0 width:_cols height:MIN(_rows,_cursorY+1)];}
 }
 - (void)eraseLine:(int)mode {
     TCell blank=[self blankCell]; NSUInteger a=0,b=_cols;
@@ -1310,7 +1336,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)deleteLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+_cursorY*_cols,_cells+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));TCell b=[self blankCell];for(NSUInteger i=(_scrollBottom-count+1)*_cols;i<=_scrollBottom*_cols+_cols-1;i++)_cells[i]=b;[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-- (void)finishOSC:(NSString *)osc __attribute__((objc_direct)) {
+- (void)finishOSC:(NSString *)osc {
     NSArray *parts=[osc componentsSeparatedByString:@";"];
     if(parts.count>1 && ([parts[0] isEqualToString:@"0"]||[parts[0] isEqualToString:@"2"])) {
         NSString *title=[[parts subarrayWithRange:NSMakeRange(1,parts.count-1)] componentsJoinedByString:@";"];
@@ -1321,7 +1347,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     } else if(self.config.oscIntegration&&[osc hasPrefix:@"8;"]){
         NSRange first=[osc rangeOfString:@";"],second=first.location==NSNotFound?NSMakeRange(NSNotFound,0):[osc rangeOfString:@";" options:0 range:NSMakeRange(NSMaxRange(first),osc.length-NSMaxRange(first))];NSString *url=second.location==NSNotFound?@"":[osc substringFromIndex:NSMaxRange(second)];_currentLink=url.length?url:nil;
     } else if(self.config.oscIntegration&&[osc hasPrefix:@"133;"]){
-        NSString *mark=parts.count>1?parts[1]:@"";NSMutableDictionary *entry=[@{@"mark":mark,@"row":@(_history.count+_cursorY)} mutableCopy];if([mark isEqual:@"D"]&&parts.count>2)entry[@"status"]=parts[2];[_commandMarks addObject:entry];if(_commandMarks.count>2048)[_commandMarks removeObjectsInRange:NSMakeRange(0,_commandMarks.count-2048)];
+        NSString *mark=parts.count>1?parts[1]:@"";NSMutableDictionary *entry=[@{@"mark":mark,@"row":@(_historyCount+_cursorY)} mutableCopy];if([mark isEqual:@"D"]&&parts.count>2)entry[@"status"]=parts[2];[_commandMarks addObject:entry];if(_commandMarks.count>2048)[_commandMarks removeObjectsInRange:NSMakeRange(0,_commandMarks.count-2048)];
     } else if(parts.count>1&&([parts[0] isEqual:@"10"]||[parts[0] isEqual:@"11"]||[parts[0] isEqual:@"12"])&&[parts[1] isEqual:@"?"]){
         NSColor *color=[parts[0] isEqual:@"10"]?self.config.foreground:([parts[0] isEqual:@"11"]?self.config.background:self.config.cursor);[self sendString:[NSString stringWithFormat:@"\033]%@;%@\033\\",parts[0],TOSCColor(color)]];
     } else if(parts.count>2&&[parts[0] isEqual:@"52"]){
@@ -1341,7 +1367,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 }
 
 - (const TCell *)lineAtVisibleIndex:(NSInteger)index temporary:(NSData **)temporary {
-    NSInteger totalHistory=(NSInteger)_history.count;
+    NSInteger totalHistory=(NSInteger)_historyCount;
     NSInteger first=totalHistory-(NSInteger)_historyOffset;
     NSInteger logical=first+index;
     if(logical<totalHistory && logical>=0){NSData *d=[self historyLineAtIndex:(NSUInteger)logical];NSUInteger full=_cols*sizeof(TCell);if(d.length>=full){*temporary=d;return d.bytes;}[_scratchLine setLength:full];TCell blank=[self blankCell],*cells=_scratchLine.mutableBytes;for(NSUInteger i=0;i<_cols;i++)cells[i]=blank;if(d.length)memcpy(cells,d.bytes,d.length);*temporary=_scratchLine;return cells;}
@@ -1376,7 +1402,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(_cursorVisible&&_historyOffset==0&&(self.window.firstResponder==self||self.activeTerminal)){BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];[[self.config.cursor colorWithAlphaComponent:block?0.42:0.96]setFill];NSRect r=NSMakeRect(pad+_cursorX*_cellWidth,top+_cursorY*_cellHeight,_cellWidth,_cellHeight);if([self.config.cursorStyle isEqual:@"bar"])r.size.width=2;else if([self.config.cursorStyle isEqual:@"underline"]){r.origin.y+=_cellHeight-2;r.size.height=2;}NSRectFillUsingOperation(r,NSCompositingOperationSourceOver);}
     if(self.config.scanlines>0){[[NSColor colorWithWhite:0 alpha:self.config.scanlines*0.10]setFill];CGFloat start=MAX(2,floor(NSMinY(dirtyRect)/4)*4);for(CGFloat y=start;y<NSMaxY(dirtyRect);y+=4)NSRectFillUsingOperation(NSMakeRect(NSMinX(dirtyRect),y,NSWidth(dirtyRect),1),NSCompositingOperationSourceOver);}
     if(self.config.vignette>0&&!self.tiledRendering){for(NSUInteger i=0;i<6;i++){[[NSColor colorWithWhite:0 alpha:self.config.vignette*(6-i)/30.0]setStroke];NSBezierPath *p=[NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds,i+0.5,i+0.5)];[p stroke];}}
-    if(_history.count&&_historyOffset>0){CGFloat trackHeight=MAX(1,NSHeight(self.bounds)-12),total=(CGFloat)(_history.count+_rows),visible=(CGFloat)_rows,thumbHeight=MAX(24,trackHeight*visible/MAX(visible,total)),progress=(CGFloat)_historyOffset/MAX(1,(CGFloat)_history.count),y=6+(trackHeight-thumbHeight)*(1-progress);[[self.config.foreground colorWithAlphaComponent:0.42]setFill];NSBezierPath *thumb=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMaxX(self.bounds)-5,y,2.5,thumbHeight) xRadius:1.25 yRadius:1.25];[thumb fill];}
+    if(_historyCount&&_historyOffset>0){CGFloat trackHeight=MAX(1,NSHeight(self.bounds)-12),total=(CGFloat)(_historyCount+_rows),visible=(CGFloat)_rows,thumbHeight=MAX(24,trackHeight*visible/MAX(visible,total)),progress=(CGFloat)_historyOffset/MAX(1,(CGFloat)_historyCount),y=6+(trackHeight-thumbHeight)*(1-progress);[[self.config.foreground colorWithAlphaComponent:0.42]setFill];NSBezierPath *thumb=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMaxX(self.bounds)-5,y,2.5,thumbHeight) xRadius:1.25 yRadius:1.25];[thumb fill];}
     }
 }
 - (NSPoint)cellForPoint:(NSPoint)p { NSInteger x=floor((p.x-self.config.padding-self.leadingOverlayInset)/_cellWidth),y=floor((p.y-self.config.padding-self.safeAreaInsets.top-self.topContentInset)/_cellHeight); return NSMakePoint(MAX(0,MIN((NSInteger)_cols-1,x)),MAX(0,MIN((NSInteger)_rows-1,y))); }
@@ -1403,11 +1429,11 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)mouseUp:(NSEvent *)event {if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:YES motion:NO];return;}if(_tileDragging){_tileDragging=NO;if(self.tileDragEnded)self.tileDragEnded(self,event);return;}_selecting=NO;}
 - (void)scrollByLines:(NSInteger)lines {
     @synchronized(self) {
-    if(!lines)return;NSInteger previous=_historyOffset;_historyOffset=MAX(0,MIN((NSInteger)_history.count,_historyOffset+lines));if(previous!=_historyOffset){_hasSelection=NO;[self markAllDamage];TLog(@"scrollback %ld/%lu",(long)_historyOffset,(unsigned long)_history.count);[self setNeedsDisplay:YES];}
+    if(!lines)return;NSInteger previous=_historyOffset;_historyOffset=MAX(0,MIN((NSInteger)_historyCount,_historyOffset+lines));if(previous!=_historyOffset){_hasSelection=NO;[self markAllDamage];TLog(@"scrollback %ld/%lu",(long)_historyOffset,(unsigned long)_historyCount);[self setNeedsDisplay:YES];}
     }
 }
 - (void)jumpToPromptDirection:(NSInteger)direction {
-    @synchronized(self){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_history.count-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_history.count,(NSInteger)_history.count-target));_hasSelection=NO;[self markAllDamage];[self setNeedsDisplay:YES];}}
+    @synchronized(self){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_historyCount-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,(NSInteger)_historyCount-target));_hasSelection=NO;[self markAllDamage];[self setNeedsDisplay:YES];}}
 }
 - (void)routeWheelLines:(NSInteger)lines event:(NSEvent *)event modifierFlags:(NSEventModifierFlags)modifiers {
     BOOL shift=(modifiers&NSEventModifierFlagShift)!=0;
@@ -1427,7 +1453,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else{lines=(NSInteger)llround(raw*3.0);if(!lines&&raw!=0)lines=raw>0?1:-1;}
     lines=MAX(-24,MIN(24,lines));
     if(!lines)return;
-    TLog(@"wheel delta %.2f -> %ld lines history %ld/%lu alt %d mouse %lu",raw,(long)lines,(long)_historyOffset,(unsigned long)_history.count,_alternateScreen,(unsigned long)_mouseTrackingMode);
+    TLog(@"wheel delta %.2f -> %ld lines history %ld/%lu alt %d mouse %lu",raw,(long)lines,(long)_historyOffset,(unsigned long)_historyCount,_alternateScreen,(unsigned long)_mouseTrackingMode);
     [self routeWheelLines:lines event:event modifierFlags:event.modifierFlags];
 }
 - (NSString *)selectedText {
@@ -1458,7 +1484,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     [self updateSecureKeyboardInput];
     if(e.modifierFlags&NSEventModifierFlagCommand){[super keyDown:e];return;}
     NSString *s=nil; unsigned short k=e.keyCode;NSEventModifierFlags mods=e.modifierFlags&NSEventModifierFlagDeviceIndependentFlagsMask;NSInteger modifier=1+((mods&NSEventModifierFlagShift)?1:0)+((mods&NSEventModifierFlagOption)?2:0)+((mods&NSEventModifierFlagControl)?4:0);
-    if((mods&NSEventModifierFlagShift)&&!(mods&(NSEventModifierFlagCommand|NSEventModifierFlagOption|NSEventModifierFlagControl))){if(k==116){[self scrollByLines:MAX(1,(NSInteger)_rows-1)];return;}if(k==121){[self scrollByLines:-MAX(1,(NSInteger)_rows-1)];return;}if(k==115){[self scrollByLines:(NSInteger)_history.count];return;}if(k==119){[self scrollByLines:-(NSInteger)_history.count];return;}}
+    if((mods&NSEventModifierFlagShift)&&!(mods&(NSEventModifierFlagCommand|NSEventModifierFlagOption|NSEventModifierFlagControl))){if(k==116){[self scrollByLines:MAX(1,(NSInteger)_rows-1)];return;}if(k==121){[self scrollByLines:-MAX(1,(NSInteger)_rows-1)];return;}if(k==115){[self scrollByLines:(NSInteger)_historyCount];return;}if(k==119){[self scrollByLines:-(NSInteger)_historyCount];return;}}
     if(_historyOffset){_historyOffset=0;[self setNeedsDisplay:YES];}
     NSString *functional=[self functionalKeySequenceForKeyCode:k modifier:modifier];if(functional){[self sendString:functional];_hasSelection=NO;[self setNeedsDisplay:YES];return;}
     if(_kittyKeyboardFlags&8){uint32_t code=[self kittyCodeForKey:k];if(!code)code=[self firstScalar:e.charactersIgnoringModifiers];if(code){[self sendString:[NSString stringWithFormat:@"\033[%u;%ldu",code,(long)modifier]];_hasSelection=NO;[self setNeedsDisplay:YES];return;}}
@@ -1478,7 +1504,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     }
     return self.launchDirectory.length?self.launchDirectory:NSFileManager.defaultManager.currentDirectoryPath;
 }
-- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_history.count),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy")))};}}
+- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy")))};}}
 @end
 
 @class TWindowController;
