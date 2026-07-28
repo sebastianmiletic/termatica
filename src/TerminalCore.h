@@ -20,19 +20,14 @@ typedef void (^TControlHandler)(uint8_t control);
 typedef void (^TEscapeHandler)(uint8_t finalByte);
 typedef void (^TCSIHandler)(uint8_t finalByte,uint8_t prefix,const int *parameters,NSUInteger count);
 typedef void (^TOSCHandler)(NSString *value);
-typedef void (^TRunHandler)(const uint32_t *codepoints,const uint8_t *widths,NSUInteger count);
-typedef void (*TRunFunc)(void *context,const uint32_t *codepoints,const uint8_t *widths,NSUInteger count);
 
 @interface TTerminalDecoder : NSObject
 - (void)consumeData:(const uint8_t *)bytes length:(NSUInteger)length
-                ascii:(TASCIIHandler)ascii
-            codepoint:(TCodepointHandler)codepoint
-              control:(TControlHandler)control
-               escape:(TEscapeHandler)escape
-                  csi:(TCSIHandler)csi
-                  osc:(TOSCHandler)osc
-              runHook:(TRunHandler)runHook
-              runFunc:(TRunFunc)runFunc
-               context:(void *)context;
+               ascii:(TASCIIHandler)ascii
+           codepoint:(TCodepointHandler)codepoint
+             control:(TControlHandler)control
+              escape:(TEscapeHandler)escape
+                 csi:(TCSIHandler)csi
+                 osc:(TOSCHandler)osc;
 - (void)reset;
 @end

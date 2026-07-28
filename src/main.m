@@ -815,7 +815,6 @@ enum { TClusterBase = 0x110000 };
 - (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct));
 - (void)finishOSC:(NSString *)value __attribute__((objc_direct));
 - (void)consumeDataRaw:(const uint8_t *)bytes length:(NSUInteger)length;
-- (void)putCodepointRun:(const uint32_t *)codepoints widths:(const uint8_t *)widths count:(NSUInteger)count __attribute__((objc_direct));
 - (void)sendString:(NSString *)string;
 - (void)scrollByLines:(NSInteger)lines;
 - (void)jumpToPromptDirection:(NSInteger)direction;
@@ -841,11 +840,6 @@ enum { TClusterBase = 0x110000 };
 - (void)parseKittyGraphic:(NSString *)data __attribute__((objc_direct));
 - (BOOL)cellInSearchResult:(NSUInteger)x y:(NSUInteger)y __attribute__((objc_direct));
 @end
-
-static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUInteger count) {
-    TTerminalView *t=(__bridge TTerminalView *)ctx;
-    [t putCodepointRun:cps widths:wids count:count];
-}
 
 #define METAL_ENABLED 0
 #if METAL_ENABLED
@@ -1267,7 +1261,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     }
     BOOL followOutput=_historyOffset==0;NSUInteger historyGeneration=_historyGeneration,oldCursorX=_cursorX,oldCursorY=_cursorY;
     __unsafe_unretained TTerminalView *terminal=self;
-    [_decoder consumeData:bytes length:length ascii:^(const uint8_t *bytes,NSUInteger length){[terminal putASCIIBytes:bytes length:length];} codepoint:^(uint32_t codepoint){[terminal putCodepoint:codepoint];} control:^(uint8_t control){[terminal handleControl:control];} escape:^(uint8_t finalByte){[terminal handleEscape:finalByte];} csi:^(uint8_t finalByte,uint8_t prefix,const int *parameters,NSUInteger count){[terminal executeCSI:finalByte prefix:prefix parameters:parameters count:count];} osc:^(NSString *value){[terminal finishOSC:value];} runHook:^(const uint32_t *codepoints,const uint8_t *widths,NSUInteger count){[terminal putCodepointRun:codepoints widths:widths count:count];} runFunc:NULL context:NULL];
+    [_decoder consumeData:bytes length:length ascii:^(const uint8_t *bytes,NSUInteger length){[terminal putASCIIBytes:bytes length:length];} codepoint:^(uint32_t codepoint){[terminal putCodepoint:codepoint];} control:^(uint8_t control){[terminal handleControl:control];} escape:^(uint8_t finalByte){[terminal handleEscape:finalByte];} csi:^(uint8_t finalByte,uint8_t prefix,const int *parameters,NSUInteger count){[terminal executeCSI:finalByte prefix:prefix parameters:parameters count:count];} osc:^(NSString *value){[terminal finishOSC:value];}];
     if(followOutput)_historyOffset=0;
     else _historyOffset=MIN((NSInteger)_historyCount,_historyOffset+(NSInteger)(_historyGeneration-historyGeneration));
     [self markDamageX:oldCursorX y:oldCursorY width:1 height:1];[self markDamageX:_cursorX y:_cursorY width:1 height:1];
@@ -1413,21 +1407,6 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)clearWideCellAtX:(NSUInteger)x row:(TCell *)row __attribute__((objc_direct)) {
     if(x>=_cols)return;if(row[x].flags&TWide){if(x+1<_cols)row[x+1]=[self blankCell];}
     else if((row[x].flags&TContinuation)&&x){row[x-1].flags&=~TWide;}
-}
-- (void)putCodepointRun:(const uint32_t *)codepoints widths:(const uint8_t *)widths count:(NSUInteger)count __attribute__((objc_direct)) {
-    if(!count)return;NSUInteger startX=_cursorX,startY=_cursorY;TCell *row=[self cellsForRow:_cursorY];
-    for(NSUInteger i=0;i<count;i++){
-        uint32_t cp=codepoints[i];uint8_t width=widths[i];
-        if(_cursorX>=_cols||(_cursorX+width>_cols)){if(_autoWrap){_cursorX=0;[self lineFeed];row=[self cellsForRow:_cursorY];}else _cursorX=_cols-width;}
-        TCell *cell=row+_cursorX;
-        if(cell->flags&(TWide|TContinuation)){if(cell->flags&TWide){if(_cursorX+1<_cols)row[_cursorX+1]=_historyBlankRow[_cursorX+1];}else if(_cursorX)row[_cursorX-1].flags&=~TWide;}
-        cell->ch=cp;cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags|(width==2?TWide:0);
-        if(width==2&&_cursorX+1<_cols){TCell *c2=row+_cursorX+1;c2->ch=0;c2->fg=_currentFG;c2->bg=_currentBG;c2->flags=TContinuation;}
-        _cursorX+=width;
-    }
-    NSUInteger endY=_cursorY,endX=_cursorX;
-    if(endY==startY){[self markDamageX:startX y:startY width:MAX(1,endX-startX) height:1];}
-    else{[self markDamageX:startX y:startY width:_cols-startX height:1];if(endY>startY+1)[self markDamageX:0 y:startY+1 width:_cols height:(endY-(startY+1))];[self markDamageX:0 y:endY width:endX height:1];}
 }
 - (void)putCodepoint:(uint32_t)cp __attribute__((objc_direct)) {
     if(_cachedUnicodeRendering&&_cursorX){

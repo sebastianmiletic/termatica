@@ -72,40 +72,10 @@ BOOL TUnicodeWide(uint32_t cp) { return TWidthFast(cp)==2; }
     else codepoint(0xFFFD);
 }
 
-- (void)consumeData:(const uint8_t *)bytes length:(NSUInteger)length ascii:(TASCIIHandler)ascii codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control escape:(TEscapeHandler)escape csi:(TCSIHandler)csi osc:(TOSCHandler)osc runHook:(TRunHandler)runHook runFunc:(TRunFunc)runFunc context:(void *)context {
-    uint32_t cps[2048];uint8_t wids[2048];
+- (void)consumeData:(const uint8_t *)bytes length:(NSUInteger)length ascii:(TASCIIHandler)ascii codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control escape:(TEscapeHandler)escape csi:(TCSIHandler)csi osc:(TOSCHandler)osc {
     for(NSUInteger index=0;index<length;index++){
         uint8_t byte=bytes[index];
         if(_state==TDecodeText&&!_utf8Needed&&byte>=32&&byte<127){NSUInteger start=index;while(index+1<length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;ascii(bytes+start,index-start+1);continue;}
-        if(_state==TDecodeText&&!_utf8Needed&&byte>=0xC0&&(runFunc||runHook)){NSUInteger cpCount=0;
-            while(index<length&&cpCount<2048){
-                byte=bytes[index];
-                if(byte>=32&&byte<127){cps[cpCount]=byte;wids[cpCount]=1;cpCount++;index++;continue;}
-                if(byte>=0xC0){
-                    uint32_t cp;
-                    if((byte&0xE0)==0xC0&&index+1<length&&(bytes[index+1]&0xC0)==0x80){
-                        cp=((uint32_t)(byte&0x1F)<<6)|(bytes[index+1]&0x3F);
-                        cps[cpCount]=cp;wids[cpCount]=TWidthFast(cp);cpCount++;
-                        index+=2;continue;
-                    } else if((byte&0xF0)==0xE0&&index+2<length&&(bytes[index+1]&0xC0)==0x80&&(bytes[index+2]&0xC0)==0x80){
-                        cp=((uint32_t)(byte&0x0F)<<12)|((uint32_t)(bytes[index+1]&0x3F)<<6)|(bytes[index+2]&0x3F);
-                        cps[cpCount]=cp;wids[cpCount]=TWidthFast(cp);cpCount++;
-                        index+=3;continue;
-                    } else if((byte&0xF8)==0xF0&&index+3<length&&(bytes[index+1]&0xC0)==0x80&&(bytes[index+2]&0xC0)==0x80&&(bytes[index+3]&0xC0)==0x80){
-                        cp=((uint32_t)(byte&0x07)<<18)|((uint32_t)(bytes[index+1]&0x3F)<<12)|((uint32_t)(bytes[index+2]&0x3F)<<6)|(bytes[index+3]&0x3F);
-                        cps[cpCount]=cp;wids[cpCount]=TWidthFast(cp);cpCount++;
-                        index+=4;continue;
-                    }
-                    break;
-                }
-                break;
-            }
-            if(cpCount){
-                if(runFunc) runFunc(context,cps,wids,cpCount);
-                else runHook(cps,wids,cpCount);
-            }
-            continue;
-        }
         if(_state==TDecodeOSC){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeOSCEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
         if(_state==TDecodeOSCEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeOSC;continue;}
         if(_state==TDecodeDCS){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeDCSEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
