@@ -807,10 +807,10 @@ enum { TClusterBase = 0x110000 };
 - (void)consumeData:(NSData *)data;
 - (void)putASCIIBytes:(const uint8_t *)bytes length:(NSUInteger)length __attribute__((objc_direct));
 - (void)putCodepoint:(uint32_t)codepoint __attribute__((objc_direct));
-- (void)handleControl:(uint8_t)control;
-- (void)handleEscape:(uint8_t)finalByte;
-- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count;
-- (void)finishOSC:(NSString *)value;
+- (void)handleControl:(uint8_t)control __attribute__((objc_direct));
+- (void)handleEscape:(uint8_t)finalByte __attribute__((objc_direct));
+- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct));
+- (void)finishOSC:(NSString *)value __attribute__((objc_direct));
 - (void)sendString:(NSString *)string;
 - (void)scrollByLines:(NSInteger)lines;
 - (void)jumpToPromptDirection:(NSInteger)direction;
@@ -890,6 +890,12 @@ enum { TClusterBase = 0x110000 };
     BOOL _hiddenPathDesired;
     NSInteger _hiddenPathApplied;
     NSUInteger _hiddenPathGeneration;
+    uint32_t _palette256[256];
+    CGFloat _cachedGlyphAdvance;
+    BOOL _palette256Valid;
+    BOOL _cachedUnicodeRendering;
+    BOOL _cachedOscIntegration;
+    TCell *_historyBlankRow;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config {
@@ -908,6 +914,7 @@ enum { TClusterBase = 0x110000 };
 - (void)dealloc {
     [self stopShellTerminating:YES];
     free(_cells);
+    free(_historyBlankRow);
 }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (void)disableSecureKeyboardInput {if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf disableSecureKeyboardInput];});return;}if(_secureInputEnabled){DisableSecureEventInput();_secureInputEnabled=NO;TLog(@"secure keyboard input disabled");}}
@@ -931,13 +938,23 @@ enum { TClusterBase = 0x110000 };
     @synchronized(self) {
     if(_historyStart||_history.count>self.config.scrollback){NSUInteger keep=MIN(_history.count,self.config.scrollback),first=_history.count-keep;NSMutableArray *ordered=[NSMutableArray arrayWithCapacity:keep];for(NSUInteger i=first;i<_history.count;i++)[ordered addObject:_history[(_historyStart+i)%_history.count]];_history=ordered;_historyStart=0;}
     [_attributeCache removeAllObjects];
+    _cachedUnicodeRendering = self.config.unicodeRendering;
+    _cachedOscIntegration = self.config.oscIntegration;
     _font = [NSFont fontWithName:self.config.fontName size:self.config.fontSize] ?: [NSFont monospacedSystemFontOfSize:self.config.fontSize weight:NSFontWeightRegular];
     NSFontManager *fm = NSFontManager.sharedFontManager;
     _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     _italicFont = [fm convertFont:_font toHaveTrait:NSItalicFontMask] ?: _font;
     NSDictionary *a = @{NSFontAttributeName:_font};
     NSSize size = [@"M" sizeWithAttributes:a];
+    _cachedGlyphAdvance = size.width;
     _cellWidth = ceil(size.width);
+    for (NSUInteger i = 0; i < 16; i++) _palette256[i] = i < self.config.palette.count ? TRGB(self.config.palette[i]) : 0;
+    const int levels[6] = {0,95,135,175,215,255};
+    for (NSUInteger i = 16; i < 232; i++) { NSUInteger q=i-16,r=q/36,g=(q/6)%6,b=q%6; _palette256[i]=((uint32_t)levels[r]<<16)|((uint32_t)levels[g]<<8)|(uint32_t)levels[b]; }
+    for (NSUInteger i = 232; i < 256; i++) { int v=8+(i-232)*10; _palette256[i]=((uint32_t)v<<16)|((uint32_t)v<<8)|(uint32_t)v; }
+    _palette256Valid = YES;
+    [self ensureBlankRow];
+    [self markAllDamage];
     _cellHeight = ceil(_font.ascender - _font.descender + _font.leading + 2);
     [self markAllDamage];
     [self resizeGrid];
@@ -947,7 +964,12 @@ enum { TClusterBase = 0x110000 };
 }
 - (void)releaseAnimationLayer {if(self.layer.animationKeys.count){__weak TTerminalView *weakSelf=self;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,80*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[weakSelf releaseAnimationLayer];});return;}[self.layer removeAllAnimations];self.wantsLayer=YES;}
 - (TCell)blankCell { return (TCell){ .ch=' ', .fg=TDefaultColor, .bg=TDefaultColor, .flags=0 }; }
-- (TCell *)cellsForRow:(NSUInteger)row {return _cells+((_rowOffset+row)%_rows)*_cols;}
+- (void)ensureBlankRow {
+    if(_historyBlankRow && _cols>0){BOOL match=YES;TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols;i++)if(_historyBlankRow[i].ch!=blank.ch||_historyBlankRow[i].fg!=blank.fg||_historyBlankRow[i].bg!=blank.bg||_historyBlankRow[i].flags!=blank.flags){match=NO;break;}if(match)return;}
+    free(_historyBlankRow);_historyBlankRow=malloc(_cols*sizeof(TCell));
+    if(_historyBlankRow){TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols;i++)_historyBlankRow[i]=blank;}
+}
+- (TCell *)cellsForRow:(NSUInteger)row __attribute__((objc_direct)) {return _cells+((_rowOffset+row)%_rows)*_cols;}
 - (void)normalizeRows {if(!_rowOffset||!_cells)return;TCell *ordered=malloc(_rows*_cols*sizeof(TCell));for(NSUInteger y=0;y<_rows;y++)memcpy(ordered+y*_cols,[self cellsForRow:y],_cols*sizeof(TCell));free(_cells);_cells=ordered;_rowOffset=0;}
 - (void)addHistoryCells:(const TCell *)cells count:(NSUInteger)count __attribute__((objc_direct)) {NSUInteger limit=self.config.scrollback;if(!limit)return;_historyGeneration++;NSUInteger length=count*sizeof(TCell);if(_history.count<limit){[_history addObject:[NSMutableData dataWithBytes:cells length:length]];return;}NSMutableData *line=(NSMutableData *)_history[_historyStart];[line setLength:length];if(length)memcpy(line.mutableBytes,cells,length);_historyStart=(_historyStart+1)%_history.count;}
 - (NSData *)historyLineAtIndex:(NSUInteger)index {return _history[(_historyStart+index)%_history.count];}
@@ -1099,16 +1121,29 @@ enum { TClusterBase = 0x110000 };
     }
 }
 - (void)putASCIIBytes:(const uint8_t *)bytes length:(NSUInteger)length __attribute__((objc_direct)) {
-    BOOL tracksLinks=self.config.oscIntegration;for(NSUInteger i=0;i<length;i++){if(_cursorX>=_cols){if(_autoWrap){_cursorX=0;[self lineFeed];}else _cursorX=_cols-1;}TCell *row=[self cellsForRow:_cursorY];[self clearWideCellAtX:_cursorX row:row];TCell *cell=row+_cursorX;cell->ch=bytes[i];cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags;[self markDamageX:_cursorX y:_cursorY width:1 height:1];if(tracksLinks){NSNumber *key=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[key]=_currentLink;else[_linksByCell removeObjectForKey:key];}_cursorX++;}
+    BOOL tracksLinks=_cachedOscIntegration;NSUInteger startX=_cursorX,startY=_cursorY;
+    for(NSUInteger i=0;i<length;i++){
+        if(_cursorX>=_cols){if(_autoWrap){_cursorX=0;[self lineFeed];}else _cursorX=_cols-1;}
+        TCell *row=[self cellsForRow:_cursorY];
+        [self clearWideCellAtX:_cursorX row:row];
+        TCell *cell=row+_cursorX;cell->ch=bytes[i];cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags;
+        if(tracksLinks){NSNumber *key=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[key]=_currentLink;else[_linksByCell removeObjectForKey:key];}
+        _cursorX++;
+    }
+    if(length){
+        NSUInteger endY=_cursorY,endX=_cursorX;
+        if(endY==startY){[self markDamageX:startX y:startY width:MAX(1,endX-startX) height:1];}
+        else{[self markDamageX:startX y:startY width:_cols-startX height:1];if(endY>startY+1)[self markDamageX:0 y:startY+1 width:_cols height:(endY-(startY+1))];[self markDamageX:0 y:endY width:endX height:1];}
+    }
 }
-- (void)handleControl:(uint8_t)control {
+- (void)handleControl:(uint8_t)control __attribute__((objc_direct)) {
     if(control==7){dispatch_async(dispatch_get_main_queue(),^{NSBeep();});return;}
     if(control==8){if(_cursorX)_cursorX--;return;}
     if(control==9){_cursorX=MIN(((_cursorX/8)+1)*8,_cols-1);return;}
     if(control==10||control==11||control==12){[self lineFeed];return;}
     if(control==13)_cursorX=0;
 }
-- (void)handleEscape:(uint8_t)finalByte {
+- (void)handleEscape:(uint8_t)finalByte __attribute__((objc_direct)) {
     if(finalByte=='7'){_savedX=_cursorX;_savedY=_cursorY;}
     else if(finalByte=='8'){_cursorX=MIN(_savedX,_cols-1);_cursorY=MIN(_savedY,_rows-1);}
     else if(finalByte=='D')[self lineFeed];
@@ -1117,7 +1152,7 @@ enum { TClusterBase = 0x110000 };
     else if(finalByte=='c')[self resetTerminal];
 }
 static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index,int defaultValue){return index<count&&parameters[index]?parameters[index]:defaultValue;}
-- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count {
+- (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct)) {
     int n=TCSIParameter(parameters,count,0,1);
     if((prefix=='>'||prefix=='=')&&command=='u'){_kittyKeyboardFlags=(NSUInteger)MAX(0,parameters[0]);return;}
     if(prefix=='<'&&command=='u'){_kittyKeyboardFlags=0;return;}
@@ -1168,10 +1203,10 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         else if (p == 23) _currentFlags &= ~TItalic;
         else if (p == 24) _currentFlags &= ~TUnderline;
         else if (p == 27) _currentFlags &= ~TInverse;
-        else if (p >= 30 && p <= 37) _currentFG = TRGB(self.config.palette[p - 30]);
-        else if (p >= 40 && p <= 47) _currentBG = TRGB(self.config.palette[p - 40]);
-        else if (p >= 90 && p <= 97) _currentFG = TRGB(self.config.palette[p - 90 + 8]);
-        else if (p >= 100 && p <= 107) _currentBG = TRGB(self.config.palette[p - 100 + 8]);
+        else if (p >= 30 && p <= 37) _currentFG = _palette256Valid ? _palette256[p - 30] : TRGB(self.config.palette[p - 30]);
+        else if (p >= 40 && p <= 47) _currentBG = _palette256Valid ? _palette256[p - 40] : TRGB(self.config.palette[p - 40]);
+        else if (p >= 90 && p <= 97) _currentFG = _palette256Valid ? _palette256[p - 90 + 8] : TRGB(self.config.palette[p - 90 + 8]);
+        else if (p >= 100 && p <= 107) _currentBG = _palette256Valid ? _palette256[p - 100 + 8] : TRGB(self.config.palette[p - 100 + 8]);
         else if (p == 39) _currentFG = TDefaultColor;
         else if (p == 49) _currentBG = TDefaultColor;
         else if((p==38||p==48)&&i+1<count){
@@ -1183,6 +1218,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     }
 }
 - (uint32_t)colorFor256:(int)i __attribute__((objc_direct)) {
+    if (_palette256Valid) return i >= 0 && i < 256 ? _palette256[i] : 0;
     if (i < 16) return TRGB(self.config.palette[MAX(0, i)]);
     if (i < 232) { int q=i-16, r=q/36, g=(q/6)%6, b=q%6; int levels[]={0,95,135,175,215,255}; return (levels[r]<<16)|(levels[g]<<8)|levels[b]; }
     int v = 8 + (i - 232) * 10; return (v<<16)|(v<<8)|v;
@@ -1218,17 +1254,17 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else if((row[x].flags&TContinuation)&&x){row[x-1].flags&=~TWide;}
 }
 - (void)putCodepoint:(uint32_t)cp __attribute__((objc_direct)) {
-    if(self.config.unicodeRendering&&_cursorX){
+    if(_cachedUnicodeRendering&&_cursorX){
         TCell *row=[self cellsForRow:_cursorY];NSUInteger baseX=_cursorX-1;if((row[baseX].flags&TContinuation)&&baseX)baseX--;TCell *base=&row[baseX];NSString *existing=[self stringForCodepoint:base->ch],*scalar=[self stringForCodepoint:cp],*candidate=[existing stringByAppendingString:scalar];BOOL joins=TUnicodeCombining(cp)||[existing hasSuffix:@"\u200D"]||(TUnicodeRegional(cp)&&TUnicodeRegional(base->ch));if(!joins&&candidate.length){NSRange cluster=[candidate rangeOfComposedCharacterSequenceAtIndex:candidate.length-1];joins=cluster.location==0&&NSMaxRange(cluster)==candidate.length;}
         if(joins&&base->ch!=' '&&!(base->flags&TContinuation)){base->ch=[self internGrapheme:candidate];base->flags|=TCluster;if((TUnicodeWide(cp)||cp==0xFE0F||cp==0x200D)&&!(base->flags&TWide)&&baseX+1<_cols){base->flags|=TWide;row[baseX+1]=(TCell){.ch=0,.fg=base->fg,.bg=base->bg,.flags=TContinuation};if(_cursorX==baseX+1)_cursorX++;}[self markDamageX:baseX y:_cursorY width:(base->flags&TWide)?2:1 height:1];return;}
     }
-    NSUInteger width=self.config.unicodeRendering&&TUnicodeWide(cp)?2:1;
+    NSUInteger width=_cachedUnicodeRendering&&TUnicodeWide(cp)?2:1;
     if (_cursorX >= _cols||(_cursorX+width>_cols)) {if(_autoWrap){_cursorX = 0; [self lineFeed];}else _cursorX=_cols-width;}
     TCell *row=[self cellsForRow:_cursorY];[self clearWideCellAtX:_cursorX row:row];TCell *c=row+_cursorX;
     c->ch = cp; c->fg = _currentFG; c->bg = _currentBG; c->flags = _currentFlags|(width==2?TWide:0);
     [self markDamageX:_cursorX y:_cursorY width:width height:1];
-    if(self.config.oscIntegration){NSNumber *linkKey=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[linkKey]=_currentLink;else[_linksByCell removeObjectForKey:linkKey];}
-    if(width==2){row[_cursorX+1]=(TCell){.ch=0,.fg=_currentFG,.bg=_currentBG,.flags=TContinuation};if(self.config.oscIntegration){NSNumber *continuation=[self linkKeyForX:_cursorX+1 y:_cursorY];if(_currentLink.length)_linksByCell[continuation]=_currentLink;else[_linksByCell removeObjectForKey:continuation];}}
+    if(_cachedOscIntegration){NSNumber *linkKey=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[linkKey]=_currentLink;else[_linksByCell removeObjectForKey:linkKey];}
+    if(width==2){row[_cursorX+1]=(TCell){.ch=0,.fg=_currentFG,.bg=_currentBG,.flags=TContinuation};if(_cachedOscIntegration){NSNumber *continuation=[self linkKeyForX:_cursorX+1 y:_cursorY];if(_currentLink.length)_linksByCell[continuation]=_currentLink;else[_linksByCell removeObjectForKey:continuation];}}
     _cursorX+=width;
 }
 - (void)lineFeed __attribute__((objc_direct)) {
@@ -1240,26 +1276,27 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if (_scrollTop == 0 && _scrollBottom == _rows - 1) {
         TCell *top=[self cellsForRow:0];NSUInteger used=_cols;TCell blank=[self blankCell];while(used){TCell cell=top[used-1];if(cell.ch!=blank.ch||cell.flags!=blank.flags||cell.fg!=blank.fg||cell.bg!=blank.bg)break;used--;}
         [self addHistoryCells:top count:used];
-        _rowOffset=(_rowOffset+1)%_rows;TCell *bottom=[self cellsForRow:_rows-1];NSUInteger physical=(_rowOffset+_rows-1)%_rows;for(NSUInteger x=0;x<_cols;x++){bottom[x]=blank;if(self.config.oscIntegration)[_linksByCell removeObjectForKey:@(physical*_cols+x)];}return;
+        _rowOffset=(_rowOffset+1)%_rows;TCell *bottom=[self cellsForRow:_rows-1];NSUInteger physical=(_rowOffset+_rows-1)%_rows;
+        if(_historyBlankRow)memcpy(bottom,_historyBlankRow,_cols*sizeof(TCell));
+        if(_cachedOscIntegration)for(NSUInteger x=0;x<_cols;x++)[_linksByCell removeObjectForKey:@(physical*_cols+x)];
+        return;
     }
     [self normalizeRows];
     memmove(_cells + _scrollTop * _cols, _cells + (_scrollTop + 1) * _cols, (_scrollBottom - _scrollTop) * _cols * sizeof(TCell));
-    TCell blank = [self blankCell];
-    for (NSUInteger x=0; x<_cols; x++) _cells[_scrollBottom*_cols+x]=blank;
+    if(_historyBlankRow)memcpy(_cells+_scrollBottom*_cols,_historyBlankRow,_cols*sizeof(TCell));
 }
 - (void)reverseIndex {
     [self markDamageX:0 y:_scrollTop width:_cols height:_scrollBottom-_scrollTop+1];
     if (_cursorY > _scrollTop) { _cursorY--; return; }
-    if(_scrollTop==0&&_scrollBottom==_rows-1){_rowOffset=(_rowOffset+_rows-1)%_rows;TCell blank=[self blankCell],*top=[self cellsForRow:0];NSUInteger physical=_rowOffset;for(NSUInteger x=0;x<_cols;x++){top[x]=blank;if(self.config.oscIntegration)[_linksByCell removeObjectForKey:@(physical*_cols+x)];}return;}
+    if(_scrollTop==0&&_scrollBottom==_rows-1){_rowOffset=(_rowOffset+_rows-1)%_rows;TCell *top=[self cellsForRow:0];NSUInteger physical=_rowOffset;if(_historyBlankRow)memcpy(top,_historyBlankRow,_cols*sizeof(TCell));if(_cachedOscIntegration)for(NSUInteger x=0;x<_cols;x++)[_linksByCell removeObjectForKey:@(physical*_cols+x)];return;}
     [self normalizeRows];
     memmove(_cells + (_scrollTop + 1) * _cols, _cells + _scrollTop * _cols, (_scrollBottom - _scrollTop) * _cols * sizeof(TCell));
-    TCell blank=[self blankCell]; for(NSUInteger x=0;x<_cols;x++) _cells[_scrollTop*_cols+x]=blank;
+    if(_historyBlankRow)memcpy(_cells+_scrollTop*_cols,_historyBlankRow,_cols*sizeof(TCell));
 }
 - (void)eraseDisplay:(int)mode {
-    TCell blank=[self blankCell];
-    if (mode==2 || mode==3) { for(NSUInteger i=0;i<_cols*_rows;i++) _cells[i]=blank;_rowOffset=0;if(mode==3)[self clearHistory];[self markAllDamage]; }
-    else if(mode==0){for(NSUInteger y=_cursorY;y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger start=y==_cursorY?_cursorX:0;for(NSUInteger x=start;x<_cols;x++)row[x]=blank;}[self markDamageX:0 y:_cursorY width:_cols height:_rows-_cursorY];}
-    else if(mode==1){for(NSUInteger y=0;y<=_cursorY&&y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger end=y==_cursorY?MIN(_cols,_cursorX+1):_cols;for(NSUInteger x=0;x<end;x++)row[x]=blank;}[self markDamageX:0 y:0 width:_cols height:MIN(_rows,_cursorY+1)];}
+    if (mode==2 || mode==3) { if(_historyBlankRow){for(NSUInteger i=0;i<_rows;i++)memcpy(_cells+i*_cols,_historyBlankRow,_cols*sizeof(TCell));}else{TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols*_rows;i++)_cells[i]=blank;}_rowOffset=0;if(mode==3)[self clearHistory];[self markAllDamage]; }
+    else if(mode==0){TCell blank=[self blankCell];for(NSUInteger y=_cursorY;y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger start=y==_cursorY?_cursorX:0;if(start==0&&_historyBlankRow)memcpy(row,_historyBlankRow,_cols*sizeof(TCell));else for(NSUInteger x=start;x<_cols;x++)row[x]=blank;}[self markDamageX:0 y:_cursorY width:_cols height:_rows-_cursorY];}
+    else if(mode==1){TCell blank=[self blankCell];for(NSUInteger y=0;y<=_cursorY&&y<_rows;y++){TCell *row=[self cellsForRow:y];NSUInteger end=y==_cursorY?MIN(_cols,_cursorX+1):_cols;if(end==_cols&&_historyBlankRow)memcpy(row,_historyBlankRow,_cols*sizeof(TCell));else for(NSUInteger x=0;x<end;x++)row[x]=blank;}[self markDamageX:0 y:0 width:_cols height:MIN(_rows,_cursorY+1)];}
 }
 - (void)eraseLine:(int)mode {
     TCell blank=[self blankCell]; NSUInteger a=0,b=_cols;
@@ -1273,7 +1310,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)deleteLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+_cursorY*_cols,_cells+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));TCell b=[self blankCell];for(NSUInteger i=(_scrollBottom-count+1)*_cols;i<=_scrollBottom*_cols+_cols-1;i++)_cells[i]=b;[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-- (void)finishOSC:(NSString *)osc {
+- (void)finishOSC:(NSString *)osc __attribute__((objc_direct)) {
     NSArray *parts=[osc componentsSeparatedByString:@";"];
     if(parts.count>1 && ([parts[0] isEqualToString:@"0"]||[parts[0] isEqualToString:@"2"])) {
         NSString *title=[[parts subarrayWithRange:NSMakeRange(1,parts.count-1)] componentsJoinedByString:@";"];
