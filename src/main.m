@@ -125,6 +125,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
 @property NSString *shell;
 @property NSArray<NSString *> *shellArguments;
 @property NSString *fontName;
+@property NSArray<NSString *> *fontFeatures;
 @property CGFloat fontSize;
 @property CGFloat padding;
 @property NSUInteger scrollback;
@@ -241,6 +242,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
     self.shell = [d[@"shell"] isKindOfClass:NSString.class] ? d[@"shell"] : @"/bin/zsh";
     self.shellArguments = [d[@"shellArguments"] isKindOfClass:NSArray.class] ? d[@"shellArguments"] : @[@"-l"];
     self.fontName = [d[@"fontName"] isKindOfClass:NSString.class] ? d[@"fontName"] : @"Monaco";
+    self.fontFeatures = [d[@"fontFeatures"] isKindOfClass:NSArray.class] ? d[@"fontFeatures"] : @[];
     self.fontSize = MAX(8, MIN(48, [d[@"fontSize"] doubleValue] ?: 11));
     self.padding = MAX(0, MIN(40, [d[@"padding"] doubleValue]));
     self.scrollback = MAX(100, MIN(100000, [d[@"scrollback"] unsignedIntegerValue] ?: 2000));
@@ -920,6 +922,9 @@ enum { TClusterBase = 0x110000 };
     dispatch_source_t _blinkTimer;
     BOOL _systemReduceMotion;
     NSString *_terminalTitle;
+    uint8_t _currentUnderlineStyle;
+    uint8_t *_underlineStyles;
+    NSString *_lastEmittedChar;
     NSString *_searchString;
     NSMutableArray *_searchResults;
     NSUInteger _searchIndex;
@@ -947,6 +952,7 @@ enum { TClusterBase = 0x110000 };
     free(_cells);
     free(_historyCells);
     free(_historyBlankRow);
+    free(_underlineStyles);
     if(_animationTimer){dispatch_source_cancel(_animationTimer);_animationTimer=nil;}
     if(_blinkTimer){dispatch_source_cancel(_blinkTimer);_blinkTimer=nil;}
 }
@@ -978,9 +984,35 @@ enum { TClusterBase = 0x110000 };
     _cachedUnicodeRendering = self.config.unicodeRendering;
     _cachedOscIntegration = self.config.oscIntegration;
     _font = [NSFont fontWithName:self.config.fontName size:self.config.fontSize] ?: [NSFont monospacedSystemFontOfSize:self.config.fontSize weight:NSFontWeightRegular];
+    if(self.config.fontFeatures.count){
+        NSMutableArray *features=[NSMutableArray array];
+        for(NSString *fn in self.config.fontFeatures){
+            NSNumber *ft=nil,*fs=nil;
+            if([fn isEqualToString:@"liga"]){ft=@(1);fs=@(2);}else if([fn isEqualToString:@"calt"]){ft=@(0);fs=@(1);}else if([fn isEqualToString:@"ss01"]){ft=@(12);fs=@(0);}else if([fn isEqualToString:@"ss02"]){ft=@(13);fs=@(0);}else if([fn isEqualToString:@"zero"]){ft=@(6);fs=@(3);}
+            if(ft&&fs)[features addObject:@{(__bridge NSString *)kCTFontFeatureTypeIdentifierKey:ft,(__bridge NSString *)kCTFontFeatureSelectorIdentifierKey:fs}];
+        }
+        if(features.count){
+            NSDictionary *attrs=@{(__bridge NSString *)kCTFontNameAttribute:_font.fontName,(__bridge NSString *)kCTFontFeaturesAttribute:features,(__bridge NSString *)kCTFontSizeAttribute:@(self.config.fontSize)};
+            CTFontDescriptorRef desc=CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef)attrs);
+            if(desc){CTFontRef ctFont=CTFontCreateWithFontDescriptor(desc,self.config.fontSize,NULL);if(ctFont){_font=CFBridgingRelease(ctFont);}CFRelease(desc);}
+        }
+    }
     NSFontManager *fm = NSFontManager.sharedFontManager;
     _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     _italicFont = [fm convertFont:_font toHaveTrait:NSItalicFontMask] ?: _font;
+    CTFontDescriptorRef mainDesc=CTFontCopyFontDescriptor((__bridge CTFontRef)_font);
+    if(mainDesc){NSMutableArray *cascade=[NSMutableArray array];
+        for(NSString *name in @[@"Apple Color Emoji",@"Apple Symbols",@"Noto Sans CJK SC",@"PingFang SC",@"Hiragino Sans"]){
+            CTFontDescriptorRef d=CTFontDescriptorCreateWithNameAndSize((__bridge CFStringRef)name,self.config.fontSize);
+            if(d){[cascade addObject:CFBridgingRelease(d)];}
+        }
+        NSDictionary *cattrs=@{(__bridge NSString *)kCTFontCascadeListAttribute:cascade};
+        CTFontDescriptorRef richDesc=CTFontDescriptorCreateCopyWithAttributes(mainDesc,(__bridge CFDictionaryRef)cattrs);
+        if(richDesc){CTFontRef richFont=CTFontCreateWithFontDescriptor(richDesc,self.config.fontSize,NULL);
+            if(richFont){_font=CFBridgingRelease(richFont);}CFRelease(richDesc);}
+        CFRelease(mainDesc);
+    }
+    _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     NSDictionary *a = @{NSFontAttributeName:_font};
     NSSize size = [@"M" sizeWithAttributes:a];
     _cellWidth = ceil(size.width);
@@ -1048,7 +1080,7 @@ enum { TClusterBase = 0x110000 };
             memcpy(next + y * cols, [self cellsForRow:y], copyCols * sizeof(TCell));
         free(_cells);
     }
-    _cells = next; _cols = cols; _rows = rows; _rowOffset=0;[_linksByCell removeAllObjects];
+    _cells = next; _cols = cols; _rows = rows; _rowOffset=0;[_linksByCell removeAllObjects];free(_underlineStyles);_underlineStyles=calloc(cols*rows,sizeof(uint8_t));
     _cursorX = MIN(_cursorX, cols - 1); _cursorY = MIN(_cursorY, rows - 1);
     _scrollTop = 0; _scrollBottom = rows - 1;
     [self markAllDamage];
@@ -1186,7 +1218,7 @@ enum { TClusterBase = 0x110000 };
         if(_cursorX>=_cols){if(_autoWrap){_cursorX=0;[self lineFeed];}else _cursorX=_cols-1;}
         TCell *row=[self cellsForRow:_cursorY];
         [self clearWideCellAtX:_cursorX row:row];
-        TCell *cell=row+_cursorX;cell->ch=bytes[i];cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags;
+        TCell *cell=row+_cursorX;cell->ch=bytes[i];cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags;if(_currentUnderlineStyle&&_underlineStyles)_underlineStyles[_cursorY*_cols+_cursorX]=_currentUnderlineStyle;
         if(tracksLinks){NSNumber *key=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[key]=_currentLink;else[_linksByCell removeObjectForKey:key];}
         _cursorX++;
     }
@@ -1246,6 +1278,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         case 'L': [self insertLines:n]; break;
         case 'M': [self deleteLines:n]; break;
         case 'n': if(parameters[0]==6)[self sendString:[NSString stringWithFormat:@"\033[%lu;%luR",_cursorY+1,_cursorX+1]];else if(parameters[0]==5)[self sendString:@"\033[0n"];break;
+        case 'b': { NSString *last=_lastEmittedChar;for(int r=0;r<n&&last;r++) [self sendString:last]; break; }
         case 'c': [self sendString:@"\033[?1;2c"]; break;
         default: break;
     }
@@ -1254,14 +1287,14 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(count==1&&parameters[0]==0){_currentFG=_currentBG=TDefaultColor;_currentFlags=0;return;}
     for(NSUInteger i=0;i<count;i++){
         int p=parameters[i];
-        if (p == 0) { _currentFG = _currentBG = TDefaultColor; _currentFlags = 0; }
+        if (p == 0) { _currentFG = _currentBG = TDefaultColor; _currentFlags = 0; _currentUnderlineStyle=0; }
         else if (p == 1) _currentFlags |= TBold;
         else if (p == 3) _currentFlags |= TItalic;
-        else if (p == 4) _currentFlags |= TUnderline;
+        else if (p == 4) { _currentFlags |= TUnderline; _currentUnderlineStyle=1; if(i+1<count&&parameters[i+1]>=0&&parameters[i+1]<=5){_currentUnderlineStyle=(uint8_t)parameters[i+1];i++;} }
         else if (p == 7) _currentFlags |= TInverse;
         else if (p == 22) _currentFlags &= ~TBold;
         else if (p == 23) _currentFlags &= ~TItalic;
-        else if (p == 24) _currentFlags &= ~TUnderline;
+        else if (p == 24) { _currentFlags &= ~TUnderline; _currentUnderlineStyle=0; }
         else if (p == 27) _currentFlags &= ~TInverse;
         else if (p >= 30 && p <= 37) _currentFG = _palette256Valid ? _palette256[p - 30] : TRGB(self.config.palette[p - 30]);
         else if (p >= 40 && p <= 47) _currentBG = _palette256Valid ? _palette256[p - 40] : TRGB(self.config.palette[p - 40]);
@@ -1370,6 +1403,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (void)finishOSC:(NSString *)osc __attribute__((objc_direct)) {
+    if([osc hasPrefix:@"bsu"]||[osc hasPrefix:@"esu"]){_synchronizedUpdates=[osc hasPrefix:@"esu"];[self refreshTextView];[self setNeedsDisplay:YES];return;}
     if([osc hasPrefix:@"1337;File="]){[self parseIterm2Image:osc];return;}
     if(osc.length>0&&[osc characterAtIndex:0]=='G'){[self parseKittyGraphic:osc];return;}
     NSArray *parts=[osc componentsSeparatedByString:@";"];
@@ -1423,7 +1457,8 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(_synchronizedUpdates||_displayScheduled||self.hidden)return;_displayScheduled=YES;__weak typeof(self) weakSelf=self;uint64_t delay=self.activeTerminal?8:16;
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_MSEC)),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage))[self setNeedsDisplayInRect:damage];[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
 }
-- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {NSNumber *key=@((foreground<<8)|flags);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline)attrs[NSUnderlineStyleAttributeName]=@(NSUnderlineStyleSingle);if(_attributeCache.count>=128)[_attributeCache removeAllObjects];_attributeCache[key]=attrs;return attrs;}
+- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow underlineStyle:(uint8_t)underlineStyle {NSNumber *key=@((foreground<<16)|(flags<<8)|underlineStyle);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline){NSInteger style=NSUnderlineStyleSingle;if(underlineStyle==2)style=NSUnderlineStyleThick;else if(underlineStyle==3)style=NSUnderlineStyleSingle|NSUnderlinePatternDash;else if(underlineStyle==4)style=NSUnderlineStyleSingle|NSUnderlinePatternDot;else if(underlineStyle==5)style=NSUnderlineStyleSingle|NSUnderlinePatternDashDot;attrs[NSUnderlineStyleAttributeName]=@(style);}if(_attributeCache.count>=1024){NSEnumerator *e=[_attributeCache keyEnumerator];NSNumber *evict=[e nextObject];if(evict)[_attributeCache removeObjectForKey:evict];}_attributeCache[key]=attrs;return attrs;}
+- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {return [self textAttributesForForeground:foreground flags:flags shadow:shadow underlineStyle:0];}
 - (void)drawRect:(NSRect)dirtyRect {
     @synchronized(self) {
     [self.config.background setFill];NSRectFill(dirtyRect);CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;NSShadow *phosphor=nil;if(self.config.glow>0){phosphor=[NSShadow new];phosphor.shadowColor=[self.config.accent colorWithAlphaComponent:self.config.glow];phosphor.shadowBlurRadius=1+self.config.glow*3;phosphor.shadowOffset=NSZeroSize;}
@@ -1432,7 +1467,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     for(NSInteger y=firstRow;y<lastRow;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:y temporary:&hold];if(!line)continue;
         BOOL inPlainToken=NO;NSUInteger plainToken=0;for(NSUInteger column=0;column<_cols;column++){uint32_t codepoint=line[column].ch;BOOL whitespace=!codepoint||codepoint==' '||codepoint=='\t';if(whitespace)inPlainToken=NO;else if(!inPlainToken){inPlainToken=YES;plainToken++;}plainForegrounds[column]=plainCount&&!whitespace?plainRGB[(plainToken-1)%plainCount]:defaultForeground;}
         NSInteger x=firstColumn;while(x<lastColumn){TCell c=line[x];BOOL selected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],inSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],inverse=(c.flags&TInverse)!=0;uint32_t background=c.bg==TDefaultColor?defaultBackground:c.bg,foreground=c.fg==TDefaultColor?defaultForeground:c.fg;if(inverse){uint32_t swap=foreground;foreground=background;background=swap;}if(inSearch){background=TRGB(self.config.accent);foreground=TRGB(self.config.background);}NSInteger kind=selected?1:(inSearch?3:((c.bg!=TDefaultColor||inverse)?2:0)),start=x;x++;while(x<lastColumn){TCell next=line[x];BOOL nextSelected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],nextInSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],nextInverse=(next.flags&TInverse)!=0;uint32_t nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg,nextForeground=next.fg==TDefaultColor?defaultForeground:next.fg;if(nextInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}if(nextInSearch){nextBackground=TRGB(self.config.accent);nextForeground=TRGB(self.config.background);}NSInteger nextKind=nextSelected?1:(nextInSearch?3:((next.bg!=TDefaultColor||nextInverse)?2:0));if(nextKind!=kind||(kind==2&&nextBackground!=background))break;x++;}if(kind){[(kind==1?self.config.selection:(kind==3?self.config.accent:TColor(background))) setFill];NSRectFill(NSMakeRect(pad+start*_cellWidth,top+y*_cellHeight,(x-start)*_cellWidth,_cellHeight));}}
-        x=firstColumn;while(x<lastColumn){TCell c=line[x];if(c.flags&TContinuation){x++;continue;}uint32_t foreground=c.fg==TDefaultColor&&!(c.flags&TInverse)?plainForegrounds[x]:(c.fg==TDefaultColor?defaultForeground:c.fg),background=c.bg==TDefaultColor?defaultBackground:c.bg;if(c.flags&TInverse){uint32_t swap=foreground;foreground=background;background=swap;}BOOL linked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);if(c.flags&(TWide|TCluster)){NSString *text=[self stringForCodepoint:c.ch];NSMutableDictionary *attrs=[[self textAttributesForForeground:foreground flags:flags shadow:phosphor] mutableCopy];[attrs removeObjectForKey:NSKernAttributeName];[text drawAtPoint:NSMakePoint(pad+x*_cellWidth,top+y*_cellHeight) withAttributes:attrs];x+=(c.flags&TWide)?2:1;continue;}NSInteger start=x;NSUInteger length=0;BOOL hasGlyph=NO;while(x<lastColumn){TCell next=line[x];if(next.flags&(TWide|TCluster|TContinuation))break;uint32_t nextForeground=next.fg==TDefaultColor&&!(next.flags&TInverse)?plainForegrounds[x]:(next.fg==TDefaultColor?defaultForeground:next.fg),nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg;if(next.flags&TInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}BOOL nextLinked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t nextFlags=(next.flags&TStyleMask)|(nextLinked?TUnderline:0);if(nextForeground!=foreground||nextFlags!=flags)break;uint32_t codepoint=next.ch?:' ';if(codepoint!=' ')hasGlyph=YES;length=TAppendUTF16(glyphs,length,codepoint);x++;}if(hasGlyph&&length){NSString *text=[[NSString alloc]initWithCharacters:glyphs length:length];[text drawAtPoint:NSMakePoint(pad+start*_cellWidth,top+y*_cellHeight) withAttributes:[self textAttributesForForeground:foreground flags:flags shadow:phosphor]];}}
+        x=firstColumn;while(x<lastColumn){TCell c=line[x];if(c.flags&TContinuation){x++;continue;}uint32_t foreground=c.fg==TDefaultColor&&!(c.flags&TInverse)?plainForegrounds[x]:(c.fg==TDefaultColor?defaultForeground:c.fg),background=c.bg==TDefaultColor?defaultBackground:c.bg;if(c.flags&TInverse){uint32_t swap=foreground;foreground=background;background=swap;}BOOL linked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);uint8_t ulStyle=(_underlineStyles&&y<(NSInteger)_rows&&x<(NSInteger)_cols)?_underlineStyles[y*_cols+x]:0;if(c.flags&(TWide|TCluster)){NSString *text=[self stringForCodepoint:c.ch];NSMutableDictionary *attrs=[[self textAttributesForForeground:foreground flags:flags shadow:phosphor underlineStyle:ulStyle] mutableCopy];[attrs removeObjectForKey:NSKernAttributeName];[text drawAtPoint:NSMakePoint(pad+x*_cellWidth,top+y*_cellHeight) withAttributes:attrs];x+=(c.flags&TWide)?2:1;continue;}NSInteger start=x;NSUInteger length=0;BOOL hasGlyph=NO;while(x<lastColumn){TCell next=line[x];if(next.flags&(TWide|TCluster|TContinuation))break;uint32_t nextForeground=next.fg==TDefaultColor&&!(next.flags&TInverse)?plainForegrounds[x]:(next.fg==TDefaultColor?defaultForeground:next.fg),nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg;if(next.flags&TInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}BOOL nextLinked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t nextFlags=(next.flags&TStyleMask)|(nextLinked?TUnderline:0);if(nextForeground!=foreground||nextFlags!=flags)break;uint32_t codepoint=next.ch?:' ';if(codepoint!=' ')hasGlyph=YES;length=TAppendUTF16(glyphs,length,codepoint);x++;}if(hasGlyph&&length){NSString *text=[[NSString alloc]initWithCharacters:glyphs length:length];[text drawAtPoint:NSMakePoint(pad+start*_cellWidth,top+y*_cellHeight) withAttributes:[self textAttributesForForeground:foreground flags:flags shadow:phosphor underlineStyle:ulStyle]];}}
     }
     if(_cursorVisible&&_historyOffset==0&&(_cursorBlink?_cursorBlinkVisible:YES)&&(self.window.firstResponder==self||self.activeTerminal)){BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];BOOL focused=self.window.firstResponder==self||self.activeTerminal;[[self.config.cursor colorWithAlphaComponent:focused?(block?0.42:0.96):(block?0.2:0.5)]setFill];NSRect r=NSMakeRect(pad+_cursorX*_cellWidth,top+_cursorY*_cellHeight,_cellWidth,_cellHeight);if([self.config.cursorStyle isEqual:@"bar"])r.size.width=2;else if([self.config.cursorStyle isEqual:@"underline"]){r.origin.y+=_cellHeight-2;r.size.height=2;}NSRectFillUsingOperation(r,NSCompositingOperationSourceOver);}
     if(_inlineImages.count){for(NSNumber *key in _inlineImages){NSUInteger v=key.unsignedIntegerValue;NSUInteger row=v>>16,col=v&0xFFFF;CGImageRef img=(__bridge CGImageRef)_inlineImages[key];if(img){NSRect imgRect=NSMakeRect(pad+col*_cellWidth,top+row*_cellHeight,CGImageGetWidth(img),CGImageGetHeight(img));if(NSIntersectsRect(imgRect,dirtyRect)){NSGraphicsContext *gc=NSGraphicsContext.currentContext;CGContextRef ctx=[gc CGContext];CGContextSaveGState(ctx);CGContextDrawImage(ctx,NSRectToCGRect(imgRect),img);CGContextRestoreGState(ctx);}}}}
