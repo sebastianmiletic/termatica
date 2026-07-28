@@ -917,6 +917,8 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     NSUInteger _hiddenPathGeneration;
     NSString *_lastEmittedChar;
     NSString *_terminalTitle;
+    uint8_t _currentUnderlineStyle;
+    uint8_t *_underlineStyles;
     BOOL _cachedUnicodeRendering;
     BOOL _cachedOscIntegration;
     NSObject *_gridLockToken;
@@ -994,6 +996,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     if(_animationTimer){dispatch_source_cancel(_animationTimer);_animationTimer=nil;}
     if(_displayLink){CVDisplayLinkStop(_displayLink);CVDisplayLinkRelease(_displayLink);}
     free(_cells);
+    free(_underlineStyles);
     free(_gridSnapshot);
     free(_historyCells);
     free(_historyBlankRow);
@@ -1049,6 +1052,12 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     NSFontManager *fm = NSFontManager.sharedFontManager;
     _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     _italicFont = [fm convertFont:_font toHaveTrait:NSItalicFontMask] ?: _font;
+    CTFontDescriptorRef mainDesc=CTFontCopyFontDescriptor((__bridge CTFontRef)_font);
+    if(mainDesc){NSMutableArray *cascade=[NSMutableArray array];for(NSString *name in @[@"Apple Color Emoji",@"Apple Symbols",@"Noto Sans CJK SC",@"Noto Sans CJK JP",@"Noto Sans CJK KR",@"Noto Sans CJK TC",@"PingFang SC",@"Hiragino Sans"]){CTFontDescriptorRef d=CTFontDescriptorCreateWithNameAndSize((__bridge CFStringRef)name,self.config.fontSize);if(d){[cascade addObject:CFBridgingRelease(d)];}}
+        NSDictionary *attrs=@{(__bridge NSString *)kCTFontCascadeListAttribute:cascade};
+        CTFontDescriptorRef richDesc=CTFontDescriptorCreateCopyWithAttributes(mainDesc,(__bridge CFDictionaryRef)attrs);
+        if(richDesc){CTFontRef richFont=CTFontCreateWithFontDescriptor(richDesc,self.config.fontSize,NULL);if(richFont){_font=CFBridgingRelease(richFont);}CFRelease(richDesc);}CFRelease(mainDesc);}
+    _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     NSDictionary *a = @{NSFontAttributeName:_font};
     NSSize size = [@"M" sizeWithAttributes:a];
     _cachedGlyphAdvance = size.width;
@@ -1122,6 +1131,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
         free(_cells);
     }
     _cells = next; _cols = cols; _rows = rows; _rowOffset=0;[_linksByCell removeAllObjects];
+    free(_underlineStyles);_underlineStyles=calloc(cols*rows,sizeof(uint8_t));
     _cursorX = MIN(_cursorX, cols - 1); _cursorY = MIN(_cursorY, rows - 1);
     _scrollTop = 0; _scrollBottom = rows - 1;
     [self markAllDamage];
@@ -1259,12 +1269,14 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     BOOL tracksLinks=_cachedOscIntegration;
     NSUInteger startX=_cursorX,startY=_cursorY;
     TCell *row=[self cellsForRow:_cursorY];TCell blank=[self blankCell];
+    NSUInteger underlineStartX=_cursorX;
     for(NSUInteger i=0;i<length;i++){
         if(_cursorX>=_cols){if(_autoWrap){_cursorX=0;[self lineFeed];row=[self cellsForRow:_cursorY];}else _cursorX=_cols-1;}
         TCell *cell=row+_cursorX;
         if(cell->flags&TWide){if(_cursorX+1<_cols)row[_cursorX+1]=blank;}
         else if((cell->flags&TContinuation)&&_cursorX)row[_cursorX-1].flags&=~TWide;
         cell->ch=bytes[i];cell->fg=_currentFG;cell->bg=_currentBG;cell->flags=_currentFlags;
+        if(_currentUnderlineStyle&&_underlineStyles){NSUInteger idx=_cursorY*_cols+_cursorX;_underlineStyles[idx]=_currentUnderlineStyle;}
         if(tracksLinks){NSNumber *key=[self linkKeyForX:_cursorX y:_cursorY];if(_currentLink.length)_linksByCell[key]=_currentLink;else[_linksByCell removeObjectForKey:key];}
         _cursorX++;
     }
@@ -1333,14 +1345,14 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(count==1&&parameters[0]==0){_currentFG=_currentBG=TDefaultColor;_currentFlags=0;return;}
     for(NSUInteger i=0;i<count;i++){
         int p=parameters[i];
-        if (p == 0) { _currentFG = _currentBG = TDefaultColor; _currentFlags = 0; }
+        if (p == 0) { _currentFG = _currentBG = TDefaultColor; _currentFlags = 0; _currentUnderlineStyle=0; }
         else if (p == 1) _currentFlags |= TBold;
         else if (p == 3) _currentFlags |= TItalic;
-        else if (p == 4) _currentFlags |= TUnderline;
+        else if (p == 4) { _currentFlags |= TUnderline; _currentUnderlineStyle=1; if(i+1<count&&parameters[i+1]>=0&&parameters[i+1]<=5){_currentUnderlineStyle=(uint8_t)parameters[i+1];i++;} }
         else if (p == 7) _currentFlags |= TInverse;
         else if (p == 22) _currentFlags &= ~TBold;
         else if (p == 23) _currentFlags &= ~TItalic;
-        else if (p == 24) _currentFlags &= ~TUnderline;
+        else if (p == 24) { _currentFlags &= ~TUnderline; _currentUnderlineStyle=0; }
         else if (p == 27) _currentFlags &= ~TInverse;
         else if (p >= 30 && p <= 37) _currentFG = _palette256Valid ? _palette256[p - 30] : TRGB(self.config.palette[p - 30]);
         else if (p >= 40 && p <= 47) _currentBG = _palette256Valid ? _palette256[p - 40] : TRGB(self.config.palette[p - 40]);
@@ -1541,7 +1553,8 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     }
     #endif
 }
-- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {NSNumber *key=@((foreground<<8)|flags);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=_cachedGlyphAdvance>0?_cachedGlyphAdvance:[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline)attrs[NSUnderlineStyleAttributeName]=@(NSUnderlineStyleSingle);if(_attributeCache.count>=1024){NSEnumerator *e=[_attributeCache keyEnumerator];NSNumber *evict=[e nextObject];if(evict)[_attributeCache removeObjectForKey:evict];}_attributeCache[key]=attrs;return attrs;}
+- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow underlineStyle:(uint8_t)underlineStyle {NSNumber *key=@((foreground<<16)|(flags<<8)|underlineStyle);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=_cachedGlyphAdvance>0?_cachedGlyphAdvance:[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline){NSInteger style=NSUnderlineStyleSingle;if(underlineStyle==2)style=NSUnderlineStyleThick|NSUnderlinePatternDot;else if(underlineStyle==3)style=NSUnderlineStyleSingle|NSUnderlinePatternDash;else if(underlineStyle==4)style=NSUnderlineStyleSingle|NSUnderlinePatternDot;else if(underlineStyle==5)style=NSUnderlineStyleSingle|NSUnderlinePatternDashDot;attrs[NSUnderlineStyleAttributeName]=@(style);}if(_attributeCache.count>=1024){NSEnumerator *e=[_attributeCache keyEnumerator];NSNumber *evict=[e nextObject];if(evict)[_attributeCache removeObjectForKey:evict];}_attributeCache[key]=attrs;return attrs;}
+- (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {return [self textAttributesForForeground:foreground flags:flags shadow:shadow underlineStyle:0];}
 - (CGImageRef)cachedGlyphForCodepoint:(uint32_t)cp flags:(uint8_t)flags foreground:(uint32_t)fg __attribute__((objc_direct)) {
     NSNumber *key=@(((uint64_t)cp<<32)|((uint64_t)flags<<24)|(fg&0xFFFFFF));
     id cachedObj=[_glyphCache objectForKey:key];CGImageRef cached=cachedObj?(__bridge CGImageRef)cachedObj:NULL;
@@ -1704,6 +1717,18 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:NO motion:NO];return;}
     NSPoint local=[self convertPoint:event.locationInWindow fromView:nil];
     NSPoint cell=[self cellForPoint:local];if(self.config.oscIntegration&&_historyOffset==0&&(event.modifierFlags&NSEventModifierFlagCommand)){NSString *link=_linksByCell[[self linkKeyForX:(NSUInteger)cell.x y:(NSUInteger)cell.y]];NSURL *url=link.length?[NSURL URLWithString:link]:nil;if(url){[NSWorkspace.sharedWorkspace openURL:url];return;}}
+    if((event.modifierFlags&NSEventModifierFlagOption)&&_mouseTrackingMode==0&&event.clickCount<2){NSUInteger tx=(NSUInteger)cell.x,ty=(NSUInteger)cell.y;[self sendString:[NSString stringWithFormat:@"\033[%lu;%luR",ty+1,tx+1]];return;}
+    if(event.clickCount>=3){
+        NSUInteger cx=(NSUInteger)cell.x,cy=(NSUInteger)cell.y;
+        NSInteger promptRow=cy,promptStart=0;
+        if(self.config.oscIntegration){for(NSInteger d=cy;d>=0;d--){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:d temporary:&hold];if(!line)continue;NSUInteger r=d*_cols;for(NSUInteger x=0;x<_cols;x++){if(line[x].ch==' '&&!line[x].flags)continue;}promptRow=d;}}
+        NSUInteger selStart=(NSUInteger)promptRow*_cols+(NSUInteger)cell.x;
+        NSUInteger selEnd=(NSUInteger)(cy+1)*(_cols-1);
+        if(selEnd<selStart){NSUInteger t=selStart;selStart=selEnd;selEnd=t;}
+        _selectionStart=NSMakePoint(selStart%_cols,selStart/_cols);_selectionEnd=NSMakePoint(selEnd%_cols,selEnd/_cols);
+        if(_selectionStart.y>_selectionEnd.y){NSPoint t=_selectionStart;_selectionStart=_selectionEnd;_selectionEnd=t;}
+        _selecting=NO;_hasSelection=YES;[self setNeedsDisplay:YES];return;
+    }
     BOOL commandDrag=(event.modifierFlags&NSEventModifierFlagCommand)!=0;
     BOOL paddingDrag=local.y<=MAX(10,self.config.padding+self.topContentInset);
     if(self.tiledRendering&&(commandDrag||paddingDrag)&&self.tileDragBegan){_tileDragging=YES;_selecting=NO;_hasSelection=NO;self.tileDragBegan(self,event);return;}
