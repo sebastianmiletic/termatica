@@ -1584,6 +1584,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;
     uint32_t defaultForeground=TRGB(self.config.foreground),defaultBackground=TRGB(self.config.background);
     float *v=_mtlVertexData;NSUInteger vc=0;
+    NSUInteger maxCells=5460;
     for(NSUInteger y=0;y<_rows;y++){
         NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:(NSInteger)y temporary:&hold];if(!line)continue;
         for(NSUInteger x=0;x<_cols;x++){
@@ -1596,15 +1597,45 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
             uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);
             float px=pad+x*_cellWidth,py=top+y*_cellHeight;
             if(bg!=defaultBackground){
-                if(vc<5461){v[vc*12]=px;v[vc*12+1]=py;v[vc*12+2]=_cellWidth;v[vc*12+3]=_cellHeight;v[vc*12+4]=0;v[vc*12+5]=0;v[vc*12+6]=1.0/2048.0;v[vc*12+7]=1.0/2048.0;v[vc*12+8]=((bg>>16)&0xFF)/255.0;v[vc*12+9]=((bg>>8)&0xFF)/255.0;v[vc*12+10]=(bg&0xFF)/255.0;v[vc*12+11]=1.0;vc++;}
+                if(vc<maxCells){v[vc*12]=px;v[vc*12+1]=py;v[vc*12+2]=_cellWidth;v[vc*12+3]=_cellHeight;v[vc*12+4]=0;v[vc*12+5]=0;v[vc*12+6]=1.0/2048.0;v[vc*12+7]=1.0/2048.0;v[vc*12+8]=((bg>>16)&0xFF)/255.0;v[vc*12+9]=((bg>>8)&0xFF)/255.0;v[vc*12+10]=(bg&0xFF)/255.0;v[vc*12+11]=1.0;vc++;}
             }
             uint32_t codepoint=c.ch?:' ';
-            if(codepoint!=' '&&vc<5461){
+            if(codepoint!=' '&&vc<maxCells){
                 float ax,ay,au0,av0,au1,av1;
                 [self atlasLookupForCodepoint:codepoint flags:flags fg:fg outX:&ax outY:&ay outU0:&au0 outV0:&av0 outU1:&au1 outV1:&av1];
                 v[vc*12]=px;v[vc*12+1]=py;v[vc*12+2]=_cellWidth;v[vc*12+3]=_cellHeight;v[vc*12+4]=au0;v[vc*12+5]=av0;v[vc*12+6]=au1;v[vc*12+7]=av1;v[vc*12+8]=((fg>>16)&0xFF)/255.0;v[vc*12+9]=((fg>>8)&0xFF)/255.0;v[vc*12+10]=(fg&0xFF)/255.0;v[vc*12+11]=1.0;vc++;
             }
         }
+    }
+    if(_inlineImages.count){
+        for(NSNumber *key in _inlineImages){
+            NSUInteger val=key.unsignedIntegerValue;NSUInteger row=val>>16,col=val&0xFFFF;
+            CGImageRef img=(__bridge CGImageRef)_inlineImages[key];if(!img)continue;
+            float ix=pad+col*_cellWidth,iy=top+row*_cellHeight;
+            float iw=CGImageGetWidth(img),ih=CGImageGetHeight(img);
+            float iu0=_atlasX/2048.0,iv0=_atlasY/2048.0;
+            NSUInteger uploadW=MIN((NSUInteger)ceil(iw),2048-_atlasX),uploadH=MIN((NSUInteger)ceil(ih),2048-_atlasY);
+            if(uploadW>0&&uploadH>0){
+                CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();
+                CGContextRef bctx=CGBitmapContextCreate(NULL,uploadW,uploadH,8,uploadW*4,cs,kCGImageAlphaPremultipliedLast);
+                if(cs&&bctx){CGContextDrawImage(bctx,CGRectMake(0,0,uploadW,uploadH),img);[_atlasTexture replaceRegion:MTLRegionMake2D(_atlasX,_atlasY,uploadW,uploadH) mipmapLevel:0 withBytes:CGBitmapContextGetData(bctx) bytesPerRow:uploadW*4];CGContextRelease(bctx);}
+                if(cs)CGColorSpaceRelease(cs);
+                float iu1=(_atlasX+uploadW)/2048.0,iv1=(_atlasY+uploadH)/2048.0;
+                if(vc<maxCells){v[vc*12]=ix;v[vc*12+1]=iy;v[vc*12+2]=iw;v[vc*12+3]=ih;v[vc*12+4]=iu0;v[vc*12+5]=iv0;v[vc*12+6]=iu1;v[vc*12+7]=iv1;v[vc*12+8]=1.0;v[vc*12+9]=1.0;v[vc*12+10]=1.0;v[vc*12+11]=1.0;vc++;}
+            }
+        }
+    }
+    if(_cursorVisible&&_historyOffset==0&&(self.window.firstResponder==self||self.activeTerminal)){
+        NSColor *cursorColor=self.config.cursor;
+        CGFloat cr,cg,cb,ca;
+        [cursorColor getRed:&cr green:&cg blue:&cb alpha:&ca];
+        BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];
+        float cx=pad+_cursorX*_cellWidth,cy=top+_cursorY*_cellHeight;
+        float cw=_cellWidth,ch=_cellHeight;
+        if([self.config.cursorStyle isEqual:@"bar"])cw=2;
+        else if([self.config.cursorStyle isEqual:@"underline"]){cy+=_cellHeight-2;ch=2;}
+        if(!block){ca=0.96;}else{ca=0.42;}
+        if(vc<maxCells){v[vc*12]=cx;v[vc*12+1]=cy;v[vc*12+2]=cw;v[vc*12+3]=ch;v[vc*12+4]=0;v[vc*12+5]=0;v[vc*12+6]=1.0/2048.0;v[vc*12+7]=1.0/2048.0;v[vc*12+8]=cr;v[vc*12+9]=cg;v[vc*12+10]=cb;v[vc*12+11]=ca;vc++;}
     }
     _mtlVertexCount=vc*6;
     id<MTLCommandBuffer> cmd=[_mtlCommandQueue commandBuffer];
