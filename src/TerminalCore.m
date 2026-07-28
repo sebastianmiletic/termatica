@@ -1,6 +1,6 @@
 #import "TerminalCore.h"
 
-enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape };
+enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDecodeDCS, TDecodeDCSEscape };
 
 NSUInteger TAppendUTF16(unichar *buffer,NSUInteger length,uint32_t codepoint) {
     if(!codepoint)codepoint=' ';
@@ -53,7 +53,9 @@ BOOL TUnicodeWide(uint32_t cp) {
         if(_state==TDecodeText&&!_utf8Needed&&byte>=32&&byte<127){NSUInteger start=index;while(index+1<data.length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;ascii(bytes+start,index-start+1);continue;}
         if(_state==TDecodeOSC){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeOSCEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
         if(_state==TDecodeOSCEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeOSC;continue;}
-        if(_state==TDecodeEscape){_state=TDecodeText;if(byte=='['){_state=TDecodeCSI;memset(_parameters,0,sizeof(_parameters));_parameterIndex=0;_prefix=0;}else if(byte==']'){[_osc setString:@""];_state=TDecodeOSC;}else escape(byte);continue;}
+        if(_state==TDecodeDCS){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeDCSEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
+        if(_state==TDecodeDCSEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeDCS;continue;}
+        if(_state==TDecodeEscape){_state=TDecodeText;if(byte=='['){_state=TDecodeCSI;memset(_parameters,0,sizeof(_parameters));_parameterIndex=0;_prefix=0;}else if(byte==']'){[_osc setString:@""];_state=TDecodeOSC;}else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){[_osc setString:@""];_state=TDecodeDCS;}else escape(byte);continue;}
         if(_state==TDecodeCSI){if(byte=='?'||byte=='>'||byte=='<'||byte=='='){_prefix=byte;continue;}if(byte>='0'&&byte<='9'){_parameters[_parameterIndex]=_parameters[_parameterIndex]*10+byte-'0';continue;}if(byte==';'||byte==':'){if(_parameterIndex<19)_parameterIndex++;continue;}if(byte>=0x40&&byte<=0x7E){csi(byte,_prefix,_parameters,_parameterIndex+1);_state=TDecodeText;}continue;}
         [self consumeTextByte:byte codepoint:codepoint control:control];
     }

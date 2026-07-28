@@ -805,7 +805,7 @@ enum { TClusterBase = 0x110000 };
 - (void)handleControl:(uint8_t)control;
 - (void)handleEscape:(uint8_t)finalByte;
 - (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix parameters:(const int *)parameters count:(NSUInteger)count;
-- (void)finishOSC:(NSString *)value;
+- (void)finishOSC:(NSString *)osc __attribute__((objc_direct));
 - (void)sendString:(NSString *)string;
 - (void)scrollByLines:(NSInteger)lines;
 - (void)jumpToPromptDirection:(NSInteger)direction;
@@ -822,6 +822,12 @@ enum { TClusterBase = 0x110000 };
 - (void)setHiddenPathEnabled:(BOOL)enabled;
 - (NSString *)workingDirectory;
 - (NSDictionary *)diagnosticState;
+- (void)renderImage:(CGImageRef)image atRow:(NSUInteger)row col:(NSUInteger)col width:(NSUInteger)w height:(NSUInteger)h scale:(BOOL)scale;
+- (void)deleteImageWithID:(NSString *)imageID;
+- (void)queryImageWithID:(NSString *)imageID;
+- (void)parseSixel:(NSString *)data;
+- (void)parseKittyGraphic:(NSString *)data;
+- (void)parseIterm2Image:(NSString *)osc;
 @end
 
 @implementation TTerminalView {
@@ -894,11 +900,16 @@ enum { TClusterBase = 0x110000 };
     BOOL _palette256Valid;
     BOOL _cachedUnicodeRendering;
     BOOL _cachedOscIntegration;
+    NSMutableDictionary *_inlineImages;
+    NSMutableDictionary *_kittyImageIDs;
+    NSMutableString *_kittyGraphicAccumulator;
+    NSMutableDictionary *_animatedImages;
+    dispatch_source_t _animationTimer;
 }
 
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config {
     if ((self = [super initWithFrame:frame])) {
-        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_scratchLine=[NSMutableData data];_glyphScratch=[NSMutableData data];_colorScratch=[NSMutableData data];_pendingData=[NSMutableData data];_parseQueue=dispatch_queue_create("com.termatica.core",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_writeQueue=dispatch_queue_create("com.termatica.pty-write",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);
+        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_scratchLine=[NSMutableData data];_glyphScratch=[NSMutableData data];_colorScratch=[NSMutableData data];_pendingData=[NSMutableData data];_parseQueue=dispatch_queue_create("com.termatica.core",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_writeQueue=dispatch_queue_create("com.termatica.pty-write",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_inlineImages=[NSMutableDictionary dictionary];_kittyImageIDs=[NSMutableDictionary dictionary];_kittyGraphicAccumulator=[NSMutableString string];_animatedImages=[NSMutableDictionary dictionary];
         _decoder=[TTerminalDecoder new];_attributeCache=[NSMutableDictionary dictionary];_graphemes=[NSMutableArray array];_graphemeIDs=[NSMutableDictionary dictionary];_linksByCell=[NSMutableDictionary dictionary];_commandMarks=[NSMutableArray array];_cursorVisible = YES;_autoWrap=YES;
         _currentFG = _currentBG = TDefaultColor;
         self.wantsLayer=YES;
@@ -913,6 +924,8 @@ enum { TClusterBase = 0x110000 };
     [self stopShellTerminating:YES];
     free(_cells);
     free(_historyCells);
+    free(_historyBlankRow);
+    if(_animationTimer){dispatch_source_cancel(_animationTimer);_animationTimer=nil;}
 }
 - (BOOL)acceptsFirstResponder { return YES; }
 - (void)disableSecureKeyboardInput {if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf disableSecureKeyboardInput];});return;}if(_secureInputEnabled){DisableSecureEventInput();_secureInputEnabled=NO;TLog(@"secure keyboard input disabled");}}
@@ -1332,7 +1345,9 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)deleteLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+_cursorY*_cols,_cells+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));TCell b=[self blankCell];for(NSUInteger i=(_scrollBottom-count+1)*_cols;i<=_scrollBottom*_cols+_cols-1;i++)_cells[i]=b;[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
-- (void)finishOSC:(NSString *)osc {
+- (void)finishOSC:(NSString *)osc __attribute__((objc_direct)) {
+    if([osc hasPrefix:@"1337;File="]){[self parseIterm2Image:osc];return;}
+    if(osc.length>0&&[osc characterAtIndex:0]=='G'){[self parseKittyGraphic:osc];return;}
     NSArray *parts=[osc componentsSeparatedByString:@";"];
     if(parts.count>1 && ([parts[0] isEqualToString:@"0"]||[parts[0] isEqualToString:@"2"])) {
         NSString *title=[[parts subarrayWithRange:NSMakeRange(1,parts.count-1)] componentsJoinedByString:@";"];
@@ -1396,6 +1411,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         x=firstColumn;while(x<lastColumn){TCell c=line[x];if(c.flags&TContinuation){x++;continue;}uint32_t foreground=c.fg==TDefaultColor&&!(c.flags&TInverse)?plainForegrounds[x]:(c.fg==TDefaultColor?defaultForeground:c.fg),background=c.bg==TDefaultColor?defaultBackground:c.bg;if(c.flags&TInverse){uint32_t swap=foreground;foreground=background;background=swap;}BOOL linked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);if(c.flags&(TWide|TCluster)){NSString *text=[self stringForCodepoint:c.ch];NSMutableDictionary *attrs=[[self textAttributesForForeground:foreground flags:flags shadow:phosphor] mutableCopy];[attrs removeObjectForKey:NSKernAttributeName];[text drawAtPoint:NSMakePoint(pad+x*_cellWidth,top+y*_cellHeight) withAttributes:attrs];x+=(c.flags&TWide)?2:1;continue;}NSInteger start=x;NSUInteger length=0;BOOL hasGlyph=NO;while(x<lastColumn){TCell next=line[x];if(next.flags&(TWide|TCluster|TContinuation))break;uint32_t nextForeground=next.fg==TDefaultColor&&!(next.flags&TInverse)?plainForegrounds[x]:(next.fg==TDefaultColor?defaultForeground:next.fg),nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg;if(next.flags&TInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}BOOL nextLinked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t nextFlags=(next.flags&TStyleMask)|(nextLinked?TUnderline:0);if(nextForeground!=foreground||nextFlags!=flags)break;uint32_t codepoint=next.ch?:' ';if(codepoint!=' ')hasGlyph=YES;length=TAppendUTF16(glyphs,length,codepoint);x++;}if(hasGlyph&&length){NSString *text=[[NSString alloc]initWithCharacters:glyphs length:length];[text drawAtPoint:NSMakePoint(pad+start*_cellWidth,top+y*_cellHeight) withAttributes:[self textAttributesForForeground:foreground flags:flags shadow:phosphor]];}}
     }
     if(_cursorVisible&&_historyOffset==0&&(self.window.firstResponder==self||self.activeTerminal)){BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];[[self.config.cursor colorWithAlphaComponent:block?0.42:0.96]setFill];NSRect r=NSMakeRect(pad+_cursorX*_cellWidth,top+_cursorY*_cellHeight,_cellWidth,_cellHeight);if([self.config.cursorStyle isEqual:@"bar"])r.size.width=2;else if([self.config.cursorStyle isEqual:@"underline"]){r.origin.y+=_cellHeight-2;r.size.height=2;}NSRectFillUsingOperation(r,NSCompositingOperationSourceOver);}
+    if(_inlineImages.count){for(NSNumber *key in _inlineImages){NSUInteger v=key.unsignedIntegerValue;NSUInteger row=v>>16,col=v&0xFFFF;CGImageRef img=(__bridge CGImageRef)_inlineImages[key];if(img){NSRect imgRect=NSMakeRect(pad+col*_cellWidth,top+row*_cellHeight,CGImageGetWidth(img),CGImageGetHeight(img));if(NSIntersectsRect(imgRect,dirtyRect)){NSGraphicsContext *gc=NSGraphicsContext.currentContext;CGContextRef ctx=[gc CGContext];CGContextSaveGState(ctx);CGContextDrawImage(ctx,NSRectToCGRect(imgRect),img);CGContextRestoreGState(ctx);}}}}
     if(self.config.scanlines>0){[[NSColor colorWithWhite:0 alpha:self.config.scanlines*0.10]setFill];CGFloat start=MAX(2,floor(NSMinY(dirtyRect)/4)*4);for(CGFloat y=start;y<NSMaxY(dirtyRect);y+=4)NSRectFillUsingOperation(NSMakeRect(NSMinX(dirtyRect),y,NSWidth(dirtyRect),1),NSCompositingOperationSourceOver);}
     if(self.config.vignette>0&&!self.tiledRendering){for(NSUInteger i=0;i<6;i++){[[NSColor colorWithWhite:0 alpha:self.config.vignette*(6-i)/30.0]setStroke];NSBezierPath *p=[NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds,i+0.5,i+0.5)];[p stroke];}}
     if(_historyCount&&_historyOffset>0){CGFloat trackHeight=MAX(1,NSHeight(self.bounds)-12),total=(CGFloat)(_historyCount+_rows),visible=(CGFloat)_rows,thumbHeight=MAX(24,trackHeight*visible/MAX(visible,total)),progress=(CGFloat)_historyOffset/MAX(1,(CGFloat)_historyCount),y=6+(trackHeight-thumbHeight)*(1-progress);[[self.config.foreground colorWithAlphaComponent:0.42]setFill];NSBezierPath *thumb=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMaxX(self.bounds)-5,y,2.5,thumbHeight) xRadius:1.25 yRadius:1.25];[thumb fill];}
@@ -1501,6 +1517,70 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     return self.launchDirectory.length?self.launchDirectory:NSFileManager.defaultManager.currentDirectoryPath;
 }
 - (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy")))};}}
+- (void)renderImage:(CGImageRef)image atRow:(NSUInteger)row col:(NSUInteger)col width:(NSUInteger)w height:(NSUInteger)h scale:(BOOL)doScale {
+    if(!image)return;
+    NSUInteger srcW=CGImageGetWidth(image),srcH=CGImageGetHeight(image);
+    if(doScale){NSUInteger maxW=_cols*_cellWidth,maxH=_rows*_cellHeight;if(srcW>maxW||srcH>maxH){CGFloat sc=MIN((CGFloat)maxW/srcW,(CGFloat)maxH/srcH);srcW=MAX(1,(NSUInteger)(srcW*sc));srcH=MAX(1,(NSUInteger)(srcH*sc));CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();CGContextRef ctx=CGBitmapContextCreate(NULL,srcW,srcH,8,srcW*4,cs,kCGImageAlphaPremultipliedLast);if(cs&&ctx){CGContextSetRGBFillColor(ctx,0,0,0,0);CGContextFillRect(ctx,CGRectMake(0,0,srcW,srcH));CGContextDrawImage(ctx,CGRectMake(0,0,srcW,srcH),image);CGImageRef scaled=CGBitmapContextCreateImage(ctx);if(scaled){CGImageRelease(image);image=scaled;}CGContextRelease(ctx);}if(cs)CGColorSpaceRelease(cs);}}
+    NSNumber *key=@((row<<16)|col);_inlineImages[key]=CFBridgingRelease(image);
+    NSUInteger cellsW=MAX(1,(srcW+_cellWidth-1)/_cellWidth),cellsH=MAX(1,(srcH+_cellHeight-1)/_cellHeight);
+    [self markDamageX:col y:row width:cellsW height:cellsH];[self refreshTextView];
+}
+- (void)deleteImageWithID:(NSString *)imageID {if(imageID){NSNumber *posKey=_kittyImageIDs[imageID];if(posKey){[_inlineImages removeObjectForKey:posKey];[_kittyImageIDs removeObjectForKey:imageID];[_animatedImages removeObjectForKey:imageID];[self setNeedsDisplay:YES];}}else{[_inlineImages removeAllObjects];[_kittyImageIDs removeAllObjects];[_animatedImages removeAllObjects];[self setNeedsDisplay:YES];}}
+- (void)queryImageWithID:(NSString *)imageID {[self sendString:[NSString stringWithFormat:@"\033_Gi=%@,s=%lu,v=%lu,C=1;\033\\",imageID?:@"",(unsigned long)(_cols*_cellWidth),(unsigned long)(_rows*_cellHeight)]];}
+- (void)parseSixel:(NSString *)data {
+    NSUInteger cursorRow=_cursorY,cursorCol=_cursorX;NSUInteger maxWidth=_cols*_cellWidth,maxHeight=_rows*_cellHeight;if(maxWidth>4096)maxWidth=4096;if(maxHeight>4096)maxHeight=4096;
+    uint32_t colors[1024]={0};colors[0]=0x000000;colors[1]=0xFFFFFF;int currentColor=0;NSUInteger sixelWidth=0,sixelHeight=0,x=0,band=0;
+    NSUInteger pixelBufSize=maxWidth*maxHeight;uint8_t *pixels=calloc(pixelBufSize,4);if(!pixels)return;memset(pixels,0,pixelBufSize*4);
+    for(NSUInteger i=1;i<data.length;i++){unichar ch=[data characterAtIndex:i];
+        if(ch=='!'){NSUInteger rc=0;i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){rc=rc*10+[data characterAtIndex:i]-'0';i++;}if(!rc)rc=1;if(i+1<data.length){unichar sc=[data characterAtIndex:i+1];if(sc>=0x3f&&sc<=0x7e){int bits=sc-0x3f;for(NSUInteger r=0;r<rc;r++){for(int b=0;b<6;b++){if(bits&(1<<b)){NSUInteger px=x,py=band*6+b;if(px<maxWidth&&py<maxHeight){uint8_t *p=pixels+(py*maxWidth+px)*4;p[0]=(colors[currentColor]>>16)&0xFF;p[1]=(colors[currentColor]>>8)&0xFF;p[2]=colors[currentColor]&0xFF;p[3]=0xFF;}}x++;}}i++;}}continue;}
+        if(ch=='#'){int reg=0;i++;BOOL isDef=NO;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){reg=reg*10+[data characterAtIndex:i]-'0';i++;}if(i<data.length&&[data characterAtIndex:i]==';'){isDef=YES;i++;}if(isDef&&i<data.length){int colorType=2;i++;if(i<data.length&&([data characterAtIndex:i]=='1'||[data characterAtIndex:i]=='2'||[data characterAtIndex:i]=='3')){colorType=[data characterAtIndex:i]-'0';i++;}while(i<data.length&&[data characterAtIndex:i]==';')i++;int v1=0,v2=0,v3=0;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v1=v1*10+[data characterAtIndex:i]-'0';i++;}if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v2=v2*10+[data characterAtIndex:i]-'0';i++;}}if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v3=v3*10+[data characterAtIndex:i]-'0';i++;}}uint32_t r,g,b;if(colorType==1){double hh=v1/360.0,s=v2/100.0,l=v3/100.0;double c=(1-fabs(2*l-1))*s;double x2=c*(1-fabs(fmod(hh*6.0,2.0)-1.0));double m=l-c/2;double r1,g1,b1;if(hh<1.0/6.0){r1=c;g1=x2;b1=0;}else if(hh<2.0/6.0){r1=x2;g1=c;b1=0;}else if(hh<3.0/6.0){r1=0;g1=c;b1=x2;}else if(hh<4.0/6.0){r1=0;g1=x2;b1=c;}else if(hh<5.0/6.0){r1=x2;g1=0;b1=c;}else{r1=c;g1=0;b1=x2;}r=(uint32_t)((r1+m)*255);g=(uint32_t)((g1+m)*255);b=(uint32_t)((b1+m)*255);}else{r=(uint32_t)(v1*255/100);g=(uint32_t)(v2*255/100);b=(uint32_t)(v3*255/100);}if(reg<1024){colors[reg]=((r&0xFF)<<16)|((g&0xFF)<<8)|(b&0xFF);}currentColor=reg;}else{if(reg<1024){currentColor=reg;}}i--;continue;}
+        if(ch=='"'){i++;while(i<data.length&&[data characterAtIndex:i]!='$'&&[data characterAtIndex:i]!='-'&&[data characterAtIndex:i]>=32)i++;i--;continue;}
+        if(ch=='$'){x=0;continue;}
+        if(ch=='-'){x=0;band++;continue;}
+        if(ch>=0x3f&&ch<=0x7e){int bits=ch-0x3f;for(int b=0;b<6;b++){if(bits&(1<<b)){NSUInteger px=x,py=band*6+b;if(px<maxWidth&&py<maxHeight){uint8_t *p=pixels+(py*maxWidth+px)*4;p[0]=(colors[currentColor]>>16)&0xFF;p[1]=(colors[currentColor]>>8)&0xFF;p[2]=colors[currentColor]&0xFF;p[3]=0xFF;}}}x++;if(x>sixelWidth)sixelWidth=x;if(band*6+6>sixelHeight)sixelHeight=band*6+6;continue;}
+    }
+    if(sixelWidth&&sixelHeight){NSUInteger imgW=MIN(sixelWidth,maxWidth),imgH=MIN(sixelHeight,maxHeight);CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();CGContextRef ctx=CGBitmapContextCreate(pixels,maxWidth,maxHeight,8,maxWidth*4,cs,kCGImageAlphaPremultipliedLast);CGImageRef image=ctx?CGBitmapContextCreateImage(ctx):NULL;if(ctx)CGContextRelease(ctx);if(cs)CGColorSpaceRelease(cs);if(image){CGImageRef subImage=CGImageCreateWithImageInRect(image,CGRectMake(0,0,imgW,imgH));if(subImage){CGImageRelease(image);image=subImage;}[self renderImage:image atRow:cursorRow col:cursorCol width:0 height:0 scale:YES];CGImageRelease(image);}_cursorY=MIN(_rows-1,cursorRow+(imgH+_cellHeight-1)/_cellHeight);_cursorX=0;}
+    free(pixels);
+}
+- (void)parseKittyGraphic:(NSString *)data {
+    NSString *body=[data substringFromIndex:1];NSRange colonRange=[body rangeOfString:@":"];if(colonRange.location==NSNotFound)return;
+    NSString *kvPart=[body substringToIndex:colonRange.location];NSString *base64=[body substringFromIndex:NSMaxRange(colonRange)];
+    NSUInteger cellRow=0,cellCol=0,destWidth=0,destHeight=0;BOOL more=NO;NSString *action=@"T",*imageID=nil;BOOL virtualPlacement=NO;
+    for(NSString *pair in [kvPart componentsSeparatedByString:@","]){NSArray *kv=[pair componentsSeparatedByString:@"="];if(kv.count!=2)continue;NSString *key=kv[0],*value=kv[1];
+        if([key isEqual:@"a"])action=value;else if([key isEqual:@"i"])imageID=value;else if([key isEqual:@"m"])more=[value boolValue];else if([key isEqual:@"c"])cellCol=[value integerValue];else if([key isEqual:@"r"])cellRow=[value integerValue];else if([key isEqual:@"w"])destWidth=[value integerValue];else if([key isEqual:@"h"])destHeight=[value integerValue];else if([key isEqual:@"U"])virtualPlacement=[value boolValue];}
+    if([action isEqual:@"q"]){[self queryImageWithID:imageID];return;}
+    if([action isEqual:@"d"]){[self deleteImageWithID:imageID];return;}
+    if(more){[_kittyGraphicAccumulator appendString:base64];return;}
+    [_kittyGraphicAccumulator appendString:base64];NSData *rawData=[[NSData alloc]initWithBase64EncodedString:_kittyGraphicAccumulator options:0];[_kittyGraphicAccumulator setString:@""];
+    if(!rawData.length)return;CGImageSourceRef src=CGImageSourceCreateWithData((__bridge CFDataRef)rawData,NULL);if(!src)return;
+    NSUInteger frameCount=CGImageSourceGetCount(src);
+    if(frameCount>1&&imageID){NSMutableDictionary *frames=[NSMutableDictionary dictionary];NSMutableArray *delays=[NSMutableArray array];for(NSUInteger i=0;i<frameCount;i++){CGImageRef f=CGImageSourceCreateImageAtIndex(src,i,NULL);if(f)frames[@(i)]=CFBridgingRelease(f);NSDictionary *props=CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(src,i,NULL));NSDictionary *gifProps=props[(__bridge NSString *)kCGImagePropertyGIFDictionary];NSUInteger delayMs=[gifProps[(__bridge NSString *)kCGImagePropertyGIFDelayTime] doubleValue]*1000;[delays addObject:@(MAX(40,delayMs))];}
+        _animatedImages[imageID]=@{@"frames":frames,@"count":@(frameCount),@"current":@(0),@"delays":delays};
+        CGImageRef first=(__bridge CGImageRef)frames[@(0)];if(first){NSUInteger targetRow=cellRow?:_cursorY,targetCol=cellCol?:_cursorX;NSNumber *posKey=@((targetRow<<16)|targetCol);_inlineImages[posKey]=CFBridgingRelease(CGImageCreateCopy(first));if(imageID)_kittyImageIDs[imageID]=posKey;NSUInteger cellsW=MAX(1,(CGImageGetWidth(first)+_cellWidth-1)/_cellWidth),cellsH=MAX(1,(CGImageGetHeight(first)+_cellHeight-1)/_cellHeight);[self markDamageX:targetCol y:targetRow width:cellsW height:cellsH];[self refreshTextView];[self startAnimationTimer];}
+        CFRelease(src);return;
+    }
+    CGImageRef image=CGImageSourceCreateImageAtIndex(src,0,NULL);CFRelease(src);if(!image)return;
+    NSUInteger targetRow=cellRow?:_cursorY,targetCol=cellCol?:_cursorX;if(virtualPlacement){targetRow=0;targetCol=0;}
+    if(destWidth&&destHeight){CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();CGContextRef ctx=CGBitmapContextCreate(NULL,destWidth,destHeight,8,destWidth*4,cs,kCGImageAlphaPremultipliedLast);if(cs&&ctx){CGContextSetRGBFillColor(ctx,0,0,0,0);CGContextFillRect(ctx,CGRectMake(0,0,destWidth,destHeight));CGContextDrawImage(ctx,CGRectMake(0,0,destWidth,destHeight),image);CGImageRef scaled=CGBitmapContextCreateImage(ctx);if(scaled){CGImageRelease(image);image=scaled;}CGContextRelease(ctx);}if(cs)CGColorSpaceRelease(cs);}
+    NSNumber *posKey=@((targetRow<<16)|targetCol);if(imageID)_kittyImageIDs[imageID]=posKey;_inlineImages[posKey]=CFBridgingRelease(image);
+    NSUInteger imgW=CGImageGetWidth(image),imgH=CGImageGetHeight(image);NSUInteger cellsW=MAX(1,(imgW+_cellWidth-1)/_cellWidth),cellsH=MAX(1,(imgH+_cellHeight-1)/_cellHeight);
+    [self markDamageX:targetCol y:targetRow width:cellsW height:cellsH];[self refreshTextView];
+    if(!cellRow&&!cellCol&&!virtualPlacement){_cursorY=MIN(_rows-1,targetRow+cellsH);_cursorX=0;}
+}
+- (void)startAnimationTimer {if(_animationTimer)return;uint64_t delay=100;for(NSString *imageID in _animatedImages){NSDictionary *anim=_animatedImages[imageID];NSArray *delays=anim[@"delays"];if(delays.count){NSUInteger cur=[anim[@"current"] unsignedIntegerValue];if(cur<delays.count){uint64_t d=[delays[cur] unsignedIntegerValue];delay=MIN(delay,d);}}}dispatch_source_t timer=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());dispatch_source_set_timer(timer,dispatch_time(DISPATCH_TIME_NOW,delay*NSEC_PER_MSEC),delay*NSEC_PER_MSEC,10*NSEC_PER_MSEC);__weak typeof(self) weakSelf=self;dispatch_source_set_event_handler(timer,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;[self advanceAnimation];if(self->_animationTimer==timer){dispatch_source_cancel(timer);self->_animationTimer=nil;[self startAnimationTimer];}});dispatch_resume(timer);_animationTimer=timer;}
+- (void)advanceAnimation {if(!_animatedImages.count){if(_animationTimer){dispatch_source_cancel(_animationTimer);_animationTimer=nil;}return;}for(NSString *imageID in _animatedImages.allKeys){NSMutableDictionary *anim=[_animatedImages[imageID] mutableCopy];NSUInteger count=[anim[@"count"] unsignedIntegerValue],current=[anim[@"current"] unsignedIntegerValue];current=(current+1)%count;anim[@"current"]=@(current);_animatedImages[imageID]=anim;NSNumber *posKey=_kittyImageIDs[imageID];if(!posKey)continue;NSDictionary *frames=anim[@"frames"];CGImageRef frame=(__bridge CGImageRef)frames[@(current)];if(!frame)continue;_inlineImages[posKey]=CFBridgingRelease(CGImageCreateCopy(frame));NSUInteger v=posKey.unsignedIntegerValue,row=v>>16,col=v&0xFFFF;NSUInteger cellsW=MAX(1,(CGImageGetWidth(frame)+_cellWidth-1)/_cellWidth),cellsH=MAX(1,(CGImageGetHeight(frame)+_cellHeight-1)/_cellHeight);[self markDamageX:col y:row width:cellsW height:cellsH];}[self refreshTextView];}
+- (void)parseIterm2Image:(NSString *)osc {
+    NSUInteger cursorRow=_cursorY,cursorCol=_cursorX;NSString *body=[osc substringFromIndex:@"1337;File=".length];NSUInteger colonLoc=[body rangeOfString:@":"].location;
+    NSString *params=colonLoc==NSNotFound?body:[body substringToIndex:colonLoc];NSString *base64=colonLoc==NSNotFound?@"":[body substringFromIndex:colonLoc+1];
+    NSUInteger destWidth=0,destHeight=0;BOOL preserveAspect=YES,inlineMode=YES;
+    for(NSString *pair in [params componentsSeparatedByString:@";"]){NSRange eq=[pair rangeOfString:@"="];if(eq.location==NSNotFound)continue;NSString *key=[pair substringToIndex:eq.location],*value=[pair substringFromIndex:eq.location+1];if([key isEqual:@"width"])destWidth=[value integerValue];else if([key isEqual:@"height"])destHeight=[value integerValue];else if([key isEqual:@"preserveAspectRatio"])preserveAspect=[value boolValue];else if([key isEqual:@"inline"])inlineMode=[value boolValue];}
+    if(!base64.length)return;NSData *rawData=[[NSData alloc]initWithBase64EncodedString:base64 options:NSDataBase64DecodingIgnoreUnknownCharacters];if(!rawData.length)return;
+    CGImageSourceRef src=CGImageSourceCreateWithData((__bridge CFDataRef)rawData,NULL);if(!src)return;CGImageRef image=CGImageSourceCreateImageAtIndex(src,0,NULL);CFRelease(src);if(!image)return;
+    NSUInteger imgW=CGImageGetWidth(image),imgH=CGImageGetHeight(image);
+    if(destWidth>0||destHeight>0){if(destWidth==0)destWidth=imgW;if(destHeight==0)destHeight=imgH;if(preserveAspect){CGFloat sc=MIN((CGFloat)destWidth/imgW,(CGFloat)destHeight/imgH);destWidth=MAX(1,(NSUInteger)(imgW*sc));destHeight=MAX(1,(NSUInteger)(imgH*sc));}CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();CGContextRef ctx=CGBitmapContextCreate(NULL,destWidth,destHeight,8,destWidth*4,cs,kCGImageAlphaPremultipliedLast);if(cs&&ctx){CGContextSetRGBFillColor(ctx,0,0,0,0);CGContextFillRect(ctx,CGRectMake(0,0,destWidth,destHeight));CGContextDrawImage(ctx,CGRectMake(0,0,destWidth,destHeight),image);CGImageRef scaled=CGBitmapContextCreateImage(ctx);if(scaled){CGImageRelease(image);image=scaled;}CGContextRelease(ctx);}if(cs)CGColorSpaceRelease(cs);}
+    [self renderImage:image atRow:cursorRow col:cursorCol width:0 height:0 scale:YES];CGImageRelease(image);
+    if(inlineMode){NSUInteger cellsH=(CGImageGetHeight(image)+_cellHeight-1)/_cellHeight;_cursorY=MIN(_rows-1,cursorRow+cellsH);_cursorX=0;}
+}
 @end
 
 @class TWindowController;
