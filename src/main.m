@@ -847,7 +847,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     [t putCodepointRun:cps widths:wids count:count];
 }
 
-#define METAL_ENABLED 1
+#define METAL_ENABLED 0
 #if METAL_ENABLED
 #import <Metal/Metal.h>
 #endif
@@ -1218,19 +1218,17 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
 }
 - (void)stopShellTerminating:(BOOL)terminate {[self disableSecureKeyboardInput];dispatch_source_t source=nil;@synchronized(_bufferLockToken){source=_readSource;_readSource=nil;if(source&&_readPaused){_readPaused=NO;dispatch_resume(source);}if(terminate){[_pendingData setLength:0];_pendingOffset=0;_drainScheduled=NO;_backpressureReported=NO;}}if(source)dispatch_source_cancel(source);int master=_master;_master=-1;if(master>=0)close(master);pid_t child=_pid;_pid=-1;if(child>0){if(terminate)kill(child,SIGHUP);dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{int status=0;while(waitpid(child,&status,0)<0&&errno==EINTR){}});}}
 - (void)drainPendingData {
-    NSUInteger parseOff=0,parseLen=0;BOOL more=NO;
+    NSData *chunk=nil;BOOL more=NO;
     @synchronized(_bufferLockToken){
-        NSUInteger available=_pendingData.length-_pendingOffset;
-        if(available){parseOff=_pendingOffset;parseLen=available;_pendingOffset+=available;}
-        NSUInteger remaining=_pendingData.length-_pendingOffset;more=remaining>0;
-        if(_readPaused&&remaining<=131072&&_readSource){_readPaused=NO;dispatch_resume(_readSource);}
+        NSUInteger available=_pendingData.length-_pendingOffset,take=MIN((NSUInteger)65536,available);
+        if(take)chunk=[NSData dataWithBytes:(const uint8_t *)_pendingData.bytes+_pendingOffset length:take];
+        _pendingOffset+=take;
+        if(_pendingOffset>=262144&&_pendingOffset*2>=_pendingData.length){[_pendingData replaceBytesInRange:NSMakeRange(0,_pendingOffset) withBytes:NULL length:0];_pendingOffset=0;}
+        available=_pendingData.length-_pendingOffset;more=available>0;
+        if(_readPaused&&available<=131072&&_readSource){_readPaused=NO;dispatch_resume(_readSource);}
         if(!more){_drainScheduled=NO;}
     }
-    if(parseLen){
-        const uint8_t *ptr=(const uint8_t *)_pendingData.bytes+parseOff;
-        [self consumeDataRaw:ptr length:parseLen];
-        @synchronized(_bufferLockToken){if(_pendingOffset>=262144&&_pendingOffset*2>=_pendingData.length){[_pendingData replaceBytesInRange:NSMakeRange(0,_pendingOffset) withBytes:NULL length:0];_pendingOffset=0;}}
-    }
+    if(chunk.length)[self consumeData:chunk];
     if(more)dispatch_async(_parseQueue,^{[self drainPendingData];});
 }
 - (void)sendBytes:(const void *)bytes length:(NSUInteger)length {
@@ -1541,12 +1539,8 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)refreshTextView {
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf refreshTextView];});return;}
     if(_synchronizedUpdates||_displayScheduled||self.hidden)return;_displayScheduled=YES;__weak typeof(self) weakSelf=self;
-    dispatch_async(_renderQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage)){
-        #if METAL_ENABLED
-        if(self->_useMetalRenderer&&self->_metalLayer){[self->_metalLayer setNeedsDisplay];}else
-        #endif
-        {dispatch_async(dispatch_get_main_queue(),^{[self setNeedsDisplayInRect:damage];});}
-    }[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
+    NSUInteger fps=120;uint64_t delay=self.activeTerminal?4:16;
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_MSEC)),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage))[self setNeedsDisplayInRect:damage];[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
 }
 - (void)startCursorBlink {
     if(_blinkTimer){dispatch_source_cancel(_blinkTimer);_blinkTimer=nil;}
@@ -1566,20 +1560,6 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 }
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
-    #if METAL_ENABLED
-    if(self.window&&!_displayLink&&_useMetalRenderer&&0){
-        CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
-        CVDisplayLinkStart(_displayLink);
-    }
-    #endif
-}
-- (void)checkDisplayLink {
-    #if METAL_ENABLED
-    if(self.window&&!_displayLink&&_useMetalRenderer){
-        CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink);
-        CVDisplayLinkStart(_displayLink);
-    }
-    #endif
 }
 - (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow underlineStyle:(uint8_t)underlineStyle {NSNumber *key=@((foreground<<16)|(flags<<8)|underlineStyle);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=_cachedGlyphAdvance>0?_cachedGlyphAdvance:[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline){NSInteger style=NSUnderlineStyleSingle;if(underlineStyle==2)style=NSUnderlineStyleThick|NSUnderlinePatternDot;else if(underlineStyle==3)style=NSUnderlineStyleSingle|NSUnderlinePatternDash;else if(underlineStyle==4)style=NSUnderlineStyleSingle|NSUnderlinePatternDot;else if(underlineStyle==5)style=NSUnderlineStyleSingle|NSUnderlinePatternDashDot;attrs[NSUnderlineStyleAttributeName]=@(style);}if(_attributeCache.count>=1024){NSEnumerator *e=[_attributeCache keyEnumerator];NSNumber *evict=[e nextObject];if(evict)[_attributeCache removeObjectForKey:evict];}_attributeCache[key]=attrs;return attrs;}
 - (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {return [self textAttributesForForeground:foreground flags:flags shadow:shadow underlineStyle:0];}

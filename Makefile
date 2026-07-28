@@ -75,12 +75,12 @@ install: release
 check: release
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.9.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.9.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 0.9.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 0.9.1'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -161,7 +161,7 @@ check: release
 	  grep -Fq 'TAnimateCenterReveal' src/main.m; \
 	  grep -Fq '_parseQueue=dispatch_queue_create("com.termatica.core"' src/main.m; \
 	  grep -Fq 'dispatch_async(self->_parseQueue,^{[self drainPendingData];})' src/main.m; \
-	  grep -Fq 'available=_pendingData.length-_pendingOffset' src/main.m; \
+	  grep -Fq 'take=MIN((NSUInteger)65536,available)' src/main.m; \
 	  grep -Fq 'routeWheelLines:lines event:event' src/main.m; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/zsh/.zshenv; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/share/fish/vendor_conf.d/termatica.fish; \
@@ -202,7 +202,7 @@ check: release
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 0.9.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 0.9.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
