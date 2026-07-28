@@ -1012,6 +1012,25 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     _cachedUnicodeRendering = self.config.unicodeRendering;
     _cachedOscIntegration = self.config.oscIntegration;
     _font = [NSFont fontWithName:self.config.fontName size:self.config.fontSize] ?: [NSFont monospacedSystemFontOfSize:self.config.fontSize weight:NSFontWeightRegular];
+    if(self.config.fontFeatures.count){
+        NSMutableArray *features=[NSMutableArray array];
+        for(NSString *featureName in self.config.fontFeatures){
+            NSNumber *featureType=nil,*featureSelector=nil;
+            if([featureName isEqualToString:@"liga"]){featureType=@(1);featureSelector=@(2);}
+            else if([featureName isEqualToString:@"calt"]){featureType=@(0);featureSelector=@(1);}
+            else if([featureName isEqualToString:@"ss01"]){featureType=@(12);featureSelector=@(0);}
+            else if([featureName isEqualToString:@"ss02"]){featureType=@(13);featureSelector=@(0);}
+            else if([featureName isEqualToString:@"zero"]){featureType=@(6);featureSelector=@(3);}
+            if(featureType&&featureSelector){
+                [features addObject:@{(__bridge NSString *)kCTFontFeatureTypeIdentifierKey:featureType,(__bridge NSString *)kCTFontFeatureSelectorIdentifierKey:featureSelector}];
+            }
+        }
+        if(features.count){
+            NSDictionary *attrs=@{(__bridge NSString *)kCTFontNameAttribute:_font.fontName,(__bridge NSString *)kCTFontFeaturesAttribute:features,(__bridge NSString *)kCTFontSizeAttribute:@(self.config.fontSize)};
+            CTFontDescriptorRef desc=CTFontDescriptorCreateWithAttributes((__bridge CFDictionaryRef)attrs);
+            if(desc){CTFontRef ctFont=CTFontCreateWithFontDescriptor(desc,self.config.fontSize,NULL);if(ctFont){_font=CFBridgingRelease(ctFont);}CFRelease(desc);}
+        }
+    }
     NSFontManager *fm = NSFontManager.sharedFontManager;
     _boldFont = [fm convertFont:_font toHaveTrait:NSBoldFontMask] ?: _font;
     _italicFont = [fm convertFont:_font toHaveTrait:NSItalicFontMask] ?: _font;
@@ -1829,8 +1848,15 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     NSUInteger frameCount=CGImageSourceGetCount(src);
     if(frameCount>1&&imageID){
         NSMutableDictionary *frames=[NSMutableDictionary dictionary];
-        for(NSUInteger i=0;i<frameCount;i++){CGImageRef f=CGImageSourceCreateImageAtIndex(src,i,NULL);if(f){frames[@(i)]=CFBridgingRelease(f);}}
-        NSDictionary *anim=@{@"frames":frames,@"count":@(frameCount),@"current":@(0)};
+        NSMutableArray *delays=[NSMutableArray array];
+        for(NSUInteger i=0;i<frameCount;i++){
+            CGImageRef f=CGImageSourceCreateImageAtIndex(src,i,NULL);if(f){frames[@(i)]=CFBridgingRelease(f);}
+            NSDictionary *props=CFBridgingRelease(CGImageSourceCopyPropertiesAtIndex(src,i,NULL));
+            NSDictionary *gifProps=props[(__bridge NSString *)kCGImagePropertyGIFDictionary];
+            NSUInteger delayMs=[gifProps[(__bridge NSString *)kCGImagePropertyGIFDelayTime] doubleValue]*1000;
+            [delays addObject:@(MAX(40,delayMs))];
+        }
+        NSDictionary *anim=@{@"frames":frames,@"count":@(frameCount),@"current":@(0),@"delays":delays};
         _animatedImages[imageID]=anim;
         CGImageRef first=(__bridge CGImageRef)frames[@(0)];
         if(first){
@@ -1866,10 +1892,12 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 }
 - (void)startAnimationTimer {
     if(_animationTimer)return;
+    uint64_t delay=100;
+    for(NSString *imageID in _animatedImages){NSDictionary *anim=_animatedImages[imageID];NSArray *delays=anim[@"delays"];if(delays.count){NSUInteger cur=[anim[@"current"] unsignedIntegerValue];if(cur<delays.count){uint64_t d=[delays[cur] unsignedIntegerValue];delay=MIN(delay,d);}}}
     dispatch_source_t timer=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());
-    dispatch_source_set_timer(timer,DISPATCH_TIME_NOW,100*NSEC_PER_MSEC,10*NSEC_PER_MSEC);
+    dispatch_source_set_timer(timer,dispatch_time(DISPATCH_TIME_NOW,delay*NSEC_PER_MSEC),delay*NSEC_PER_MSEC,10*NSEC_PER_MSEC);
     __weak typeof(self) weakSelf=self;
-    dispatch_source_set_event_handler(timer,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;[self advanceAnimation];});
+    dispatch_source_set_event_handler(timer,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;[self advanceAnimation];if(self->_animationTimer==timer){dispatch_source_cancel(timer);self->_animationTimer=nil;[self startAnimationTimer];}});
     dispatch_resume(timer);_animationTimer=timer;
 }
 - (void)advanceAnimation {
