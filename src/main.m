@@ -1028,10 +1028,10 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
 }
 - (void)markAllDamage __attribute__((objc_direct)) {_damageValid=YES;_damageFull=YES;_damageMinX=_damageMinY=0;_damageMaxX=_cols;_damageMaxY=_rows;}
 - (NSRect)takeDamageRect __attribute__((objc_direct)) {
-    @synchronized(_gridLockToken){if(!_damageValid)return NSZeroRect;NSRect rect;if(_damageFull)rect=self.bounds;else{CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;rect=NSMakeRect(pad+_damageMinX*_cellWidth,top+_damageMinY*_cellHeight,MAX(1,(_damageMaxX-_damageMinX)*_cellWidth),MAX(1,(_damageMaxY-_damageMinY)*_cellHeight));rect=NSIntersectionRect(NSInsetRect(rect,-1,-1),self.bounds);}_damageValid=_damageFull=NO;return rect;}
+    @synchronized(self){if(!_damageValid)return NSZeroRect;NSRect rect;if(_damageFull)rect=self.bounds;else{CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;rect=NSMakeRect(pad+_damageMinX*_cellWidth,top+_damageMinY*_cellHeight,MAX(1,(_damageMaxX-_damageMinX)*_cellWidth),MAX(1,(_damageMaxY-_damageMinY)*_cellHeight));rect=NSIntersectionRect(NSInsetRect(rect,-1,-1),self.bounds);}_damageValid=_damageFull=NO;return rect;}
 }
 - (void)reloadAppearance {
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     if(_historyCount>self.config.scrollback){
         NSUInteger drop=_historyCount-self.config.scrollback;
         _historyStart=(_historyStart+drop)%_historyCapacity;_historyCount=self.config.scrollback;
@@ -1126,7 +1126,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     [_history removeAllObjects];_historyStart=0;_historyCount=0;
 }
 - (void)resizeGrid {
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     CGFloat topInset=self.safeAreaInsets.top+self.topContentInset,bottomInset=self.safeAreaInsets.bottom;
     NSUInteger cols = MAX(2, (NSUInteger)floor((self.bounds.size.width - self.config.padding * 2 - self.leadingOverlayInset) / MAX(1, _cellWidth)));
     NSUInteger rows = MAX(2, (NSUInteger)floor((self.bounds.size.height - self.config.padding * 2 - topInset - bottomInset) / MAX(1, _cellHeight)));
@@ -1201,11 +1201,11 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
         @autoreleasepool {
             __strong typeof(weakSelf) self = weakSelf;
             if (!self) return;
-            int master=-1;@synchronized(self->_bufferLockToken){if(self->_readSource!=source)return;master=self->_master;}
+            int master=-1;@synchronized(self){if(self->_readSource!=source)return;master=self->_master;}
             uint8_t buffer[65536];
             ssize_t n = read(master, buffer, sizeof(buffer));
             if (n > 0) {
-                BOOL schedule=NO;@synchronized(self->_bufferLockToken){if(self->_readSource!=source)return;[self->_pendingData appendBytes:buffer length:(NSUInteger)n];NSUInteger queued=self->_pendingData.length-self->_pendingOffset;if(queued>=524288&&!self->_readPaused){self->_readPaused=YES;dispatch_suspend(source);if(!self->_backpressureReported){self->_backpressureReported=YES;TLog(@"PTY backpressure active at %lu queued bytes",(unsigned long)queued);}}if(!self->_drainScheduled){self->_drainScheduled=YES;schedule=YES;}}
+                BOOL schedule=NO;@synchronized(self){if(self->_readSource!=source)return;[self->_pendingData appendBytes:buffer length:(NSUInteger)n];NSUInteger queued=self->_pendingData.length-self->_pendingOffset;if(queued>=524288&&!self->_readPaused){self->_readPaused=YES;dispatch_suspend(source);if(!self->_backpressureReported){self->_backpressureReported=YES;TLog(@"PTY backpressure active at %lu queued bytes",(unsigned long)queued);}}if(!self->_drainScheduled){self->_drainScheduled=YES;schedule=YES;}}
                 if(schedule)dispatch_async(self->_parseQueue,^{[self drainPendingData];});
             } else if (n == 0) {TLog(@"shell pty reached EOF");[self stopShellTerminating:NO];}
             else if (errno != EAGAIN) {TLog(@"pty read failed: %s", strerror(errno));[self stopShellTerminating:YES];}
@@ -1216,10 +1216,10 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     _hiddenPathDesired=[self.config isPluginEnabled:@"hidden-path"];_hiddenPathApplied=_hiddenPathDesired?1:0;
     return YES;
 }
-- (void)stopShellTerminating:(BOOL)terminate {[self disableSecureKeyboardInput];dispatch_source_t source=nil;@synchronized(_bufferLockToken){source=_readSource;_readSource=nil;if(source&&_readPaused){_readPaused=NO;dispatch_resume(source);}if(terminate){[_pendingData setLength:0];_pendingOffset=0;_drainScheduled=NO;_backpressureReported=NO;}}if(source)dispatch_source_cancel(source);int master=_master;_master=-1;if(master>=0)close(master);pid_t child=_pid;_pid=-1;if(child>0){if(terminate)kill(child,SIGHUP);dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{int status=0;while(waitpid(child,&status,0)<0&&errno==EINTR){}});}}
+- (void)stopShellTerminating:(BOOL)terminate {[self disableSecureKeyboardInput];dispatch_source_t source=nil;@synchronized(self){source=_readSource;_readSource=nil;if(source&&_readPaused){_readPaused=NO;dispatch_resume(source);}if(terminate){[_pendingData setLength:0];_pendingOffset=0;_drainScheduled=NO;_backpressureReported=NO;}}if(source)dispatch_source_cancel(source);int master=_master;_master=-1;if(master>=0)close(master);pid_t child=_pid;_pid=-1;if(child>0){if(terminate)kill(child,SIGHUP);dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY,0),^{int status=0;while(waitpid(child,&status,0)<0&&errno==EINTR){}});}}
 - (void)drainPendingData {
     NSData *chunk=nil;BOOL more=NO;
-    @synchronized(_bufferLockToken){
+    @synchronized(self){
         NSUInteger available=_pendingData.length-_pendingOffset,take=MIN((NSUInteger)65536,available);
         if(take)chunk=[NSData dataWithBytes:(const uint8_t *)_pendingData.bytes+_pendingOffset length:take];
         _pendingOffset+=take;
@@ -1233,7 +1233,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
 }
 - (void)sendBytes:(const void *)bytes length:(NSUInteger)length {
     if(!length)return;if(_diagnosticInput){[_diagnosticInput appendBytes:bytes length:length];return;}NSData *payload=[NSData dataWithBytes:bytes length:length];__weak typeof(self) weakSelf=self;
-    dispatch_async(_writeQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;const uint8_t *cursor=payload.bytes;NSUInteger remaining=payload.length;while(remaining){int master=-1;@synchronized(self->_bufferLockToken){master=self->_master;}if(master<0){TLog(@"input dropped because PTY is closed");return;}ssize_t written=write(master,cursor,remaining);if(written>0){cursor+=written;remaining-=(NSUInteger)written;continue;}if(written<0&&(errno==EAGAIN||errno==EWOULDBLOCK)){struct pollfd descriptor={.fd=master,.events=POLLOUT};if(poll(&descriptor,1,20)>=0)continue;}if(written<0&&errno==EINTR)continue;TLog(@"PTY input write failed: %s",strerror(errno));return;}});
+    dispatch_async(_writeQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;const uint8_t *cursor=payload.bytes;NSUInteger remaining=payload.length;while(remaining){int master=-1;@synchronized(self){master=self->_master;}if(master<0){TLog(@"input dropped because PTY is closed");return;}ssize_t written=write(master,cursor,remaining);if(written>0){cursor+=written;remaining-=(NSUInteger)written;continue;}if(written<0&&(errno==EAGAIN||errno==EWOULDBLOCK)){struct pollfd descriptor={.fd=master,.events=POLLOUT};if(poll(&descriptor,1,20)>=0)continue;}if(written<0&&errno==EINTR)continue;TLog(@"PTY input write failed: %s",strerror(errno));return;}});
 }
 - (void)startDiagnosticInputCapture {_diagnosticInput=[NSMutableData data];}
 - (NSData *)finishDiagnosticInputCapture {NSData *captured=[_diagnosticInput copy]?:NSData.data;_diagnosticInput=nil;return captured;}
@@ -1259,7 +1259,7 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
 }
 - (void)consumeData:(NSData *)data {[self consumeDataRaw:(const uint8_t *)data.bytes length:data.length];}
 - (void)consumeDataRaw:(const uint8_t *)bytes length:(NSUInteger)length {
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     static BOOL reportedFirstShellOutput = NO;
     if (!reportedFirstShellOutput) {
         reportedFirstShellOutput = YES;
@@ -1603,7 +1603,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     NSSize viewSize=self.bounds.size;if(viewSize.width<=0||viewSize.height<=0)return;
     _metalLayer.drawableSize=viewSize;
     id<CAMetalDrawable> drawable=[_metalLayer nextDrawable];if(!drawable)return;
-    @synchronized(_gridLockToken){
+    @synchronized(self){
     CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;
     uint32_t defaultForeground=TRGB(self.config.foreground),defaultBackground=TRGB(self.config.background);
     float *v=_mtlVertexData;NSUInteger vc=0;
@@ -1683,7 +1683,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 #if METAL_ENABLED
     if(_useMetalRenderer&&_mtlPipeline){return;}
 #endif
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     [self.config.background setFill];NSRectFill(dirtyRect);CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;NSShadow *phosphor=nil;if(self.config.glow>0){phosphor=[NSShadow new];phosphor.shadowColor=[self.config.accent colorWithAlphaComponent:self.config.glow];phosphor.shadowBlurRadius=1+self.config.glow*3;phosphor.shadowOffset=NSZeroSize;}
     NSInteger firstRow=MAX(0,(NSInteger)floor((NSMinY(dirtyRect)-top)/MAX(1,_cellHeight))),lastRow=MIN((NSInteger)_rows,(NSInteger)ceil((NSMaxY(dirtyRect)-top)/MAX(1,_cellHeight)));NSInteger firstColumn=MAX(0,(NSInteger)floor((NSMinX(dirtyRect)-pad)/MAX(1,_cellWidth))),lastColumn=MIN((NSInteger)_cols,(NSInteger)ceil((NSMaxX(dirtyRect)-pad)/MAX(1,_cellWidth)));if(lastRow<firstRow)lastRow=firstRow;if(lastColumn<firstColumn)lastColumn=firstColumn;
     uint32_t defaultForeground=TRGB(self.config.foreground),defaultBackground=TRGB(self.config.background),plainRGB[8]={0};NSUInteger plainCount=self.config.colorizePlainText?MIN((NSUInteger)8,self.config.plainTextPalette.count):0;for(NSUInteger i=0;i<plainCount;i++)plainRGB[i]=TRGB(self.config.plainTextPalette[i]);[_glyphScratch setLength:MAX((NSUInteger)1,_cols*2)*sizeof(unichar)];[_colorScratch setLength:MAX((NSUInteger)1,_cols)*sizeof(uint32_t)];unichar *glyphs=_glyphScratch.mutableBytes;uint32_t *plainForegrounds=_colorScratch.mutableBytes;
@@ -1772,12 +1772,12 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)mouseDragged:(NSEvent *)event {if(_mouseTrackingMode>=1002&&[self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:NO motion:YES];return;}if(_tileDragging){if(self.tileDragMoved)self.tileDragMoved(self,event);return;}if(!_selecting)return;_selectionEnd=[self cellForPoint:[self convertPoint:event.locationInWindow fromView:nil]];_hasSelection=YES;[self setNeedsDisplay:YES];}
 - (void)mouseUp:(NSEvent *)event {if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:YES motion:NO];return;}if(_tileDragging){_tileDragging=NO;if(self.tileDragEnded)self.tileDragEnded(self,event);return;}_selecting=NO;}
 - (void)scrollByLines:(NSInteger)lines {
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     if(!lines)return;NSInteger previous=_historyOffset;_historyOffset=MAX(0,MIN((NSInteger)_historyCount,_historyOffset+lines));if(previous!=_historyOffset){_hasSelection=NO;[self markAllDamage];TLog(@"scrollback %ld/%lu",(long)_historyOffset,(unsigned long)_historyCount);[self setNeedsDisplay:YES];}
     }
 }
 - (void)jumpToPromptDirection:(NSInteger)direction {
-    @synchronized(_gridLockToken){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_historyCount-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,(NSInteger)_historyCount-target));_hasSelection=NO;[self markAllDamage];[self setNeedsDisplay:YES];}}
+    @synchronized(self){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_historyCount-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,(NSInteger)_historyCount-target));_hasSelection=NO;[self markAllDamage];[self setNeedsDisplay:YES];}}
 }
 - (void)routeWheelLines:(NSInteger)lines event:(NSEvent *)event modifierFlags:(NSEventModifierFlags)modifiers {
     BOOL shift=(modifiers&NSEventModifierFlagShift)!=0;
@@ -1801,11 +1801,11 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     [self routeWheelLines:lines event:event modifierFlags:event.modifierFlags];
 }
 - (NSString *)selectedText {
-    @synchronized(_gridLockToken) {
+    @synchronized(self) {
     if(!_hasSelection)return @"";NSInteger a=(NSInteger)_selectionStart.y*(NSInteger)_cols+(NSInteger)_selectionStart.x,b=(NSInteger)_selectionEnd.y*(NSInteger)_cols+(NSInteger)_selectionEnd.x;if(a>b){NSInteger t=a;a=b;b=t;}NSMutableString *s=[NSMutableString string];NSInteger firstRow=a/(NSInteger)_cols,lastRow=b/(NSInteger)_cols;for(NSInteger y=firstRow;y<=lastRow;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:y temporary:&hold];NSInteger x0=y==firstRow?a%(NSInteger)_cols:0,x1=y==lastRow?b%(NSInteger)_cols:(NSInteger)_cols-1;NSMutableString *row=[NSMutableString string];for(NSInteger x=x0;x<=x1;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[s appendString:row];if(y<lastRow)[s appendString:@"\n"];}return s;
     }
 }
-- (NSString *)visibleText {@synchronized(_gridLockToken){NSMutableArray *lines=[NSMutableArray array];for(NSUInteger y=0;y<_rows;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:(NSInteger)y temporary:&hold];NSMutableString *row=[NSMutableString string];for(NSUInteger x=0;x<_cols;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[lines addObject:row];}while(lines.count&&[lines.lastObject length]==0)[lines removeLastObject];return [lines componentsJoinedByString:@"\n"];}}
+- (NSString *)visibleText {@synchronized(self){NSMutableArray *lines=[NSMutableArray array];for(NSUInteger y=0;y<_rows;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:(NSInteger)y temporary:&hold];NSMutableString *row=[NSMutableString string];for(NSUInteger x=0;x<_cols;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[lines addObject:row];}while(lines.count&&[lines.lastObject length]==0)[lines removeLastObject];return [lines componentsJoinedByString:@"\n"];}}
 - (void)copy:(id)sender {NSString *s=[self selectedText];if(s.length){[NSPasteboard.generalPasteboard clearContents];[NSPasteboard.generalPasteboard setString:s forType:NSPasteboardTypeString];}}
 - (void)paste:(id)sender {
     NSString *s=[NSPasteboard.generalPasteboard stringForType:NSPasteboardTypeString];if(!s.length)return;BOOL multiline=[s rangeOfCharacterFromSet:NSCharacterSet.newlineCharacterSet].location!=NSNotFound,unsafe=multiline&&(!_bracketedPaste||[s hasSuffix:@"\n"]||[s hasSuffix:@"\r"]||[s rangeOfString:@"\033"].location!=NSNotFound);
@@ -1850,7 +1850,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     }
     return self.launchDirectory.length?self.launchDirectory:NSFileManager.defaultManager.currentDirectoryPath;
 }
-- (NSDictionary *)diagnosticState {@synchronized(_gridLockToken){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy")))};}}
+- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy")))};}}
 - (void)searchScrollback {
     dispatch_async(dispatch_get_main_queue(), ^{
         if(self->_searchActive){[self closeSearch];return;}
@@ -1899,7 +1899,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     NSUInteger regexOpts=_searchCaseSensitive?0:NSRegularExpressionCaseInsensitive;
     NSRegularExpression *regex=[NSRegularExpression regularExpressionWithPattern:query options:regexOpts error:nil]?:[NSRegularExpression regularExpressionWithPattern:[NSRegularExpression escapedPatternForString:query] options:regexOpts error:nil];
     if(!regex)return;
-    @synchronized(_gridLockToken){
+    @synchronized(self){
     for(NSInteger y=0;y<(NSInteger)(_historyCount+_rows);y++){
         NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:y-(NSInteger)_historyCount temporary:&hold];
         if(!line)continue;
