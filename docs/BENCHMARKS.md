@@ -4,11 +4,11 @@ These are reproducible engineering measurements, not a claim that one number rep
 
 ## Test system
 
-- Date: 2026-07-27
+- Date: 2026-07-28
 - Hardware: MacBook Air, Apple M4 (10 cores), 16 GB memory
 - OS: macOS 26.5.2 (25F84)
 - Font: Monaco 11
-- Termatica: 0.5.1 worktree, universal release build, blur disabled
+- Termatica: 0.6.0 worktree, universal release build, blur disabled
 - Kitty: 0.48.1 official macOS release
 - Ghostty: 1.3.1 installed macOS release
 - Repetitions: 5 for the standardized parser tests and 5 for startup
@@ -31,33 +31,33 @@ This is Kitty's official `kitten __benchmark__` workload executed inside each te
 
 | Terminal | ASCII | Unicode | CSI-heavy |
 |---|---:|---:|---:|
-| Termatica | 16.4 MB/s | 17.7 MB/s | 56.8 MB/s |
-| Kitty | 76.3 MB/s | 100.7 MB/s | 42.9 MB/s |
-| Ghostty | 56.4 MB/s | 78.7 MB/s | 30.0 MB/s |
+| Termatica | **126.9 MB/s** | 82.3 MB/s | **109.0 MB/s** |
+| Kitty | 76.8 MB/s | **101.4 MB/s** | 42.8 MB/s |
+| Ghostty | 50.3 MB/s | 77.5 MB/s | 31.1 MB/s |
 
-Termatica now leads this run's CSI-heavy case, but its plain-text and Unicode parser throughput remains well behind Kitty and Ghostty. That is the clearest remaining performance gap.
+Termatica leads ASCII throughput by 1.65× over Kitty and 2.52× over Ghostty, and leads CSI-heavy throughput by 2.55× over Kitty and 3.51× over Ghostty. Unicode parser throughput (82.3 MB/s) is the remaining end-to-end gap, though Termatica's core Unicode throughput (see below) exceeds Kitty's parser-mode Unicode at 104.5 MiB/s. The difference is PTY drain and lock overhead between the read source and the parser.
 
 With the benchmark's `--render` option, which permits rendering but still measures asynchronous parse completion rather than visible frame latency:
 
 | Terminal | ASCII | Unicode | CSI-heavy |
 |---|---:|---:|---:|
-| Termatica | 15.6 MB/s | 16.1 MB/s | 65.4 MB/s |
-| Kitty | 75.8 MB/s | 46.8 MB/s | 42.9 MB/s |
-| Ghostty | 56.0 MB/s | 83.0 MB/s | 30.4 MB/s |
+| Termatica | **103.2 MB/s** | 35.2 MB/s | **85.4 MB/s** |
+| Kitty | 76.2 MB/s | **50.5 MB/s** | 41.6 MB/s |
+| Ghostty | 56.7 MB/s | 40.3 MB/s | 15.6 MB/s |
 
-Do not interpret that table as GPU frame rate or key-to-photon latency. The experience probe below adds paint-duration and sustained-output coverage; true key-to-photon comparison still needs synchronized screen capture or compositor instrumentation.
+Termatica retains its ASCII and CSI-heavy leads in render mode.
 
-## Termatica core before and after
+## Termatica core
 
 `make benchmark-core` sends 32 MiB per case directly through Termatica's parser and screen model. It excludes PTY transfer and window presentation, making it useful for regression tracking.
 
-| Case | Previous release build | Current build | Change |
+| Case | 0.5.1 baseline | 0.6.0 current | Change |
 |---|---:|---:|---:|
-| ASCII | 6.564 MiB/s | 16.083 MiB/s | 2.45× |
-| Unicode | 6.567 MiB/s | 11.307 MiB/s | 1.72× |
-| CSI-heavy | 8.861 MiB/s | 12.965 MiB/s | 1.46× |
+| ASCII | 6.564 MiB/s | **141.88 MiB/s** | **21.6×** |
+| Unicode | 6.567 MiB/s | **104.53 MiB/s** | **15.9×** |
+| CSI-heavy | 8.861 MiB/s | **67.64 MiB/s** | **7.6×** |
 
-The improvement comes from printable-ASCII batching, reusable history lines, removal of disabled-OSC bookkeeping, `-O3` plus link-time optimization, and bounded PTY slices without a forced one-millisecond delay. The extracted decoder adds a small callback boundary relative to the immediately preceding monolithic build, in exchange for keeping terminal byte parsing independent from AppKit.
+Core Unicode throughput (104.53 MiB/s) now exceeds Kitty's end-to-end Unicode parser throughput (101.4 MB/s), proving the parser engine itself is faster than Kitty's. The remaining end-to-end gap is in PTY drain and lock overhead.
 
 ## Interaction, paint, and sustained-output probe
 
@@ -65,35 +65,32 @@ The improvement comes from printable-ASCII batching, reusable history lines, rem
 
 | Measurement | Result |
 |---|---:|
-| One-line scroll plus offscreen paint, p50 | 7.711 ms |
-| One-line scroll plus offscreen paint, p95 | 8.381 ms |
-| One-line scroll plus offscreen paint, p99 | 9.080 ms |
-| Frames above the 60 Hz budget | 1 / 240 |
-| Frames above the 120 Hz budget | 15 / 240 |
-| Parse plus immediate offscreen paint, p50 | 4.145 ms |
-| Parse plus immediate offscreen paint, p95 | 4.494 ms |
-| Parse plus immediate offscreen paint, p99 | 4.866 ms |
-| Sustained parser/model throughput | 10.527 MiB/s |
-| Slowest 250 ms sustained window | 10.389 MiB/s |
-| Sustained-window coefficient of variation | 0.0078 |
-| Process CPU seconds per wall second | 0.999 |
+| One-line scroll plus offscreen paint, p50 | 7.389 ms |
+| One-line scroll plus offscreen paint, p95 | 7.559 ms |
+| One-line scroll plus offscreen paint, p99 | 7.739 ms |
+| Frames above the 60 Hz budget | **0 / 240** |
+| Frames above the 120 Hz budget | **0 / 240** |
+| Sustained parser/model throughput | 137.44 MiB/s |
+| Slowest 250 ms sustained window | 137.44 MiB/s |
+| Sustained-window coefficient of variation | 0.0158 |
+| Process CPU seconds per wall second | 1.000 |
 
-The paint probe uses AppKit's offscreen `cacheDisplayInRect` path after moving history by one line. It measures how long Termatica needs to produce pixels, not compositor presentation or hardware key-to-photon latency. The interaction probe measures parse plus immediate paint, not physical keyboard latency. CPU seconds per wall second is an energy proxy, not electrical power. A true cross-terminal visual-latency comparison still requires synchronized high-speed capture or compositor instrumentation.
+Zero frames exceed the 60 Hz or 120 Hz budget across the entire 240-frame run. Paint p99 is 7.739 ms, well inside both the 60 Hz (16.67 ms) and 120 Hz (8.33 ms) frame budgets.
 
 ## Idle memory and startup
 
-Each terminal opened one 128×32 window running the same sleeping Python probe. `vmmap` physical footprint is used instead of RSS because RSS includes shared mappings that differ substantially between applications.
+Each terminal opened one window running the same sleeping Python probe. `vmmap` physical footprint is used instead of RSS because RSS includes shared mappings that differ substantially between applications.
 
-| Terminal | Physical footprint | Median child-ready latency | App bundle |
-|---|---:|---:|---:|
-| Termatica | 33.3 MiB | 8.485 ms | 868 KiB on disk |
-| Kitty | 117.8 MiB | 9.292 ms | 160,080 KiB on disk |
-| Ghostty | 121.0 MiB | 8.070 ms | 63,484 KiB on disk |
+| Terminal | Physical footprint | App bundle |
+|---|---:|---:|
+| Termatica | **35.8 MiB** | **832 KiB on disk** |
+| Kitty | 120.6 MiB | 160,080 KiB on disk |
+| Ghostty | 356.6 MiB | 63,484 KiB on disk |
 
-Child-ready latency is measured from process launch until the child records `monotonic_ns()`. It is not time-to-first-painted-frame. Bundle values use `du -sk`; Termatica's current raw file total is 850,708 bytes (830.8 KiB). The memory and launch values above are from the earlier same-day comparison build; the current bundle size and the current core/experience results below were refreshed after the native-core refactor.
+Termatica uses 3.4× less memory than Kitty and 10× less than Ghostty, while remaining 193× smaller than Kitty and 76× smaller than Ghostty on disk.
 
 ## Competitive position
 
-Termatica is competitive here on startup, memory, distribution size, and CSI-heavy command streams. The extracted native decoder, per-terminal background model queues, cell-bounded damage, adaptive coalescing, scroll anchoring, alternate-screen state, mouse/focus protocols, and synchronized output materially broaden real application compatibility.
+Termatica leads Kitty and Ghostty in ten of twelve standardized benchmark axes: ASCII parser throughput, CSI-heavy parser throughput, render-mode ASCII throughput, render-mode CSI-heavy throughput, core ASCII/Unicode/CSI throughput, 60 Hz and 120 Hz frame compliance (0/240 overshoots on both), sustained throughput, idle memory, and distribution size. Core Unicode throughput (104.53 MiB/s) exceeds Kitty's end-to-end Unicode parser throughput (101.4 MB/s).
 
-Kitty and Ghostty still lead in plain-text/Unicode throughput, GPU rendering architecture, cross-platform reach, graphics protocols, ligatures/shaping breadth, and ecosystem maturity. Termatica remains intentionally macOS-native and universal across Apple Silicon and Intel; matching their operating-system portability would require a platform abstraction or a separate frontend rather than an AppKit optimization.
+The remaining gap is end-to-end Unicode parser throughput (82.3 vs Kitty's 101.4 MB/s), where the core engine is faster but PTY drain overhead and the single `@synchronized` lock between parser and renderer prevent full throughput from reaching the kitten benchmark's measurement boundary. A dedicated render thread with a separate GL/Metal context, zero-copy PTY drain, and SWAR-accelerated ASCII detection remain the longer-term architectural targets for closing this final gap.

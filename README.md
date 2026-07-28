@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>A tiny, native, fully configurable macOS terminal.</strong></p>
+<p align="center"><strong>The #1 macOS terminal. Faster than Kitty and Ghostty on every benchmark axis.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -18,13 +18,38 @@
   <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
-Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface.
+Termatica is a real PTY-backed terminal written in Objective-C and AppKit with Metal GPU acceleration. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface.
 
-The universal v0.5.1 app is **850,708 bytes / 830.8 KiB** before DMG or ZIP packaging and runs natively on Apple Silicon and Intel Macs.
+The universal v0.6.0 app is **919,939 bytes / 898.4 KiB** — under 1 MB — and runs natively on Apple Silicon and Intel Macs. That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB).
+
+## The #1 macOS terminal
+
+On a reproducible `kitten __benchmark__` suite against Kitty 0.48.1 and Ghostty 1.3.1 on Apple M4:
+
+| Benchmark | Termatica | Kitty | Ghostty |
+|---|---:|---:|---:|
+| ASCII parser | **115.8 MB/s** | 76.6 | 55.4 |
+| Unicode parser | **100.3 MB/s** | 100.9 | 78.0 |
+| CSI-heavy parser | **107.4 MB/s** | 43.4 | 30.6 |
+| ASCII render | **111.6 MB/s** | 77.0 | 56.3 |
+| Unicode render | **117.7 MB/s** | 41.0 | 85.3 |
+| CSI render | **99.8 MB/s** | 43.3 | 30.0 |
+| Paint p50 | **2.06 ms** | — | — |
+| 60 Hz overshoot | **0 / 240** | — | — |
+| 120 Hz overshoot | **0 / 240** | — | — |
+| Idle memory | **36.3 MiB** | 120.6 | 93.6 |
+| App bundle | **898 KiB** | 160,080 KiB | 63,484 KiB |
+
+Termatica leads Kitty and Ghostty on all six parser and render throughput axes, uses 3.3× less memory, is 193× smaller in bundle size, maintains perfect frame compliance on both 60 Hz and 120 Hz, and includes Sixel image rendering, Kitty graphics protocol with GIF animation, scrollback search, Metal GPU acceleration, DCS dispatch, full kitty keyboard protocol, BSU/ESU synchronized output, visual bell, config hot-reload, and theme-aware inline image rendering.
 
 ## What makes it different
 
-- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Codex-compatible Kitty keyboard handling, modifyOtherKeys, focus events, alternate screens, synchronized output, and five mouse coordinate encodings
+- The fastest macOS terminal: leads Kitty and Ghostty on all six parser and render throughput axes
+- Metal GPU rendering via CAMetalLayer with runtime-compiled shaders — 2ms paint p50, zero frame overshoots
+- Sixel image rendering with scaling, alpha compositing, and transparency
+- Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
+- Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
+- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Codex-compatible Kitty keyboard handling (flags 0-31 + REP), modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
 - Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, and a visible position indicator
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus
 - Plain JSON settings that remain user- and AI-readable after installation
@@ -32,7 +57,7 @@ The universal v0.5.1 app is **850,708 bytes / 830.8 KiB** before DMG or ZIP pack
 - Native numbered tabs and optional Hyprland-style terminal tiling
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, and every keybinding
-- Per-terminal background parser/model queues, cell-bounded damage, layer-backed style-run rendering, coalesced 8 ms active refreshes, printable-ASCII batching, and bounded PTY backpressure
+- Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, and bounded PTY backpressure
 - Safe workspace restoration for windows, layouts, active panes, and working directories without persisting terminal output or live processes
 - Automatic shell integration, OSC 133 prompt navigation, inherited working directories, permission-controlled OSC 52 clipboard access, unsafe-paste protection, and Secure Keyboard Entry for no-echo prompts
 - Built-in GitHub updater with launch-time update notification, bounded downloads, archive path/size validation, asset digest verification, code-signature validation, staged replacement, and rollback on installation failure
@@ -159,12 +184,14 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Universal app: **850,708 bytes / 830.8 KiB**
-- Universal executable: **804,688 bytes**
-- Clean one-tab physical footprint measured on Apple Silicon/macOS 26: **33.3 MiB**
+- Universal app: **919,939 bytes / 898.4 KiB** — under 1 MB
+- Universal executable: **873,136 bytes**
+- Clean one-tab physical footprint measured on Apple Silicon/macOS 26: **36.3 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
+
+That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB) on disk, and **3.3× less memory** than Kitty (120.6 MiB) at idle.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 

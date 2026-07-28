@@ -12,6 +12,15 @@ if [[ -o interactive && -z "${TERMATICA_SHELL_INTEGRATION_ACTIVE:-}" ]]; then
     printf '\e]133;C\a'
   }
 
+  if [[ -n "${TERMATICA_HIDDEN_PATH:-}" && -r "${TERM_HP:-}" ]]; then
+    _termatica_hidden_path_init() {
+      source "$TERM_HP" on 2>/dev/null
+      add-zsh-hook -d precmd _termatica_hidden_path_init
+      unset -f _termatica_hidden_path_init
+    }
+    add-zsh-hook precmd _termatica_hidden_path_init
+  fi
+
   add-zsh-hook precmd _termatica_precmd
   add-zsh-hook preexec _termatica_preexec
 fi

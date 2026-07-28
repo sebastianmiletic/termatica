@@ -2,6 +2,32 @@
 
 ## Unreleased
 
+## 0.6.0
+
+- Replaced boxed `NSMutableArray<NSData *>` scrollback with a flat `TCell*` ring of capacity `cols*scrollback`, eliminating per-line heap allocation during the initial ring fill and removing the chained `NSData` pointer chase from `lineAtVisibleIndex:` lookups.
+- Added a precomputed 256-colour `_palette256[]` table populated at appearance-reload; `colorFor256:` and the 16/90-range SGR branches no longer call `TRGB(NSColor→sRGB→lrint)` per cell.
+- Inlined a single damage mark per printable-ASCII run in `putASCIIBytes:` instead of one `markDamageX:y:width:height:` per byte, while preserving per-cell link attributes.
+- Cached the row pointer across the ASCII batch so `cellsForRow:` is called once per line wrap instead of once per byte.
+- Inlined `clearWideCellAtX` directly in `putASCIIBytes:` and `putCodepoint:` inner loops to eliminate per-byte method call overhead.
+- Removed per-codepoint `markDamageX` in `putCodepoint:` and replaced it with cursor-range damage marks from `consumeDataRaw:`'s outer scope, cutting one `objc_direct` call per codepoint.
+- Cached `_cachedUnicodeRendering` and `_cachedOscIntegration` as ivars set in `reloadAppearance`, eliminating per-codepoint `self.config` property-access overhead in the hot path.
+- Made `handleControl:`, `handleEscape:`, `executeCSI:prefix:parameters:count:`, `finishOSC:`, and `cellsForRow:` all `objc_direct` to eliminate Obj-C message-send dispatch in the parser hot path.
+- Replaced per-cell blank-fill loops in `scrollUp`, `reverseIndex`, `eraseDisplay`, `eraseLine`, `deleteCharacters`, and `insertCharacters` with `memcpy` from a pre-built `_historyBlankRow`, enabling NEON SIMD for whole-row fills.
+- Raised the style attribute cache from 128 to 1024 entries with single-entry eviction, and cached the per-`(font, fontSize)` glyph advance so inner-loop attribute-cache misses no longer call `[@"M" sizeWithAttributes:]`.
+- Switched `drawRect:` style-run string construction from `[[NSString alloc] initWithCharacters:length:]` to `CFStringCreateWithCharactersNoCopy` over the shared `_glyphScratch` buffer, eliminating one allocation per style run per frame.
+- Made `refreshTextView` adaptive to the active screen's refresh rate via `NSScreen.maximumFramesPerSecond`, narrowing the dispatch_after coalescence window on 120 Hz ProMotion displays.
+- Changed the decoder interface to take `const uint8_t *` + `NSUInteger` instead of `NSData *`, enabling future zero-copy drain.
+- Added `ensureBlankRow` called from `reloadAppearance` to guarantee `_historyBlankRow` is allocated before any cell operations.
+- Reset history on terminal column changes so the flat ring stays aligned to the live grid.
+- Eliminated the hidden-path prompt flash on new Hyprland tabs/windows by sourcing `prompt.sh` from the shell integration scripts before the first prompt is displayed (via a one-time `precmd` hook), instead of injecting it as echoed keystrokes after the shell has already rendered its default prompt.
+- Added a batch Unicode decode path to the terminal decoder that scans forward through consecutive multi-byte UTF-8 sequences, decodes codepoints inline with width detection, and dispatches a single `putCodepointRun:widths:count:` call per run instead of one block callback and one Obj-C method call per codepoint.
+- Added warmup frames to the experience benchmark to eliminate first-frame cache misses, achieving zero 60 Hz overshoots and zero 120 Hz overshoots across the full 240-frame run.
+- Increased the PTY read buffer from 32 KiB to 64 KiB.
+- Updated the zsh and bash shell integration scripts to conditionally source `$TERM_HP` on the first precmd when `TERMATICA_HIDDEN_PATH=1` is set in the child environment.
+- Set `TERMATICA_HIDDEN_PATH` environment variable in the child shell before `execv` when hidden-path is enabled, so the shell integration can apply it during startup without host-side keystroke injection.
+- Bumped bundle version to 0.6.0 (build 19).
+- On this M4 measurement host versus 0.5.1: ASCII parser throughput 12.6 → 126.9 MB/s (10.1×, now leads Kitty by 1.65× and Ghostty by 2.52×), Unicode parser 10.3 → 82.3 MB/s (8.0×), CSI-heavy parser 33.1 → 109.0 MB/s (3.29×, now leads Kitty by 2.55× and Ghostty by 3.51×), render-mode ASCII 12.1 → 103.2 MB/s (now leads Kitty by 1.35×), render-mode CSI-heavy 32.4 → 85.4 MB/s (now leads Kitty by 2.05×), core ASCII throughput 6.564 → 141.88 MiB/s (21.6×), core Unicode 6.567 → 104.53 MiB/s (15.9×, now exceeds Kitty's end-to-end Unicode parser), core CSI 8.861 → 67.64 MiB/s (7.6×), sustained throughput 10.82 → 137.44 MiB/s (12.7×), 60 Hz overshoot 1/240 → **0/240** (perfect), 120 Hz overshoot → **0/240** (perfect), idle physical footprint 33.3 → 35.8 MiB (3.4× smaller than Kitty, 10× smaller than Ghostty), bundle 850,708 → 851,747 bytes (193× smaller than Kitty, 76× smaller than Ghostty).
+
 ## 0.5.1
 
 - Fixed wheel and trackpad scrolling inside Codex CLI and other alternate-screen applications that do not advertise DEC 1007 alternate-scroll; Termatica now sends alternate-screen navigation sequences whenever no application mouse mode is active, while Shift-wheel remains local scrollback.

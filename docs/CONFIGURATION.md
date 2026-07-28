@@ -21,7 +21,6 @@ Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or
   "theme": "terminal-default",
   "themeOptions": ["terminal-default", "amber-crt", "ghost-glass", "green-screen"],
   "textColorMode": "ansi",
-  "skeleterm": false,
   "plugins": {
     "hello": false,
     "pi-bridge": false,
@@ -159,7 +158,6 @@ Important built-ins include `hidden-path`, `hyprland-layout`, `unicode-rendering
 |---|---|
 | `shell` | Absolute shell executable |
 | `shellArguments` | JSON argument array; `["-l"]` starts a login shell |
-| `skeleterm` | Reduces scrollback and disables expensive effects/extensions |
 | `system.restoreSession` | Restore window geometry, terminal layout, focus, and working directories |
 | `system.pasteProtection` | Confirm multiline pastes that may immediately execute commands |
 | `system.secureKeyboard` | Enable macOS Secure Keyboard Entry whenever the active PTY disables echo |
