@@ -33,11 +33,15 @@ static NSString *TConfigDirectoryPath(void) {
 static NSString *TCLISocketPath(void) {const char *path=TConfigDirectoryPath().stringByStandardizingPath.fileSystemRepresentation;uint32_t hash=2166136261u;for(const unsigned char *byte=(const unsigned char *)path;*byte;byte++)hash=(hash^*byte)*16777619u;return [NSString stringWithFormat:@"/tmp/termatica-%u-%08x.sock",getuid(),hash];}
 static NSString *TSessionPath(void) {return [TConfigDirectoryPath() stringByAppendingPathComponent:@"session.json"];}
 
+static NSString *TScreenSnapshotsPath(void) {return [TConfigDirectoryPath() stringByAppendingPathComponent:@"screens"];}
+
 static NSString *TEnsureDirectory(NSString *name) {
     NSString *path = name.length ? [TConfigDirectoryPath() stringByAppendingPathComponent:name] : TConfigDirectoryPath();
     [NSFileManager.defaultManager createDirectoryAtPath:path withIntermediateDirectories:YES attributes:nil error:nil];
     return path;
 }
+
+static NSString *TEnsureScreenSnapshotDir(void) {return TEnsureDirectory(@"screens");}
 
 static void TInvalidateSessionSnapshot(void) {
     NSString *path=TSessionPath();
@@ -47,11 +51,11 @@ static void TInvalidateSessionSnapshot(void) {
         TLog(@"could not invalidate session snapshot: %@",error.localizedDescription);
 }
 static NSDictionary *TReadSessionSnapshot(void) {
-    NSString *path=TSessionPath();struct stat info={0};if(stat(path.fileSystemRepresentation,&info)<0||!S_ISREG(info.st_mode)||info.st_uid!=getuid()||info.st_size<=0||info.st_size>262144)return nil;
+    NSString *path=TSessionPath();struct stat info={0};if(stat(path.fileSystemRepresentation,&info)<0||!S_ISREG(info.st_mode)||info.st_uid!=getuid()||info.st_size<=0||info.st_size>5242880)return nil;
     NSData *data=[NSData dataWithContentsOfFile:path options:NSDataReadingMappedIfSafe error:nil];id value=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;return [value isKindOfClass:NSDictionary.class]?value:nil;
 }
 static void TWriteSessionSnapshot(NSArray<NSDictionary *> *windows) {
-    NSString *directory=TEnsureDirectory(nil),*path=TSessionPath();NSDictionary *snapshot=@{@"version":@1,@"windows":windows?:@[]};NSData *data=[NSJSONSerialization dataWithJSONObject:snapshot options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];if(!data.length||data.length>262144)return;
+    NSString *directory=TEnsureDirectory(nil),*path=TSessionPath();NSDictionary *snapshot=@{@"version":@2,@"windows":windows?:@[]};NSData *data=[NSJSONSerialization dataWithJSONObject:snapshot options:NSJSONWritingPrettyPrinted|NSJSONWritingSortedKeys error:nil];if(!data.length||data.length>5242880)return;
     NSString *temporary=[directory stringByAppendingPathComponent:[NSString stringWithFormat:@".session.%u.tmp",arc4random()]];if([data writeToFile:temporary options:NSDataWritingAtomic error:nil]){[NSFileManager.defaultManager setAttributes:@{NSFilePosixPermissions:@0600} ofItemAtPath:temporary error:nil];if(rename(temporary.fileSystemRepresentation,path.fileSystemRepresentation)<0)[NSFileManager.defaultManager removeItemAtPath:temporary error:nil];}
 }
 
@@ -165,6 +169,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
 @property BOOL updateCheckOnLaunch;
 @property NSString *updateRepository;
 @property BOOL restoreSession;
+@property BOOL saveScreenContent;
 @property BOOL pasteProtection;
 @property NSString *clipboardRead;
 @property NSString *clipboardWrite;
@@ -211,7 +216,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
         },
         @"colors": @{@"foreground":@"theme",@"cursor":@"theme",@"palette":@"theme"},
         @"tabs": @{@"railWidth":@34,@"animations":@YES,@"animationSpeed":@1.35,@"autoHide":@YES,@"hideDelay":@5,@"tileGap":@10,@"screenInset":@18,@"hyprlandBlur":@NO},
-        @"system": @{@"restoreSession":@YES,@"pasteProtection":@NO,@"secureKeyboard":@YES,@"shellIntegration":@YES,@"clipboardRead":@"ask",@"clipboardWrite":@"allow"},
+        @"system": @{@"restoreSession":@YES,@"saveScreenContent":@NO,@"pasteProtection":@NO,@"secureKeyboard":@YES,@"shellIntegration":@YES,@"clipboardRead":@"ask",@"clipboardWrite":@"allow"},
         @"updates": @{@"checkOnLaunch":@YES,@"repository":@"sebastianmiletic/termatica"},
         @"keybindings": @{@"openConfig":@"cmd+,",@"newWindow":@"cmd+n",@"newTab":@"cmd+t",@"newVerticalTab":@"cmd+shift+t",@"closeTab":@"cmd+w",@"clearTerminal":@"cmd+k",@"searchScrollback":@"cmd+shift+f",@"splitHorizontal":@"cmd+d",@"splitVertical":@"cmd+shift+d",@"nextSplit":@"cmd+]",@"previousSplit":@"cmd+[",@"previousPrompt":@"cmd+shift+p",@"nextPrompt":@"cmd+option+p",@"reload":@"cmd+r",@"copy":@"cmd+c",@"paste":@"cmd+v",@"selectAll":@"cmd+a",@"zoomIn":@"cmd+plus",@"zoomOut":@"cmd+-",@"zoomReset":@"cmd+0"}
     };
@@ -247,7 +252,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
     self.padding = MAX(0, MIN(40, [d[@"padding"] doubleValue]));
     self.scrollback = MAX(100, MIN(100000, [d[@"scrollback"] unsignedIntegerValue] ?: 2000));
     
-    NSDictionary *system=[d[@"system"] isKindOfClass:NSDictionary.class]?d[@"system"]:@{};self.restoreSession=system[@"restoreSession"]?[system[@"restoreSession"] boolValue]:YES;self.pasteProtection=system[@"pasteProtection"]?[system[@"pasteProtection"] boolValue]:NO;self.secureKeyboard=system[@"secureKeyboard"]?[system[@"secureKeyboard"] boolValue]:YES;self.shellIntegration=system[@"shellIntegration"]?[system[@"shellIntegration"] boolValue]:YES;self.clipboardRead=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardRead"]]?system[@"clipboardRead"]:@"ask";self.clipboardWrite=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardWrite"]]?system[@"clipboardWrite"]:@"allow";self.bellStyle=[@[@"sound",@"visual",@"both",@"none"] containsObject:system[@"bellStyle"]]?system[@"bellStyle"]:@"sound";
+    NSDictionary *system=[d[@"system"] isKindOfClass:NSDictionary.class]?d[@"system"]:@{};self.restoreSession=system[@"restoreSession"]?[system[@"restoreSession"] boolValue]:YES;self.saveScreenContent=system[@"saveScreenContent"]?[system[@"saveScreenContent"] boolValue]:NO;self.pasteProtection=system[@"pasteProtection"]?[system[@"pasteProtection"] boolValue]:NO;self.secureKeyboard=system[@"secureKeyboard"]?[system[@"secureKeyboard"] boolValue]:YES;self.shellIntegration=system[@"shellIntegration"]?[system[@"shellIntegration"] boolValue]:YES;self.clipboardRead=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardRead"]]?system[@"clipboardRead"]:@"ask";self.clipboardWrite=[@[@"ask",@"allow",@"deny"] containsObject:system[@"clipboardWrite"]]?system[@"clipboardWrite"]:@"allow";self.bellStyle=[@[@"sound",@"visual",@"both",@"none"] containsObject:system[@"bellStyle"]]?system[@"bellStyle"]:@"sound";
     NSDictionary *updates=[d[@"updates"] isKindOfClass:NSDictionary.class]?d[@"updates"]:@{};self.updateCheckOnLaunch=updates[@"checkOnLaunch"]?[updates[@"checkOnLaunch"] boolValue]:YES;self.updateRepository=[updates[@"repository"] isKindOfClass:NSString.class]?updates[@"repository"]:@"sebastianmiletic/termatica";
     self.pluginStates=[d[@"plugins"] isKindOfClass:NSDictionary.class]?d[@"plugins"]:@{};
     self.unicodeRendering=[self isPluginEnabled:@"unicode-rendering"];
@@ -515,7 +520,7 @@ static NSArray<NSDictionary *> *TUnifiedConfigSections(TConfig *config) {
       @{@"title":@"PLUGINS",@"detail":@"all installed and built-in capabilities",@"rows":pluginRows},
       @{@"title":@"SYSTEM & UPDATES",@"detail":@"shell, memory mode and GitHub releases",@"rows":@[
         TSetting(@"Shell",@"shell",@"string",nil,nil,nil,nil),TSetting(@"Shell arguments",@"shellArguments",@"json",nil,nil,nil,nil),
-        TSetting(@"Restore workspace",@"system.restoreSession",@"bool",nil,nil,nil,nil),
+        TSetting(@"Restore workspace",@"system.restoreSession",@"bool",nil,nil,nil,nil),TSetting(@"Save screen content",@"system.saveScreenContent",@"bool",nil,nil,nil,nil),
         TSetting(@"Unsafe paste protection",@"system.pasteProtection",@"bool",nil,nil,nil,nil),TSetting(@"Secure password input",@"system.secureKeyboard",@"bool",nil,nil,nil,nil),TSetting(@"Shell integration",@"system.shellIntegration",@"bool",nil,nil,nil,nil),TSetting(@"Clipboard reads",@"system.clipboardRead",@"option",@[@"ask",@"allow",@"deny"],nil,nil,nil),
         TSetting(@"Clipboard writes",@"system.clipboardWrite",@"option",@[@"ask",@"allow",@"deny"],nil,nil,nil),TSetting(@"Check on launch",@"updates.checkOnLaunch",@"bool",nil,nil,nil,nil),
         TSetting(@"Update repository",@"updates.repository",@"string",nil,nil,nil,nil)
@@ -1941,14 +1946,19 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
         _tabEdge=[[TTabEdgeView alloc]initWithFrame:NSZeroRect];_tabEdge.config=config;_tabEdge.wantsLayer=YES;_tabEdge.hidden=YES;_tabEdge.alphaValue=0;[_root addSubview:_tabEdge positioned:NSWindowAbove relativeTo:nil];
         [self applyAppearance];
         NSArray *saved=[session[@"terminals"] isKindOfClass:NSArray.class]?session[@"terminals"]:@[];if(saved.count&&saved.count<=32){NSString *frameString=[session[@"frame"] isKindOfClass:NSString.class]?session[@"frame"]:nil;NSRect restored=frameString.length?NSRectFromString(frameString):NSZeroRect;if(restored.size.width>=480&&restored.size.height>=280){NSRect visible=NSScreen.mainScreen.visibleFrame;restored.size.width=MIN(restored.size.width,visible.size.width);restored.size.height=MIN(restored.size.height,visible.size.height);restored.origin.x=MAX(NSMinX(visible),MIN(NSMaxX(visible)-restored.size.width,restored.origin.x));restored.origin.y=MAX(NSMinY(visible),MIN(NSMaxY(visible)-restored.size.height,restored.origin.y));[window setFrame:restored display:NO];}
-            for(NSDictionary *item in saved){if(![item isKindOfClass:NSDictionary.class])continue;TTerminalView *terminal=[self newTerminal];NSString *cwd=[item[@"cwd"] isKindOfClass:NSString.class]?item[@"cwd"]:nil;BOOL directory=NO;if(cwd.length&&cwd.length<=PATH_MAX&&[NSFileManager.defaultManager fileExistsAtPath:cwd isDirectory:&directory]&&directory)terminal.launchDirectory=cwd;terminal.verticalSplit=[item[@"vertical"] boolValue];NSInteger anchor=[item[@"anchor"] integerValue];if(anchor>=0&&anchor<(NSInteger)_terminals.count)terminal.splitAnchor=_terminals[(NSUInteger)anchor];[_terminals addObject:terminal];[_root addSubview:terminal positioned:NSWindowBelow relativeTo:_tabRail];[terminal startShell];}
+            for(NSDictionary *item in saved){if(![item isKindOfClass:NSDictionary.class])continue;TTerminalView *terminal=[self newTerminal];NSString *cwd=[item[@"cwd"] isKindOfClass:NSString.class]?item[@"cwd"]:nil;BOOL directory=NO;if(cwd.length&&cwd.length<=PATH_MAX&&[NSFileManager.defaultManager fileExistsAtPath:cwd isDirectory:&directory]&&directory)terminal.launchDirectory=cwd;terminal.verticalSplit=[item[@"vertical"] boolValue];NSInteger anchor=[item[@"anchor"] integerValue];if(anchor>=0&&anchor<(NSInteger)_terminals.count)terminal.splitAnchor=_terminals[(NSUInteger)anchor];[_terminals addObject:terminal];[_root addSubview:terminal positioned:NSWindowBelow relativeTo:_tabRail];[terminal startShell];
+                if(self.config.saveScreenContent&&[item[@"screen"] isKindOfClass:NSString.class]){NSString *screenPath=[TScreenSnapshotsPath() stringByAppendingPathComponent:item[@"screen"]];NSString *screenContent=[NSString stringWithContentsOfFile:screenPath encoding:NSUTF8StringEncoding error:nil];if(screenContent.length){dispatch_after(dispatch_time(DISPATCH_TIME_NOW,300*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[terminal consumeData:[screenContent dataUsingEncoding:NSUTF8StringEncoding]];[terminal sendString:@"\033[2J\033[H"];[terminal sendString:[screenContent dataUsingEncoding:NSUTF8StringEncoding]?screenContent:@""];});}}
+            }
             NSUInteger active=MIN([session[@"active"] unsignedIntegerValue],_terminals.count?_terminals.count-1:0);self.terminal=_terminals.count?_terminals[active]:nil;self.extensions.activeTerminal=self.terminal;[self rebuildTabs];[self layoutTabs];if(self.terminal)[self focusTerminal:self.terminal];
         }
         if(!_terminals.count)[self addTab];
     }return self;
 }
 - (NSDictionary *)sessionState {
-    if(!_terminals.count)return nil;NSMutableArray *items=[NSMutableArray arrayWithCapacity:_terminals.count];for(TTerminalView *terminal in _terminals){NSUInteger anchor=terminal.splitAnchor?[_terminals indexOfObject:terminal.splitAnchor]:NSNotFound;[items addObject:@{@"cwd":[terminal workingDirectory]?:NSHomeDirectory(),@"vertical":@(terminal.verticalSplit),@"anchor":anchor==NSNotFound?@(-1):@(anchor)}];}NSUInteger active=[_terminals indexOfObject:self.terminal];return @{@"frame":NSStringFromRect(self.window.frame),@"active":@(active==NSNotFound?0:active),@"terminals":items};
+    if(!_terminals.count)return nil;NSMutableArray *items=[NSMutableArray arrayWithCapacity:_terminals.count];for(NSUInteger i=0;i<_terminals.count;i++){TTerminalView *terminal=_terminals[i];NSUInteger anchor=terminal.splitAnchor?[_terminals indexOfObject:terminal.splitAnchor]:NSNotFound;NSMutableDictionary *item=[NSMutableDictionary dictionaryWithDictionary:@{@"cwd":[terminal workingDirectory]?:NSHomeDirectory(),@"vertical":@(terminal.verticalSplit),@"anchor":anchor==NSNotFound?@(-1):@(anchor)}];
+        if(self.config.saveScreenContent){NSString *screen=[terminal visibleText]?:@"";if(screen.length){NSString *filename=[NSString stringWithFormat:@"screen-%lu.txt",(unsigned long)i];NSString *screenPath=[TScreenSnapshotsPath() stringByAppendingPathComponent:filename];[screen writeToFile:screenPath atomically:YES encoding:NSUTF8StringEncoding error:nil];item[@"screen"]=filename;}}
+        [items addObject:item];}
+    NSUInteger active=[_terminals indexOfObject:self.terminal];return @{@"frame":NSStringFromRect(self.window.frame),@"active":@(active==NSNotFound?0:active),@"terminals":items};
 }
 - (BOOL)hasVerticalSplit {for(TTerminalView *terminal in _terminals)if(terminal.verticalSplit)return YES;return NO;}
 - (BOOL)usesTiledLayout {return _terminals.count>1&&(self.config.hyprlandLayout||[self hasVerticalSplit]);}
@@ -2139,7 +2149,7 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 #pragma clang diagnostic pop
 - (void)applicationDidFinishLaunching:(NSNotification *)notification {_cliSocket=-1;_config=[TConfig new];TInstallConfiguredPlugins(_config);[_config reload];_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];[self buildMenu];[self startCLIListener];[_extensions loadExtensions];[self startConfigWatcher];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}[self checkForUpdatesOnLaunch];}
 - (void)startConfigWatcher {NSString *path=_config.path;int fd=open(path.fileSystemRepresentation,O_EVTONLY);if(fd<0)return;dispatch_source_t src=dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE,fd,DISPATCH_VNODE_DELETE|DISPATCH_VNODE_WRITE|DISPATCH_VNODE_REVOKE,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));__weak typeof(self) weakSelf=self;__block dispatch_source_t prev=nil;dispatch_source_set_event_handler(src,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,500*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self reloadAll];});if(prev)dispatch_cancel(prev);prev=src;});dispatch_source_set_cancel_handler(src,^{close(fd);});dispatch_resume(src);}
-- (void)applicationWillTerminate:(NSNotification *)notification {if(self.config.restoreSession){NSMutableArray *states=[NSMutableArray array];for(TWindowController *controller in self.windows){NSDictionary *state=[controller sessionState];if(state)[states addObject:state];}TWriteSessionSnapshot(states);}else TInvalidateSessionSnapshot();if(_cliSource){dispatch_source_cancel(_cliSource);_cliSource=nil;}else if(_cliSocket>=0){close(_cliSocket);TRemoveOwnedSocket(TCLISocketPath());_cliSocket=-1;}}
+- (void)applicationWillTerminate:(NSNotification *)notification {if(self.config.restoreSession){TEnsureScreenSnapshotDir();NSMutableArray *states=[NSMutableArray array];for(TWindowController *controller in self.windows){NSDictionary *state=[controller sessionState];if(state)[states addObject:state];}TWriteSessionSnapshot(states);}else TInvalidateSessionSnapshot();if(_cliSource){dispatch_source_cancel(_cliSource);_cliSource=nil;}else if(_cliSocket>=0){close(_cliSocket);TRemoveOwnedSocket(TCLISocketPath());_cliSocket=-1;}}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return YES;}
 - (void)newWindow:(id)sender {TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}
 - (TWindowController *)active {return (TWindowController *)NSApp.keyWindow.windowController?:self.windows.lastObject;}
