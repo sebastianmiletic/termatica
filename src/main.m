@@ -798,6 +798,11 @@ enum { TClusterBase = 0x110000 };
 @property(weak) TTerminalView *splitAnchor;
 @property BOOL tiledRendering;
 @property NSString *launchDirectory;
+@property(readonly) NSString *terminalTitle;
+@property BOOL systemReduceMotion;
+@property BOOL systemReduceTransparency;
+@property BOOL cursorBlink;
+@property dispatch_source_t blinkTimer;
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config;
 - (BOOL)startShell;
 - (void)stopShellTerminating:(BOOL)terminate;
@@ -919,6 +924,12 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     NSString *_terminalTitle;
     uint8_t _currentUnderlineStyle;
     uint8_t *_underlineStyles;
+    BOOL _cursorBlink;
+    BOOL _cursorBlinkVisible;
+    dispatch_source_t _blinkTimer;
+    BOOL _systemReduceMotion;
+    BOOL _systemReduceTransparency;
+    BOOL _systemIncreaseContrast;
     BOOL _cachedUnicodeRendering;
     BOOL _cachedOscIntegration;
     NSObject *_gridLockToken;
@@ -1394,6 +1405,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else if(mode==1015)_urxvtMouse=enabled;
     else if(mode==1016)_pixelMouse=enabled;
     else if(mode==2026){_synchronizedUpdates=enabled;if(!enabled)[self refreshTextView];}
+    else if(mode==12){_cursorBlink=enabled;[self startCursorBlink];}
 }
 - (uint32_t)internGrapheme:(NSString *)value {
     NSNumber *existing=_graphemeIDs[value];if(existing)return existing.unsignedIntValue;
@@ -1536,6 +1548,22 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         {dispatch_async(dispatch_get_main_queue(),^{[self setNeedsDisplayInRect:damage];});}
     }[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
 }
+- (void)startCursorBlink {
+    if(_blinkTimer){dispatch_source_cancel(_blinkTimer);_blinkTimer=nil;}
+    if(!_cursorBlink||_systemReduceMotion)return;
+    _cursorBlinkVisible=YES;
+    _blinkTimer=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());
+    dispatch_source_set_timer(_blinkTimer,dispatch_time(DISPATCH_TIME_NOW,530*NSEC_PER_MSEC),530*NSEC_PER_MSEC,50*NSEC_PER_MSEC);
+    __weak typeof(self) weakSelf=self;
+    dispatch_source_set_event_handler(_blinkTimer,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_cursorBlinkVisible=!self->_cursorBlinkVisible;[self setNeedsDisplay:YES];});
+    dispatch_resume(_blinkTimer);
+}
+- (void)checkSystemAccessibility {
+    _systemReduceMotion=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+    _systemReduceTransparency=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceTransparency;
+    _systemIncreaseContrast=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldIncreaseContrast;
+    if(_systemReduceMotion){_cursorBlink=NO;if(_blinkTimer){dispatch_source_cancel(_blinkTimer);_blinkTimer=nil;}}
+}
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
     #if METAL_ENABLED
@@ -1640,16 +1668,17 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
             }
         }
     }
-    if(_cursorVisible&&_historyOffset==0&&(self.window.firstResponder==self||self.activeTerminal)){
+    if(_cursorVisible&&_historyOffset==0&&(_cursorBlink?_cursorBlinkVisible:YES)&&(self.window.firstResponder==self||self.activeTerminal)){
         NSColor *cursorColor=self.config.cursor;
         CGFloat cr,cg,cb,ca;
         [cursorColor getRed:&cr green:&cg blue:&cb alpha:&ca];
         BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];
+        BOOL focused=self.window.firstResponder==self||self.activeTerminal;
         float cx=pad+_cursorX*_cellWidth,cy=top+_cursorY*_cellHeight;
         float cw=_cellWidth,ch=_cellHeight;
         if([self.config.cursorStyle isEqual:@"bar"])cw=2;
         else if([self.config.cursorStyle isEqual:@"underline"]){cy+=_cellHeight-2;ch=2;}
-        if(!block){ca=0.96;}else{ca=0.42;}
+        if(!block){ca=focused?0.96:0.5;}else{ca=focused?0.42:0.2;}
         if(vc<maxCells){v[vc*12]=cx;v[vc*12+1]=cy;v[vc*12+2]=cw;v[vc*12+3]=ch;v[vc*12+4]=0;v[vc*12+5]=0;v[vc*12+6]=1.0/2048.0;v[vc*12+7]=1.0/2048.0;v[vc*12+8]=cr;v[vc*12+9]=cg;v[vc*12+10]=cb;v[vc*12+11]=ca;vc++;}
     }
     _mtlVertexCount=vc*6;
@@ -1680,7 +1709,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     uint32_t defaultForeground=TRGB(self.config.foreground),defaultBackground=TRGB(self.config.background),plainRGB[8]={0};NSUInteger plainCount=self.config.colorizePlainText?MIN((NSUInteger)8,self.config.plainTextPalette.count):0;for(NSUInteger i=0;i<plainCount;i++)plainRGB[i]=TRGB(self.config.plainTextPalette[i]);[_glyphScratch setLength:MAX((NSUInteger)1,_cols*2)*sizeof(unichar)];[_colorScratch setLength:MAX((NSUInteger)1,_cols)*sizeof(uint32_t)];unichar *glyphs=_glyphScratch.mutableBytes;uint32_t *plainForegrounds=_colorScratch.mutableBytes;
     for(NSInteger y=firstRow;y<lastRow;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:y temporary:&hold];if(!line)continue;
         BOOL inPlainToken=NO;NSUInteger plainToken=0;for(NSUInteger column=0;column<_cols;column++){uint32_t codepoint=line[column].ch;BOOL whitespace=!codepoint||codepoint==' '||codepoint=='\t';if(whitespace)inPlainToken=NO;else if(!inPlainToken){inPlainToken=YES;plainToken++;}plainForegrounds[column]=plainCount&&!whitespace?plainRGB[(plainToken-1)%plainCount]:defaultForeground;}
-        NSInteger x=firstColumn;while(x<lastColumn){TCell c=line[x];BOOL selected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],inSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],inverse=(c.flags&TInverse)!=0;uint32_t background=c.bg==TDefaultColor?defaultBackground:c.bg,foreground=c.fg==TDefaultColor?defaultForeground:c.fg;if(inverse){uint32_t swap=foreground;foreground=background;background=swap;}if(inSearch){background=0xFFFF00;foreground=0x000000;}NSInteger kind=selected?1:(inSearch?3:((c.bg!=TDefaultColor||inverse||inSearch)?2:0)),start=x;x++;while(x<lastColumn){TCell next=line[x];BOOL nextSelected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],nextInSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],nextInverse=(next.flags&TInverse)!=0;uint32_t nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg,nextForeground=next.fg==TDefaultColor?defaultForeground:next.fg;if(nextInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}if(nextInSearch){nextBackground=0xFFFF00;nextForeground=0x000000;}NSInteger nextKind=nextSelected?1:(nextInSearch?3:((next.bg!=TDefaultColor||nextInverse||nextInSearch)?2:0));if(nextKind!=kind||(kind==2&&nextBackground!=background))break;x++;}if(kind){[(kind==1?self.config.selection:(kind==3?[NSColor yellowColor]:TColor(background))) setFill];NSRectFill(NSMakeRect(pad+start*_cellWidth,top+y*_cellHeight,(x-start)*_cellWidth,_cellHeight));}}
+        NSInteger x=firstColumn;while(x<lastColumn){TCell c=line[x];BOOL selected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],inSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],inverse=(c.flags&TInverse)!=0;uint32_t background=c.bg==TDefaultColor?defaultBackground:c.bg,foreground=c.fg==TDefaultColor?defaultForeground:c.fg;if(inverse){uint32_t swap=foreground;foreground=background;background=swap;}uint32_t searchBg=TRGB(self.config.accent),searchFg=TRGB(self.config.background);if(inSearch){background=searchBg;foreground=searchFg;}NSInteger kind=selected?1:(inSearch?3:((c.bg!=TDefaultColor||inverse||inSearch)?2:0)),start=x;x++;while(x<lastColumn){TCell next=line[x];BOOL nextSelected=[self cellSelectedX:(NSUInteger)x y:(NSUInteger)y],nextInSearch=[self cellInSearchResult:(NSUInteger)x y:(NSUInteger)y],nextInverse=(next.flags&TInverse)!=0;uint32_t nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg,nextForeground=next.fg==TDefaultColor?defaultForeground:next.fg;if(nextInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}if(nextInSearch){nextBackground=searchBg;nextForeground=searchFg;}NSInteger nextKind=nextSelected?1:(nextInSearch?3:((next.bg!=TDefaultColor||nextInverse||nextInSearch)?2:0));if(nextKind!=kind||(kind==2&&nextBackground!=background))break;x++;}if(kind){[(kind==1?self.config.selection:(kind==3?self.config.accent:TColor(background))) setFill];NSRectFill(NSMakeRect(pad+start*_cellWidth,top+y*_cellHeight,(x-start)*_cellWidth,_cellHeight));}}
         x=firstColumn;while(x<lastColumn){TCell c=line[x];if(c.flags&TContinuation){x++;continue;}uint32_t foreground=c.fg==TDefaultColor&&!(c.flags&TInverse)?plainForegrounds[x]:(c.fg==TDefaultColor?defaultForeground:c.fg),background=c.bg==TDefaultColor?defaultBackground:c.bg;if(c.flags&TInverse){uint32_t swap=foreground;foreground=background;background=swap;}BOOL linked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);NSInteger start=x;NSUInteger length=0;BOOL hasGlyph=NO,needsNoKern=NO;
             NSDictionary *baseAttrs=[self textAttributesForForeground:foreground flags:flags shadow:phosphor];
             while(x<lastColumn){TCell next=line[x];if(next.flags&TContinuation){x++;continue;}uint32_t nextForeground=next.fg==TDefaultColor&&!(next.flags&TInverse)?plainForegrounds[x]:(next.fg==TDefaultColor?defaultForeground:next.fg),nextBackground=next.bg==TDefaultColor?defaultBackground:next.bg;if(next.flags&TInverse){uint32_t swap=nextForeground;nextForeground=nextBackground;nextBackground=swap;}BOOL nextLinked=_historyOffset==0&&_linksByCell[[self linkKeyForX:(NSUInteger)x y:(NSUInteger)y]]!=nil;uint8_t nextFlags=(next.flags&TStyleMask)|(nextLinked?TUnderline:0);if(nextForeground!=foreground||nextFlags!=flags)break;
@@ -1697,7 +1726,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(_inlineImages.count){
         for(NSNumber *key in _inlineImages){NSUInteger v=key.unsignedIntegerValue;NSUInteger row=v>>16,col=v&0xFFFF;CGImageRef img=(__bridge CGImageRef)_inlineImages[key];if(img){NSRect imgRect=NSMakeRect(pad+col*_cellWidth,top+row*_cellHeight,CGImageGetWidth(img),CGImageGetHeight(img));if(NSIntersectsRect(imgRect,dirtyRect)){NSGraphicsContext *gc=NSGraphicsContext.currentContext;CGContextRef ctx=[gc CGContext];CGContextSaveGState(ctx);CGContextDrawImage(ctx,NSRectToCGRect(imgRect),img);CGContextRestoreGState(ctx);}}}
     }
-    if(_cursorVisible&&_historyOffset==0&&(self.window.firstResponder==self||self.activeTerminal)){BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];[[self.config.cursor colorWithAlphaComponent:block?0.42:0.96]setFill];NSRect r=NSMakeRect(pad+_cursorX*_cellWidth,top+_cursorY*_cellHeight,_cellWidth,_cellHeight);if([self.config.cursorStyle isEqual:@"bar"])r.size.width=2;else if([self.config.cursorStyle isEqual:@"underline"]){r.origin.y+=_cellHeight-2;r.size.height=2;}NSRectFillUsingOperation(r,NSCompositingOperationSourceOver);}
+    if(_cursorVisible&&_historyOffset==0&&(_cursorBlink?_cursorBlinkVisible:YES)&&(self.window.firstResponder==self||self.activeTerminal)){BOOL block=![self.config.cursorStyle isEqual:@"bar"]&&![self.config.cursorStyle isEqual:@"underline"];BOOL focused=self.window.firstResponder==self||self.activeTerminal;[[self.config.cursor colorWithAlphaComponent:focused?(block?0.42:0.96):(block?0.2:0.5)]setFill];NSRect r=NSMakeRect(pad+_cursorX*_cellWidth,top+_cursorY*_cellHeight,_cellWidth,_cellHeight);if([self.config.cursorStyle isEqual:@"bar"])r.size.width=2;else if([self.config.cursorStyle isEqual:@"underline"]){r.origin.y+=_cellHeight-2;r.size.height=2;}NSRectFillUsingOperation(r,NSCompositingOperationSourceOver);}
     if(self.config.scanlines>0){[[NSColor colorWithWhite:0 alpha:self.config.scanlines*0.10]setFill];CGFloat start=MAX(2,floor(NSMinY(dirtyRect)/4)*4);for(CGFloat y=start;y<NSMaxY(dirtyRect);y+=4)NSRectFillUsingOperation(NSMakeRect(NSMinX(dirtyRect),y,NSWidth(dirtyRect),1),NSCompositingOperationSourceOver);}
     if(self.config.vignette>0&&!self.tiledRendering){for(NSUInteger i=0;i<6;i++){[[NSColor colorWithWhite:0 alpha:self.config.vignette*(6-i)/30.0]setStroke];NSBezierPath *p=[NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds,i+0.5,i+0.5)];[p stroke];}}
     if(_historyCount&&_historyOffset>0){CGFloat trackHeight=MAX(1,NSHeight(self.bounds)-12),total=(CGFloat)(_historyCount+_rows),visible=(CGFloat)_rows,thumbHeight=MAX(24,trackHeight*visible/MAX(visible,total)),progress=(CGFloat)_historyOffset/MAX(1,(CGFloat)_historyCount),y=6+(trackHeight-thumbHeight)*(1-progress);[[self.config.foreground colorWithAlphaComponent:0.42]setFill];NSBezierPath *thumb=[NSBezierPath bezierPathWithRoundedRect:NSMakeRect(NSMaxX(self.bounds)-5,y,2.5,thumbHeight) xRadius:1.25 yRadius:1.25];[thumb fill];}
@@ -1710,6 +1739,31 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else if(_urxvtMouse)[self sendString:[NSString stringWithFormat:@"\033[%lu;%lu;%luM",(unsigned long)(32+code),(unsigned long)x,(unsigned long)y]];
     else if(_utf8Mouse){uint8_t header[]={27,'[','M'};NSMutableData *sequence=[NSMutableData dataWithBytes:header length:sizeof(header)];uint32_t values[]={(uint32_t)(32+code),(uint32_t)(32+x),(uint32_t)(32+y)};for(NSUInteger i=0;i<3;i++){uint32_t value=MIN(values[i],(uint32_t)0x7FF);uint8_t encoded[2];if(value<0x80){encoded[0]=(uint8_t)value;[sequence appendBytes:encoded length:1];}else{encoded[0]=(uint8_t)(0xC0|(value>>6));encoded[1]=(uint8_t)(0x80|(value&0x3F));[sequence appendBytes:encoded length:2];}}[self sendBytes:sequence.bytes length:sequence.length];}
     else{uint8_t sequence[]={27,'[','M',(uint8_t)MIN(255,32+code),(uint8_t)MIN(255,32+x),(uint8_t)MIN(255,32+y)};[self sendBytes:sequence length:sizeof(sequence)];}
+}
+- (NSMenu *)menuForEvent:(NSEvent *)event {
+    NSMenu *menu=[NSMenu new];
+    [menu addItemWithTitle:@"Copy" action:@selector(copy:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Paste" action:@selector(paste:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Select All" action:@selector(selectAll:) keyEquivalent:@""];
+    [menu addItem:NSMenuItem.separatorItem];
+    [menu addItemWithTitle:@"Split Horizontal" action:@selector(splitHorizontal:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Split Vertical" action:@selector(splitVertical:) keyEquivalent:@""];
+    [menu addItem:NSMenuItem.separatorItem];
+    [menu addItemWithTitle:@"Search Scrollback" action:@selector(searchScrollback:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Clear Terminal" action:@selector(clearTerminal:) keyEquivalent:@""];
+    [menu addItemWithTitle:@"Reload Config" action:@selector(reloadConfig:) keyEquivalent:@""];
+    for(NSMenuItem *item in menu.itemArray)item.target=self;
+    return menu;
+}
+- (NSDragOperation)draggingEntered:(id<NSDraggingInfo>)sender {
+    if([sender.draggingPasteboard.types containsObject:NSFilenamesPboardType])return NSDragOperationCopy;
+    return NSDragOperationNone;
+}
+- (BOOL)performDragOperation:(id<NSDraggingInfo>)sender {
+    NSArray *files=[sender.draggingPasteboard propertyListForType:NSFilenamesPboardType];
+    if(!files.count)return NO;
+    for(NSString *path in files){NSString *escaped=[path stringByReplacingOccurrencesOfString:@" " withString:@"\\ "];[self sendString:escaped];if(files.count>1)[self sendString:@" "];}
+    return YES;
 }
 - (void)mouseDown:(NSEvent *)event {
     if(self.focused)self.focused();
@@ -2409,7 +2463,7 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
 - (void)rebuildTabs {
     for(TTabButton *button in _tabButtons)[button removeFromSuperview];[_tabButtons removeAllObjects];_tabRail.tabCount=_terminals.count;
     if(![self tabRailAvailable]){[self suppressTabRail];TLog(@"tab count %lu, rail suppressed%@",(unsigned long)_terminals.count,self.config.hyprlandLayout?@" in Hyprland mode":@"");return;}
-    _revealRailAfterLayout=YES;NSUInteger active=[_terminals indexOfObject:self.terminal];for(NSUInteger i=0;i<_terminals.count;i++){TTabButton *button=[[TTabButton alloc]initWithFrame:NSZeroRect];button.config=self.config;button.title=[NSString stringWithFormat:@"%lu",(unsigned long)i+1];button.target=self;button.action=@selector(selectTabButton:);button.tag=(NSInteger)i;button.selectedTab=i==active;button.accessibilityLabel=[NSString stringWithFormat:@"Terminal tab %lu",(unsigned long)i+1];[button applyStyleAnimated:NO];[_tabRail addSubview:button];[_tabButtons addObject:button];}[_root addSubview:_tabRail positioned:NSWindowAbove relativeTo:nil];[_root addSubview:_tabEdge positioned:NSWindowAbove relativeTo:nil];[_tabRail setNeedsDisplay:YES];TLog(@"tab count %lu, rail ready",(unsigned long)_terminals.count);
+    _revealRailAfterLayout=YES;NSUInteger active=[_terminals indexOfObject:self.terminal];for(NSUInteger i=0;i<_terminals.count;i++){TTabButton *button=[[TTabButton alloc]initWithFrame:NSZeroRect];button.config=self.config;TTerminalView *term=_terminals[i];NSString *title=term.terminalTitle.length?term.terminalTitle:[NSString stringWithFormat:@"%lu",(unsigned long)i+1];button.title=title;button.target=self;button.action=@selector(selectTabButton:);button.tag=(NSInteger)i;button.selectedTab=i==active;button.accessibilityLabel=[NSString stringWithFormat:@"Terminal tab %lu: %@",(unsigned long)i+1,title];[button applyStyleAnimated:NO];[_tabRail addSubview:button];[_tabButtons addObject:button];}[_root addSubview:_tabRail positioned:NSWindowAbove relativeTo:nil];[_root addSubview:_tabEdge positioned:NSWindowAbove relativeTo:nil];[_tabRail setNeedsDisplay:YES];TLog(@"tab count %lu, rail ready",(unsigned long)_terminals.count);
 }
 - (void)layoutTabs {
     CGFloat w=_root.bounds.size.width,h=_root.bounds.size.height;BOOL tile=[self usesTiledLayout],animate=_animateTabLayout&&self.config.tabAnimations;NSArray<NSValue *> *slots=tile?[self hyprlandFrames]:@[];CAMediaTimingFunction *ease=[CAMediaTimingFunction functionWithControlPoints:0.11f :1.0f :0.2f :1.0f];
@@ -2421,6 +2475,7 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
         terminal.hidden=tile?NO:terminal!=self.terminal;terminal.leadingOverlayInset=0;terminal.topContentInset=self.config.topBar?0:6;terminal.activeTerminal=terminal==self.terminal;terminal.tiledRendering=tile;
         if(terminal!=_draggingTerminal){terminal.frame=target;[terminal resizeGrid];}
         terminal.wantsLayer=YES;terminal.layer.cornerRadius=tile?14:0;terminal.layer.masksToBounds=tile;
+        if(tile){terminal.layer.borderColor=[self.config.accent colorWithAlphaComponent:terminal==self.terminal?0.6:0].CGColor;terminal.layer.borderWidth=terminal==self.terminal?1.5:0;}
         if(tile)TLog(@"tile %lu frame %.0f,%.0f %.0fx%.0f anchor %@",(unsigned long)i+1,target.origin.x,target.origin.y,target.size.width,target.size.height,terminal.splitAnchor?[NSString stringWithFormat:@"%lu",(unsigned long)[_terminals indexOfObject:terminal.splitAnchor]+1]:@"root");
         if(terminal==_draggingTerminal)continue;
         BOOL animateTerminal=animate&&(!tile||!_enteringTerminal||terminal==_enteringTerminal);
@@ -2489,7 +2544,20 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 }
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center shouldPresentNotification:(NSUserNotification *)notification{return YES;}
 #pragma clang diagnostic pop
-- (void)applicationDidFinishLaunching:(NSNotification *)notification {_cliSocket=-1;_config=[TConfig new];TInstallConfiguredPlugins(_config);[_config reload];_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];[self buildMenu];[self startCLIListener];[_extensions loadExtensions];[self startConfigWatcher];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}[self checkForUpdatesOnLaunch];}
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {_cliSocket=-1;_config=[TConfig new];TInstallConfiguredPlugins(_config);[_config reload];_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];[self buildMenu];[self startCLIListener];[_extensions loadExtensions];[self startConfigWatcher];[self registerForAccessibilityNotifications];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller animateLaunchReveal];[controller showWindow:nil];}[self checkForUpdatesOnLaunch];}
+- (void)registerForAccessibilityNotifications {
+    NSWorkspace *ws=NSWorkspace.sharedWorkspace;
+    [ws.notificationCenter addObserver:self selector:@selector(accessibilitySettingsChanged:) name:NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification object:nil];
+}
+- (void)accessibilitySettingsChanged:(NSNotification *)notification {
+    BOOL reduceMotion=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceMotion;
+    BOOL reduceTransparency=NSWorkspace.sharedWorkspace.accessibilityDisplayShouldReduceTransparency;
+    for(TWindowController *wc in self.windows)for(TTerminalView *t in wc.terminals){
+        t.systemReduceMotion=reduceMotion;t.systemReduceTransparency=reduceTransparency;
+        if(reduceMotion&&t.blinkTimer){dispatch_source_cancel(t.blinkTimer);t.blinkTimer=nil;t.cursorBlink=NO;}
+    }
+    [self reloadAll];
+}
 - (void)startConfigWatcher {NSString *path=_config.path;int fd=open(path.fileSystemRepresentation,O_EVTONLY);if(fd<0)return;dispatch_source_t src=dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE,fd,DISPATCH_VNODE_DELETE|DISPATCH_VNODE_WRITE|DISPATCH_VNODE_REVOKE,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));__weak typeof(self) weakSelf=self;__block dispatch_source_t prev=nil;dispatch_source_set_event_handler(src,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,500*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self reloadAll];});if(prev)dispatch_cancel(prev);prev=src;});dispatch_source_set_cancel_handler(src,^{close(fd);});dispatch_resume(src);}
 - (void)applicationWillTerminate:(NSNotification *)notification {if(self.config.restoreSession){NSMutableArray *states=[NSMutableArray array];for(TWindowController *controller in self.windows){NSDictionary *state=[controller sessionState];if(state)[states addObject:state];}TWriteSessionSnapshot(states);}else TInvalidateSessionSnapshot();if(_cliSource){dispatch_source_cancel(_cliSource);_cliSource=nil;}else if(_cliSocket>=0){close(_cliSocket);TRemoveOwnedSocket(TCLISocketPath());_cliSocket=-1;}}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return YES;}
