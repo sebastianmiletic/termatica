@@ -56,7 +56,7 @@
 | GIF animation | ✅ per-frame | ✅ per-frame | ✅ per-frame |
 | Virtual placements (U=1) | ✅ | ✅ | ❌ |
 | Transmission type (t=) | ✅ f/d | ✅ | ✅ |
-| iTerm2 inline images | ❌ | ✅ | ✅ |
+| iTerm2 inline images | ✅ OSC 1337 | ✅ | ✅ |
 
 ## Shell integration
 

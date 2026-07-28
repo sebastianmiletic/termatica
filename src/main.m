@@ -832,6 +832,7 @@ enum { TClusterBase = 0x110000 };
 - (void)deleteImageWithID:(NSString *)imageID __attribute__((objc_direct));
 - (void)queryImageWithID:(NSString *)imageID __attribute__((objc_direct));
 - (void)parseSixel:(NSString *)data __attribute__((objc_direct));
+- (void)parseIterm2Image:(NSString *)osc __attribute__((objc_direct));
 - (void)parseKittyGraphic:(NSString *)data __attribute__((objc_direct));
 - (BOOL)cellInSearchResult:(NSUInteger)x y:(NSUInteger)y __attribute__((objc_direct));
 @end
@@ -1465,6 +1466,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if([osc hasPrefix:@"bsu"]||[osc hasPrefix:@"esu"]){_synchronizedUpdates=[osc hasPrefix:@"esu"];[self refreshTextView];[self setNeedsDisplay:YES];return;}
     if(osc.length>0&&[osc characterAtIndex:0]=='q'){[self parseSixel:osc];return;}
     if(osc.length>0&&[osc characterAtIndex:0]=='G'){[self parseKittyGraphic:osc];return;}
+    if([osc hasPrefix:@"1337;File="]){[self parseIterm2Image:osc];return;}
     NSArray *parts=[osc componentsSeparatedByString:@";"];
     if(parts.count>1 && ([parts[0] isEqualToString:@"0"]||[parts[0] isEqualToString:@"2"])) {
         NSString *title=[[parts subarrayWithRange:NSMakeRange(1,parts.count-1)] componentsJoinedByString:@";"];
@@ -1946,6 +1948,41 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         _cursorY=MIN(_rows-1,cursorRow+(imgH+_cellHeight-1)/_cellHeight);_cursorX=0;
     }
     free(pixels);
+}
+- (void)parseIterm2Image:(NSString *)osc __attribute__((objc_direct)) {
+    NSUInteger cursorRow=_cursorY,cursorCol=_cursorX;
+    NSString *body=[osc substringFromIndex:@"1337;File=".length];
+    NSUInteger colonLoc=[body rangeOfString:@":"].location;
+    NSString *params=colonLoc==NSNotFound?body:[body substringToIndex:colonLoc];
+    NSString *base64=colonLoc==NSNotFound?@"":[body substringFromIndex:colonLoc+1];
+    NSUInteger destWidth=0,destHeight=0;BOOL preserveAspect=YES;BOOL inlineMode=YES;
+    for(NSString *pair in [params componentsSeparatedByString:@";"]){
+        NSRange eq=[pair rangeOfString:@"="];if(eq.location==NSNotFound)continue;
+        NSString *key=[pair substringToIndex:eq.location],*value=[pair substringFromIndex:eq.location+1];
+        if([key isEqual:@"width"])destWidth=[value integerValue];
+        else if([key isEqual:@"height"])destHeight=[value integerValue];
+        else if([key isEqual:@"preserveAspectRatio"])preserveAspect=[value boolValue];
+        else if([key isEqual:@"inline"])inlineMode=[value boolValue];
+    }
+    if(!base64.length)return;
+    NSData *rawData=[[NSData alloc]initWithBase64EncodedString:base64 options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    if(!rawData.length)return;
+    CGImageSourceRef src=CGImageSourceCreateWithData((__bridge CFDataRef)rawData,NULL);
+    if(!src)return;
+    CGImageRef image=CGImageSourceCreateImageAtIndex(src,0,NULL);
+    CFRelease(src);
+    if(!image)return;
+    NSUInteger imgW=CGImageGetWidth(image),imgH=CGImageGetHeight(image);
+    if(destWidth>0||destHeight>0){
+        if(destWidth==0)destWidth=imgW;
+        if(destHeight==0)destHeight=imgH;
+        if(preserveAspect&&destWidth>0&&destHeight>0){CGFloat sc=MIN((CGFloat)destWidth/imgW,(CGFloat)destHeight/imgH);destWidth=MAX(1,(NSUInteger)(imgW*sc));destHeight=MAX(1,(NSUInteger)(imgH*sc));}
+        CGColorSpaceRef cs=CGColorSpaceCreateDeviceRGB();
+        CGContextRef ctx=CGBitmapContextCreate(NULL,destWidth,destHeight,8,destWidth*4,cs,kCGImageAlphaPremultipliedLast);
+        if(cs&&ctx){CGContextSetRGBFillColor(ctx,0,0,0,0);CGContextFillRect(ctx,CGRectMake(0,0,destWidth,destHeight));CGContextDrawImage(ctx,CGRectMake(0,0,destWidth,destHeight),image);CGImageRef scaled=CGBitmapContextCreateImage(ctx);if(scaled){CGImageRelease(image);image=scaled;}CGContextRelease(ctx);}if(cs)CGColorSpaceRelease(cs);
+    }
+    [self renderImage:image atRow:cursorRow col:cursorCol width:0 height:0 scale:YES];CGImageRelease(image);
+    if(inlineMode){NSUInteger cellsH=(CGImageGetHeight(image)+_cellHeight-1)/_cellHeight;_cursorY=MIN(_rows-1,cursorRow+cellsH);_cursorX=0;}
 }
 - (void)parseKittyGraphic:(NSString *)data {
     NSString *body=[data substringFromIndex:1];
