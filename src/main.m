@@ -1895,9 +1895,10 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)parseSixel:(NSString *)data {
     NSUInteger cursorRow=_cursorY,cursorCol=_cursorX;
     NSUInteger maxWidth=_cols*_cellWidth,maxHeight=_rows*_cellHeight;
+    if(maxWidth>4096)maxWidth=4096;if(maxHeight>4096)maxHeight=4096;
     uint32_t colors[1024]={0};int colorCount=2;
     colors[0]=0x000000;colors[1]=0xFFFFFF;
-    int currentColor=0;
+    int currentColor=0;int bgMode=0;
     NSUInteger sixelWidth=0,sixelHeight=0;
     NSUInteger x=0,band=0;
     NSUInteger pixelBufSize=maxWidth*maxHeight;
@@ -1914,7 +1915,19 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
             continue;
         }
         if(ch=='#'){int reg=0;i++;BOOL isDef=NO;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){reg=reg*10+[data characterAtIndex:i]-'0';i++;}if(i<data.length&&[data characterAtIndex:i]==';'){isDef=YES;i++;}
-            if(isDef&&i<data.length&&[data characterAtIndex:i]=='2'){i++;while(i<data.length&&[data characterAtIndex:i]==';')i++;int r=0,g=0,b=0;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){r=r*10+[data characterAtIndex:i]-'0';i++;}if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){g=g*10+[data characterAtIndex:i]-'0';i++;}}if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){b=b*10+[data characterAtIndex:i]-'0';i++;}}if(reg<1024){colors[reg]=((r*255/100)<<16)|((g*255/100)<<8)|(b*255/100);if(reg>=colorCount)colorCount=reg+1;}currentColor=reg;}else{if(reg<1024){currentColor=reg;}}
+            if(isDef&&i<data.length){
+                int colorType=2;i++;
+                if(i<data.length&&([data characterAtIndex:i]=='1'||[data characterAtIndex:i]=='2'||[data characterAtIndex:i]=='3')){colorType=[data characterAtIndex:i]-'0';i++;}
+                while(i<data.length&&[data characterAtIndex:i]==';')i++;
+                int v1=0,v2=0,v3=0;
+                while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v1=v1*10+[data characterAtIndex:i]-'0';i++;}
+                if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v2=v2*10+[data characterAtIndex:i]-'0';i++;}}
+                if(i<data.length&&[data characterAtIndex:i]==';'){i++;while(i<data.length&&[data characterAtIndex:i]>='0'&&[data characterAtIndex:i]<='9'){v3=v3*10+[data characterAtIndex:i]-'0';i++;}}
+                uint32_t r,g,b;
+                if(colorType==1){double hh=v1/360.0,s=v2/100.0,l=v3/100.0;double c=(1-fabs(2*l-1))*s;double x2=c*(1-fabs(fmod(hh*6.0,2.0)-1.0));double m=l-c/2;double r1,g1,b1;if(hh<1.0/6.0){r1=c;g1=x2;b1=0;}else if(hh<2.0/6.0){r1=x2;g1=c;b1=0;}else if(hh<3.0/6.0){r1=0;g1=c;b1=x2;}else if(hh<4.0/6.0){r1=0;g1=x2;b1=c;}else if(hh<5.0/6.0){r1=x2;g1=0;b1=c;}else{r1=c;g1=0;b1=x2;}r=(uint32_t)((r1+m)*255);g=(uint32_t)((g1+m)*255);b=(uint32_t)((b1+m)*255);}
+                else{r=(uint32_t)(v1*255/100);g=(uint32_t)(v2*255/100);b=(uint32_t)(v3*255/100);}
+                if(reg<1024){colors[reg]=((r&0xFF)<<16)|((g&0xFF)<<8)|(b&0xFF);if(reg>=colorCount)colorCount=reg+1;}currentColor=reg;
+            }else{if(reg<1024){currentColor=reg;}}
             i--;continue;
         }
         if(ch=='"'){i++;while(i<data.length&&[data characterAtIndex:i]!='$'&&[data characterAtIndex:i]!='-'&&[data characterAtIndex:i]>=32)i++;i--;continue;}
@@ -1940,7 +1953,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     if(colonRange.location==NSNotFound)return;
     NSString *kvPart=[body substringToIndex:colonRange.location];
     NSString *base64=[body substringFromIndex:NSMaxRange(colonRange)];
-    NSUInteger width=0,height=0,offsetX=0,offsetY=0,cellRow=0,cellCol=0;BOOL more=NO;NSString *action=@"T",*imageID=nil;BOOL doScale=NO;NSUInteger destWidth=0,destHeight=0;BOOL virtualPlacement=NO;
+    NSUInteger width=0,height=0,offsetX=0,offsetY=0,cellRow=0,cellCol=0;BOOL more=NO;NSString *action=@"T",*imageID=nil;BOOL doScale=NO;NSUInteger destWidth=0,destHeight=0;BOOL virtualPlacement=NO;NSString *transmitType=@"f";
     for(NSString *pair in [kvPart componentsSeparatedByString:@","]){
         NSArray *kv=[pair componentsSeparatedByString:@"="];if(kv.count!=2)continue;
         NSString *key=kv[0],*value=kv[1];
@@ -1957,6 +1970,9 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         else if([key isEqual:@"h"])destHeight=[value integerValue];
         else if([key isEqual:@"z"])doScale=![value boolValue];
         else if([key isEqual:@"U"]){virtualPlacement=[value boolValue];}
+        else if([key isEqual:@"t"])transmitType=value;
+        else if([key isEqual:@"T"]){width=[value integerValue];}
+        else if([key isEqual:@"S"]){NSUInteger idx=[value integerValue];if(idx==0||idx==1)[self deleteImageWithID:nil];}
     }
     if([action isEqual:@"q"]){[self queryImageWithID:imageID];return;}
     if([action isEqual:@"d"]){[self deleteImageWithID:imageID];if(imageID){[_animatedImages removeObjectForKey:imageID];}return;}

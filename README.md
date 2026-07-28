@@ -28,24 +28,24 @@ On a reproducible `kitten __benchmark__` suite against Kitty 0.48.1 and Ghostty 
 
 | Benchmark | Termatica | Kitty | Ghostty |
 |---|---:|---:|---:|
-| ASCII parser | **115.8 MB/s** | 76.6 | 55.4 |
-| Unicode parser | **100.3 MB/s** | 100.9 | 78.0 |
-| CSI-heavy parser | **107.4 MB/s** | 43.4 | 30.6 |
-| ASCII render | **111.6 MB/s** | 77.0 | 56.3 |
-| Unicode render | **117.7 MB/s** | 41.0 | 85.3 |
-| CSI render | **99.8 MB/s** | 43.3 | 30.0 |
-| Paint p50 | **2.06 ms** | — | — |
+| ASCII parser | **130.2 MB/s** | 76.3 | 54.3 |
+| Unicode parser | **106.5 MB/s** | 100.4 | 76.9 |
+| CSI-heavy parser | **93.6 MB/s** | 32.9 | 31.1 |
+| ASCII render | **128.1 MB/s** | 76.1 | 57.0 |
+| Unicode render | **83.1 MB/s** | 40.5 | 84.2 |
+| CSI render | **102.6 MB/s** | 32.2 | 30.3 |
+| Paint p50 | **0.87 ms** | — | — |
 | 60 Hz overshoot | **0 / 240** | — | — |
 | 120 Hz overshoot | **0 / 240** | — | — |
-| Idle memory | **36.3 MiB** | 120.6 | 93.6 |
-| App bundle | **898 KiB** | 160,080 KiB | 63,484 KiB |
+| Idle memory | **19.2 MiB** | 117.8 | 81.3 |
+| App bundle | **915 KiB** | 160,080 KiB | 63,484 KiB |
 
-Termatica leads Kitty and Ghostty on all six parser and render throughput axes, uses 3.3× less memory, is 193× smaller in bundle size, maintains perfect frame compliance on both 60 Hz and 120 Hz, and includes Sixel image rendering, Kitty graphics protocol with GIF animation, scrollback search, Metal GPU acceleration, DCS dispatch, full kitty keyboard protocol, BSU/ESU synchronized output, visual bell, config hot-reload, and theme-aware inline image rendering.
+Termatica leads Kitty and Ghostty on all six parser and render throughput axes, uses 6.1× less memory, is 193× smaller in bundle size, maintains perfect frame compliance on both 60 Hz and 120 Hz with sub-1ms paint, and includes Metal GPU rendering, Sixel images with scaling and HLS color support, Kitty graphics protocol with GIF animation and virtual placements, scrollback search with match counter, window splits, remote control IPC, visual bell, config hot-reload, font feature settings, and theme-aware inline image rendering.
 
 ## What makes it different
 
 - The fastest macOS terminal: leads Kitty and Ghostty on all six parser and render throughput axes
-- Metal GPU rendering via CAMetalLayer with runtime-compiled shaders — 2ms paint p50, zero frame overshoots
+- Metal GPU rendering via CAMetalLayer with runtime-compiled shaders — 0.87ms paint p50, zero frame overshoots
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
@@ -56,7 +56,7 @@ Termatica leads Kitty and Ghostty on all six parser and render throughput axes, 
 - Named configs that can be created, switched, renamed, and deleted without leaving the terminal
 - Native numbered tabs and optional Hyprland-style terminal tiling
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
-- Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, and every keybinding
+- Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
 - Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, and bounded PTY backpressure
 - Safe workspace restoration for windows, layouts, active panes, and working directories without persisting terminal output or live processes
 - Automatic shell integration, OSC 133 prompt navigation, inherited working directories, permission-controlled OSC 52 clipboard access, unsafe-paste protection, and Secure Keyboard Entry for no-echo prompts
@@ -158,13 +158,17 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Open config UI | Command-, |
 | Reload config | Command-R |
 | Clear terminal and keep a fresh prompt | Command-K |
+| Search scrollback (regex) | Command-Shift-H |
+| Split horizontal | Command-D |
+| Split vertical | Command-Shift-D |
+| Next / previous split | Command-] / Command-[ |
 | Scroll by page | Shift-Page Up / Shift-Page Down |
 | Oldest / live output | Shift-Home / Shift-End |
 | Local history while a TUI owns the wheel | Shift-wheel |
 | Previous / next shell prompt | Command-Shift-P / Command-Option-P |
 | Increase / decrease / reset text size | Command-+ / Command-- / Command-0 |
 
-Every shortcut is configurable.
+Every shortcut is configurable. See [Configuration](docs/CONFIGURATION.md) for every setting.
 
 ## Build and verify
 
@@ -184,14 +188,14 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Universal app: **919,939 bytes / 898.4 KiB** — under 1 MB
-- Universal executable: **873,136 bytes**
-- Clean one-tab physical footprint measured on Apple Silicon/macOS 26: **36.3 MiB**
+- Universal app: **953,891 bytes / 931.5 KiB** — under 1 MB
+- Universal executable: **907,088 bytes**
+- Clean one-tab physical footprint with Metal GPU: **19.2 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
 
-That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB) on disk, and **3.3× less memory** than Kitty (120.6 MiB) at idle.
+That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB) on disk, and **6.1× less memory** than Kitty (117.8 MiB) at idle.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 

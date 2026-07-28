@@ -1,26 +1,53 @@
-# Configuration
+# Termatica Configuration
 
-Termatica keeps appearance, terminal behavior, tabs, plugins, updates, and shortcuts in one user-owned file:
+All settings live at `~/.config/termatica/config.json`. Named configs are stored in `~/.config/termatica/configs/*.json`. The config is plain JSON — user- and AI-readable. Changes can be made by a person, shell script, or coding agent. Run `t r` to reload, or just save the file — Termatica watches it for changes.
 
-```text
-~/.config/termatica/config.json
-```
-
-Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or `termatica config-file`) to open the JSON itself. Command-, opens the same terminal config UI. Configuration survives app replacement. Workspace restoration recreates window geometry, terminal layout, focus, and working directories, but never terminal output or live processes.
-
-## Complete generated config
+## Full config reference
 
 ```json
 {
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
-  "fontName": "Monaco",
-  "fontSize": 11,
-  "padding": 12,
   "scrollback": 2000,
   "theme": "terminal-default",
   "themeOptions": ["terminal-default", "amber-crt", "ghost-glass", "green-screen"],
   "textColorMode": "ansi",
+  "fontName": "Monaco",
+  "fontSize": 11,
+  "padding": 8,
+  "fontFeatures": ["calt", "liga"],
+  "colors": {
+    "foreground": "#D8DEE9",
+    "cursor": "#EEF1F5",
+    "accent": "#7AA2F7",
+    "panel": "#151820",
+    "muted": "#6B7280",
+    "selection": "#2B3445",
+    "palette": ["# hari", "# ..."16ANSIcolors"...]
+    "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]
+  },
+  "appearance": {
+    "backgroundOpacity": 1.0,
+    "windowOpacity": 1.0,
+    "blur": false,
+    "glow": 0,
+    "scanlines": 0,
+    "vignette": 0,
+    "cursorStyle": "block"
+  },
+  "system": {
+    "restoreSession": true,
+    "pasteProtection": false,
+    "secureKeyboard": true,
+    "shellIntegration": true,
+    "clipboardRead": "ask",
+    "clipboardWrite": "allow",
+    "bellStyle": "sound"
+  },
+  "updates": {
+    "checkOnLaunch": true,
+    "repository": "sebastianmiletic/termatica"
+  },
   "plugins": {
     "hello": false,
     "pi-bridge": false,
@@ -37,21 +64,6 @@ Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or
     "osc-integration": false,
     "borderless-window": false
   },
-  "colors": {
-    "foreground": "theme",
-    "cursor": "theme",
-    "palette": "theme"
-  },
-  "appearance": {
-    "backgroundOpacity": "theme",
-    "windowOpacity": "theme",
-    "blur": "theme",
-    "blurMaterial": "theme",
-    "glow": "theme",
-    "scanlines": "theme",
-    "vignette": "theme",
-    "cursorStyle": "theme"
-  },
   "tabs": {
     "railWidth": 34,
     "animations": true,
@@ -62,18 +74,6 @@ Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or
     "screenInset": 18,
     "hyprlandBlur": false
   },
-  "system": {
-    "restoreSession": true,
-    "pasteProtection": true,
-    "secureKeyboard": true,
-    "shellIntegration": true,
-    "clipboardRead": "ask",
-    "clipboardWrite": "allow"
-  },
-  "updates": {
-    "checkOnLaunch": true,
-    "repository": "sebastianmiletic/termatica"
-  },
   "keybindings": {
     "openConfig": "cmd+,",
     "newWindow": "cmd+n",
@@ -81,12 +81,17 @@ Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or
     "newVerticalTab": "cmd+shift+t",
     "closeTab": "cmd+w",
     "clearTerminal": "cmd+k",
+    "searchScrollback": "cmd+shift+h",
     "previousPrompt": "cmd+shift+p",
     "nextPrompt": "cmd+option+p",
     "reload": "cmd+r",
     "copy": "cmd+c",
     "paste": "cmd+v",
     "selectAll": "cmd+a",
+    "splitHorizontal": "cmd+d",
+    "splitVertical": "cmd+shift+d",
+    "nextSplit": "cmd+]",
+    "previousSplit": "cmd+[",
     "zoomIn": "cmd+plus",
     "zoomOut": "cmd+-",
     "zoomReset": "cmd+0"
@@ -94,96 +99,186 @@ Run `t c` (or `termatica config`) for the categorized terminal UI and `t cf` (or
 }
 ```
 
-Termatica merges missing default keys into older configs without overwriting user values. Writes are atomic and config files use `0600` permissions.
+## Settings reference
 
-## Themes
+### Shell
 
-`theme` selects an installed theme. `themeOptions` is the informational installed list. `textColorMode` is `ansi` for normal terminal colors or `spectrum` for optional plain-text coloring. Themes are selected in `termatica config`; there is no separate themes menu.
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `shell` | string | `/bin/zsh` | Absolute path to shell executable |
+| `shellArguments` | array | `["-l"]` | Arguments passed to the shell; `["-l"]` starts a login shell |
+| `scrollback` | integer | `2000` | Maximum history lines (100–100000) |
 
-## Text and colour
+### Text & Colour
 
-| Field | Range |
-|---|---|
-| `fontName` | Installed fixed-width font name |
-| `fontSize` | 8–48 |
-| `padding` | 0–40 |
-| `scrollback` | 100–100000 lines for the current session |
-| `colors.foreground` | `theme` or `#RRGGBB` |
-| `colors.cursor` | `theme` or `#RRGGBB` |
-| `colors.palette` | `theme` or 16 `#RRGGBB` values |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `theme` | string | `"terminal-default"` | Active theme name |
+| `themeOptions` | array | 4 themes | Available theme names |
+| `textColorMode` | string | `"ansi"` | `"ansi"` for standard colors, `"spectrum"` for per-token plain-text coloring |
+| `fontName` | string | `"Monaco"` | Font family name |
+| `fontSize` | integer | `11` | Font size in points (8–48) |
+| `padding` | integer | `8` | Terminal content padding in points (0–40) |
+| `fontFeatures` | array | `[]` | OpenType features: `"liga"`, `"calt"`, `"ss01"`, `"ss02"`, `"zero"` |
 
-The tab rail is drawn as an overlay. Changing its visibility or width never reduces terminal columns or moves the prompt.
+### Colors (nested under `"colors"`)
 
-Mouse wheels and precision trackpads scroll terminal history. Wheel events are hit-tested against live terminal frames at the window level, so the pane under the pointer scrolls independently in normal, split, and Hyprland layouts. When Codex or another TUI enables mouse tracking, unmodified wheel events are forwarded to that application even on the primary screen. Shift-wheel always accesses Termatica's local history. Trackpad deltas accumulate below one text row, flush at gesture end so slow gestures are not discarded, and clamp momentum bursts. New output preserves the viewed position instead of snapping to the prompt. Shift-Page Up/Down pages through history; Shift-Home moves to the oldest retained line; Shift-End returns to live output. Typing also returns to live output.
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `foreground` | hex | `#D8DEE9` | Default text color |
+| `cursor` | hex | `#EEF1F5` | Cursor color |
+| `accent` | hex | `#7AA2F7` | UI accent color (borders, highlights) |
+| `panel` | hex | `#151820` | Panel/overlay background |
+| `muted` | hex | `#6B7280` | Muted text color (e.g., search counter) |
+| `selection` | hex | `#2B3445` | Text selection background |
+| `palette` | array | 16 ANSI | 16 ANSI colors as hex strings. Omit to use theme palette. |
+| `plainTextPalette` | array | 6 colors | Colors for `"spectrum"` text color mode |
 
-An ordinary click focuses the terminal and a drag selects text; it never moves the shell cursor or sends a click position to Codex or another TUI. When terminal software explicitly requests mouse reporting, Option-click/Option-drag forwards mouse input to it. Full-screen applications may request alternate-screen wheel scrolling independently.
+### Appearance (nested under `"appearance"`)
 
-## Appearance
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `backgroundOpacity` | float | `1.0` | Terminal background opacity (0.0–1.0) |
+| `windowOpacity` | float | `1.0` | Window opacity (0.0–1.0) |
+| `blur` | boolean | `false` | Enable macOS vibrancy blur |
+| `glow` | float | `0` | Phosphor glow intensity (0.0–1.0) |
+| `scanlines` | float | `0` | CRT scanline intensity (0.0–1.0) |
+| `vignette` | float | `0` | Edge vignette intensity (0.0–1.0) |
+| `cursorStyle` | string | `"block"` | Cursor style: `"block"`, `"bar"`, or `"underline"` |
 
-| Field | Range/options |
-|---|---|
-| `backgroundOpacity` | `theme` or 0.08–1 |
-| `windowOpacity` | `theme` or 0.20–1 |
-| `blur` | `theme`, `true`, or `false` |
-| `blurMaterial` | `theme`, `hud`, `popover`, `sidebar`, `menu`, or `under-window` |
-| `glow` | `theme` or 0–1 |
-| `scanlines` | `theme` or 0–1 |
-| `vignette` | `theme` or 0–1 |
-| `cursorStyle` | `theme`, `block`, `bar`, or `underline` |
+### System (nested under `"system"`)
 
-`theme` inherits the active theme value. An explicit setting overrides the theme without modifying the theme file.
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `restoreSession` | boolean | `true` | Restore window geometry, layout, and working directories on relaunch |
+| `pasteProtection` | boolean | `false` | Warn before pasting multiline content that may execute commands |
+| `secureKeyboard` | boolean | `true` | Enable macOS Secure Keyboard Entry when PTY echo is disabled (password prompts) |
+| `shellIntegration` | boolean | `true` | Install OSC 7/133 shell integration for prompt navigation and cwd tracking |
+| `clipboardRead` | string | `"ask"` | OSC 52 clipboard read policy: `"ask"`, `"allow"`, or `"deny"` |
+| `clipboardWrite` | string | `"allow"` | OSC 52 clipboard write policy: `"ask"`, `"allow"`, or `"deny"` |
+| `bellStyle` | string | `"sound"` | Bell behavior: `"sound"`, `"visual"`, `"both"`, or `"none"` |
 
-## Tabs and motion
+### Updates (nested under `"updates"`)
 
-| Field | Range/options |
-|---|---|
-| `railWidth` | 28–64 |
-| `animations` | Boolean |
-| `animationSpeed` | 0.25–4 |
-| `autoHide` | Boolean |
-| `hideDelay` | 1–30 seconds |
-| `tileGap` | 0–24 |
-| `screenInset` | 8–80 |
-| `hyprlandBlur` | Boolean |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `checkOnLaunch` | boolean | `true` | Check GitHub for new releases on app launch |
+| `repository` | string | `"sebastianmiletic/termatica"` | GitHub repository for update checks |
 
-## Plugins
+### Plugins (nested under `"plugins"`)
 
-Every built-in and discovered capability is represented as `plugins.<id>: true|false` and appears in the Plugins section of `termatica config`. There is no plugin browser or install menu. Enabling a built-in capability installs its small readable files when needed and applies it on reload.
+Built-in helper-free plugins. Each is a boolean toggle.
 
-Important built-ins include `hidden-path`, `hyprland-layout`, `unicode-rendering`, `osc-integration`, and `borderless-window`.
+| Key | Default | Description |
+|---|---|---|
+| `hidden-path` | `false` | Replace the prompt with a short path indicator (`Coding/Project ;`) |
+| `hyprland-layout` | `false` | Enable Hyprland-style terminal tiling |
+| `unicode-rendering` | `false` | Full Unicode: wide glyphs, emoji, composed grapheme clusters |
+| `osc-integration` | `false` | OSC 7 cwd, OSC 8 hyperlinks, OSC 133 command marks |
+| `borderless-window` | `false` | Remove titlebar and traffic lights, keep rounded corners |
+| `hello` | `false` | Example plugin |
+| `pi-bridge` | `false` | Raspberry Pi bridge plugin |
+| `editor-deck` | `false` | Editor deck plugin |
+| `vim-control` | `false` | Vim control integration |
+| `neovim-control` | `false` | Neovim control integration |
+| `emacs-control` | `false` | Emacs control integration |
+| `nano-control` | `false` | Nano control integration |
+| `micro-control` | `false` | Micro control integration |
+| `helix-control` | `false` | Helix control integration |
 
-## System and updates
+### Tabs (nested under `"tabs"`)
 
-| Field | Meaning |
-|---|---|
-| `shell` | Absolute shell executable |
-| `shellArguments` | JSON argument array; `["-l"]` starts a login shell |
-| `system.restoreSession` | Restore window geometry, terminal layout, focus, and working directories |
-| `system.pasteProtection` | Confirm multiline pastes that may immediately execute commands |
-| `system.secureKeyboard` | Enable macOS Secure Keyboard Entry whenever the active PTY disables echo |
-| `system.shellIntegration` | Inject prompt marks and working-directory reporting for supported shells |
-| `system.clipboardRead` | OSC 52 clipboard reads: `ask`, `allow`, or `deny` |
-| `system.clipboardWrite` | OSC 52 clipboard writes: `ask`, `allow`, or `deny` |
-| `updates.checkOnLaunch` | Asynchronously check for a newer GitHub release at app launch |
-| `updates.repository` | GitHub `owner/repository` used by the updater |
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `railWidth` | integer | `34` | Tab rail width in points |
+| `animations` | boolean | `true` | Enable tab and window animations |
+| `animationSpeed` | float | `1.35` | Animation speed multiplier |
+| `autoHide` | boolean | `true` | Auto-hide the tab rail when only one tab is open |
+| `hideDelay` | integer | `5` | Seconds before auto-hiding the tab rail |
+| `tileGap` | integer | `10` | Gap between Hyprland tiles in points |
+| `screenInset` | integer | `18` | Edge inset for Hyprland tiles in points |
+| `hyprlandBlur` | boolean | `false` | Enable blur for Hyprland tiles |
 
-The default updater repository is `sebastianmiletic/termatica`. Disable the launch request by setting `updates.checkOnLaunch` to `false`.
+### Keybindings (nested under `"keybindings"`)
 
-## Keybindings
+Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
 
-Each keybinding is a string with modifiers joined by `+`. All application shortcuts appear under Keybindings in the config UI.
+| Key | Default | Description |
+|---|---|---|
+| `openConfig` | `cmd+,` | Open the config UI |
+| `newWindow` | `cmd+n` | New terminal window |
+| `newTab` | `cmd+t` | New terminal tab |
+| `newVerticalTab` | `cmd+shift+t` | New vertical split tab |
+| `closeTab` | `cmd+w` | Close current tab |
+| `clearTerminal` | `cmd+k` | Clear terminal and scrollback |
+| `searchScrollback` | `cmd+shift+h` | Search scrollback (regex) |
+| `previousPrompt` | `cmd+shift+p` | Jump to previous shell prompt (OSC 133) |
+| `nextPrompt` | `cmd+option+p` | Jump to next shell prompt (OSC 133) |
+| `reload` | `cmd+r` | Reload configuration |
+| `copy` | `cmd+c` | Copy selection to clipboard |
+| `paste` | `cmd+v` | Paste from clipboard |
+| `selectAll` | `cmd+a` | Select all text |
+| `splitHorizontal` | `cmd+d` | Split current pane horizontally |
+| `splitVertical` | `cmd+shift+d` | Split current pane vertically |
+| `nextSplit` | `cmd+]` | Focus next split |
+| `previousSplit` | `cmd+[` | Focus previous split |
+| `zoomIn` | `cmd+plus` | Increase font size |
+| `zoomOut` | `cmd+-` | Decrease font size |
+| `zoomReset` | `cmd+0` | Reset font size to default |
 
-Command-K clears scrollback and leaves a fresh shell prompt. Command-Shift-P and Command-Option-P navigate OSC 133 prompt marks. `newVerticalTab` creates a terminal below the focused terminal, inheriting its working directory. `tab1` through `tab9` may be added to override numbered selection shortcuts.
+## Theme structure
 
-## Saved configs
+Themes are JSON files in `~/.config/termatica/themes/` or the bundled `Resources/Themes/` directory. A theme looks like:
 
-Named configs live in `~/.config/termatica/configs/*.json`. Config Files is always the first screen opened by `termatica config`. The current config appears once, followed only by other saved files. Create, select, rename, or delete files there, then press Enter to continue into the selected config's categorized settings. Q returns from settings to the file list.
-
-```sh
-termatica config create focused
-termatica config use focused
-termatica config rename focused work
-termatica config delete work
+```json
+{
+  "background": "#101216",
+  "foreground": "#D8DEE9",
+  "cursor": "#EEF1F5",
+  "accent": "#7AA2F7",
+  "panel": "#151820",
+  "muted": "#6B7280",
+  "selection": "#2B3445",
+  "appearance": {
+    "backgroundOpacity": 0.28,
+    "windowOpacity": 1,
+    "blur": false,
+    "glow": 0,
+    "scanlines": 0,
+    "vignette": 0,
+    "cursorStyle": "block"
+  },
+  "palette": ["#FF6B6B", "#7CE38B", "#67B7F7", "..."],
+  "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]
+}
 ```
 
-Set `TERMATICA_CONFIG_DIR=/some/folder` to redirect the complete configuration root for testing, automation, or portable setups.
+The `colors` key in `config.json` overrides theme colors. Set `"palette": "theme"` to use the theme's palette, or provide a 16-element array for a custom ANSI palette.
+
+## CLI
+
+```sh
+t c                    # Open config UI
+t cf                   # Open config.json in editor
+t cf path              # Print config file path
+t r                    # Reload config
+t u check              # Check for update
+t u                    # Download and install update
+t e <name> [files]     # Run terminal editor
+t v                    # Print version
+t h                    # Help
+```
+
+## Remote control
+
+Send JSON commands via the CLI socket:
+
+```sh
+echo '{"command":"newTab"}' | nc -U /tmp/termatica-501-*.sock
+echo '{"command":"sendText","text":"ls\n"}' | nc -U /tmp/termatica-501-*.sock
+echo '{"command":"splitHorizontal"}' | nc -U /tmp/termatica-501-*.sock
+echo '{"command":"search"}' | nc -U /tmp/termatica-501-*.sock
+echo '{"command":"getStats"}' | nc -U /tmp/termatica-501-*.sock
+```
+
+Supported commands: `newTab`, `newWindow`, `splitHorizontal`, `splitVertical`, `sendText`, `search`, `getStats`, `reload`, `run`.
