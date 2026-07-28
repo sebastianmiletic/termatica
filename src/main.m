@@ -947,6 +947,14 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
     BOOL _useMetalRenderer;
 #endif
     NSUInteger _kittyGraphicWidth, _kittyGraphicHeight;
+#if METAL_ENABLED
+    id<MTLTexture> _atlasTexture;
+    NSMutableDictionary *_atlasMap;
+    NSUInteger _atlasX, _atlasY, _atlasRowH;
+    MTLViewport _mtlViewport;
+    float _mtlVertexData[65536];
+    NSUInteger _mtlVertexCount;
+#endif
 }
 
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config {
@@ -955,15 +963,21 @@ static void TRunDispatch(void *ctx,const uint32_t *cps,const uint8_t *wids,NSUIn
 #if METAL_ENABLED
         _useMetalRenderer=YES;_mtlDevice=MTLCreateSystemDefaultDevice();
         if(_mtlDevice){_mtlCommandQueue=[_mtlDevice newCommandQueue];_metalLayer=[CAMetalLayer layer];_metalLayer.device=_mtlDevice;_metalLayer.pixelFormat=MTLPixelFormatBGRA8Unorm;
-            NSString *src=@"#include <metal_stdlib>\nusing namespace metal;\nstruct V{float4 p[[position]];float2 t;float4 c;};\nvertex V v(uint i[[vertex_id]],device const float* b[[buffer(0)]]){uint c=i/6,v=i%6;float x=b[c*8]+(v==1||v==4||v==5?b[c*8+2]:0);float y=b[c*8+1]+(v>=3?b[c*8+3]:0);V o;o.p=float4(x,y,0,1);o.t=float2(v==1||v==4||v==5?1:0,v>=3?1:0);o.c=float4(b[c*8+4],b[c*8+5],b[c*8+6],b[c*8+7]);return o;}\nfragment float4 f(V i[[stage_in]],texture2d<float> t[[texture(0)]],sampler s[[sampler(0)]]){return t.sample(s,i.t)*i.c;}";
+            NSString *src=@"#include <metal_stdlib>\nusing namespace metal;\nstruct V{float4 p[[position]];float2 t;float4 c;};\nvertex V v(uint i[[vertex_id]],device const float* b[[buffer(0)]],constant float2& vp[[buffer(1)]]){\nuint c=i/6,v=i%6;\nfloat px=b[c*12],py=b[c*12+1],w=b[c*12+2],h=b[c*12+3];\nfloat x=px+(v==1||v==4||v==5?w:0);float y=py+(v>=3?h:0);\nfloat u0=b[c*12+4],v0=b[c*12+5],u1=b[c*12+6],v1=b[c*12+7];\nfloat r=b[c*12+8],g=b[c*12+9],bb=b[c*12+10],a=b[c*12+11];\nV o;o.p=float4(x/vp.x*2.0-1.0,1.0-y/vp.y*2.0-h/vp.y*2.0,0,1);\no.t=float2(v==1||v==4||v==5?u1:u0,v>=3?v1:v0);\no.c=float4(r,g,bb,a);return o;}\nfragment float4 f(V i[[stage_in]],texture2d<float> t[[texture(0)]],sampler s[[sampler(0)]]){return t.sample(s,i.t)*i.c;}";
             id<MTLLibrary> lib=[_mtlDevice newLibraryWithSource:src options:nil error:nil];
             if(lib){id<MTLFunction> vf=[lib newFunctionWithName:@"v"],ff=[lib newFunctionWithName:@"f"];MTLRenderPipelineDescriptor *d=[MTLRenderPipelineDescriptor new];d.vertexFunction=vf;d.fragmentFunction=ff;d.colorAttachments[0].pixelFormat=MTLPixelFormatBGRA8Unorm;d.colorAttachments[0].blendingEnabled=YES;d.colorAttachments[0].sourceRGBBlendFactor=MTLBlendFactorSourceAlpha;d.colorAttachments[0].destinationRGBBlendFactor=MTLBlendFactorOneMinusSourceAlpha;_mtlPipeline=[_mtlDevice newRenderPipelineStateWithDescriptor:d error:nil];}
         }else _useMetalRenderer=NO;
+        if(_useMetalRenderer){
+            MTLTextureDescriptor *td=[[MTLTextureDescriptor alloc]init];td.textureType=MTLTextureType2D;td.pixelFormat=MTLPixelFormatRGBA8Unorm;td.width=2048;td.height=2048;td.usage=MTLTextureUsageShaderRead|MTLTextureUsageShaderWrite;
+            _atlasTexture=[_mtlDevice newTextureWithDescriptor:td];
+            _atlasMap=[NSMutableDictionary dictionary];_atlasX=1;_atlasY=0;_atlasRowH=0;
+            if(_atlasTexture){uint32_t white=0xFFFFFFFF;MTLOrigin o={0,0,0};MTLSize s={1,1,1};[_atlasTexture replaceRegion:MTLRegionMake2D(0,0,1,1) mipmapLevel:0 withBytes:&white bytesPerRow:4];}
+        }
 #endif
         _decoder=[TTerminalDecoder new];_attributeCache=[NSMutableDictionary dictionary];_graphemes=[NSMutableArray array];_graphemeIDs=[NSMutableDictionary dictionary];_linksByCell=[NSMutableDictionary dictionary];_commandMarks=[NSMutableArray array];_cursorVisible = YES;_autoWrap=YES;
         _currentFG = _currentBG = TDefaultColor;
 #if METAL_ENABLED
-        if(_useMetalRenderer&&_metalLayer){[self.layer addSublayer:_metalLayer];}else{self.wantsLayer=YES;}
+        if(_useMetalRenderer&&_metalLayer){self.wantsLayer=YES;_metalLayer.frame=self.bounds;_metalLayer.delegate=self;[self.layer addSublayer:_metalLayer];}else{self.wantsLayer=YES;}
 #else
         self.wantsLayer=YES;
 #endif
@@ -1501,7 +1515,12 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
 - (void)refreshTextView {
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf refreshTextView];});return;}
     if(_synchronizedUpdates||_displayScheduled||self.hidden)return;_displayScheduled=YES;__weak typeof(self) weakSelf=self;
-    dispatch_async(_renderQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage)){dispatch_async(dispatch_get_main_queue(),^{[self setNeedsDisplayInRect:damage];});}[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
+    dispatch_async(_renderQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage)){
+        #if METAL_ENABLED
+        if(self->_useMetalRenderer&&self->_metalLayer){[self->_metalLayer setNeedsDisplay];}else
+        #endif
+        {dispatch_async(dispatch_get_main_queue(),^{[self setNeedsDisplayInRect:damage];});}
+    }[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
 }
 - (void)viewDidMoveToWindow {
     [super viewDidMoveToWindow];
@@ -1535,7 +1554,80 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     CGImageRef image=rep.CGImage;if(image)CGImageRetain(image);[_glyphCache setObject:(__bridge id)image forKey:key cost:(NSUInteger)(size.width*size.height*4)];
     return image;
 }
+#if METAL_ENABLED
+- (void)atlasLookupForCodepoint:(uint32_t)cp flags:(uint8_t)flags fg:(uint32_t)fg outX:(float*)ox outY:(float*)oy outU0:(float*)u0 outV0:(float*)v0 outU1:(float*)u1 outV1:(float*)v1 __attribute__((objc_direct)) {
+    NSNumber *key=@(((uint64_t)cp<<32)|((uint64_t)flags<<24)|(fg&0xFFFFFF));
+    NSValue *cached=_atlasMap[key];
+    if(cached){NSRect r=[cached rectValue];*ox=r.origin.x;*oy=r.origin.y;*u0=r.origin.x/2048.0;*v0=r.origin.y/2048.0;*u1=NSMaxX(r)/2048.0;*v1=NSMaxY(r)/2048.0;return;}
+    NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);
+    NSString *str=[self stringForCodepoint:cp]?:@" ";
+    NSDictionary *attrs=@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(fg)};
+    NSSize size=[str sizeWithAttributes:attrs];
+    NSUInteger gw=MAX(1,(NSUInteger)ceil(size.width)),gh=MAX(1,(NSUInteger)ceil(size.height));
+    if(_atlasX+gw>2048){_atlasX=0;_atlasY+=_atlasRowH;_atlasRowH=0;}
+    if(_atlasY+gh>2048){_atlasMap=[NSMutableDictionary dictionary];_atlasX=1;_atlasY=0;_atlasRowH=0;}
+    if(gh>_atlasRowH)_atlasRowH=gh;
+    NSUInteger ax=_atlasX,ay=_atlasY;
+    NSBitmapImageRep *rep=[[NSBitmapImageRep alloc]initWithBitmapDataPlanes:NULL pixelsWide:gw pixelsHigh:gh bitsPerSample:8 samplesPerPixel:4 hasAlpha:YES isPlanar:NO colorSpaceName:NSCalibratedRGBColorSpace bytesPerRow:0 bitsPerPixel:32];
+    NSGraphicsContext *ctx=[NSGraphicsContext graphicsContextWithBitmapImageRep:rep];[NSGraphicsContext.currentContext saveGraphicsState];[NSGraphicsContext setCurrentContext:ctx];[str drawAtPoint:NSZeroPoint withAttributes:attrs];[NSGraphicsContext.currentContext restoreGraphicsState];
+    [_atlasTexture replaceRegion:MTLRegionMake2D(ax,ay,gw,gh) mipmapLevel:0 withBytes:rep.bitmapData bytesPerRow:rep.bytesPerRow];
+    _atlasMap[key]=[NSValue valueWithRect:NSMakeRect(ax,ay,gw,gh)];
+    _atlasX+=gw;
+    *ox=ax;*oy=ay;*u0=(float)ax/2048.0;*v0=(float)ay/2048.0;*u1=(float)(ax+gw)/2048.0;*v1=(float)(ay+gh)/2048.0;
+}
+- (void)displayLayer:(CALayer *)layer __attribute__((objc_direct)) {
+    if(!_useMetalRenderer||!_mtlPipeline||!_atlasTexture){return;}
+    NSSize viewSize=self.bounds.size;if(viewSize.width<=0||viewSize.height<=0)return;
+    _metalLayer.drawableSize=viewSize;
+    id<CAMetalDrawable> drawable=[_metalLayer nextDrawable];if(!drawable)return;
+    @synchronized(_gridLockToken){
+    CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;
+    uint32_t defaultForeground=TRGB(self.config.foreground),defaultBackground=TRGB(self.config.background);
+    float *v=_mtlVertexData;NSUInteger vc=0;
+    for(NSUInteger y=0;y<_rows;y++){
+        NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:(NSInteger)y temporary:&hold];if(!line)continue;
+        for(NSUInteger x=0;x<_cols;x++){
+            TCell c=line[x];
+            if(c.flags&TContinuation)continue;
+            uint32_t bg=c.bg==TDefaultColor?defaultBackground:c.bg;
+            uint32_t fg=c.fg==TDefaultColor?defaultForeground:c.fg;
+            if(c.flags&TInverse){uint32_t s=fg;fg=bg;bg=s;}
+            BOOL linked=_historyOffset==0&&_linksByCell[[self linkKeyForX:x y:y]]!=nil;
+            uint8_t flags=(c.flags&TStyleMask)|(linked?TUnderline:0);
+            float px=pad+x*_cellWidth,py=top+y*_cellHeight;
+            if(bg!=defaultBackground){
+                if(vc<5461){v[vc*12]=px;v[vc*12+1]=py;v[vc*12+2]=_cellWidth;v[vc*12+3]=_cellHeight;v[vc*12+4]=0;v[vc*12+5]=0;v[vc*12+6]=1.0/2048.0;v[vc*12+7]=1.0/2048.0;v[vc*12+8]=((bg>>16)&0xFF)/255.0;v[vc*12+9]=((bg>>8)&0xFF)/255.0;v[vc*12+10]=(bg&0xFF)/255.0;v[vc*12+11]=1.0;vc++;}
+            }
+            uint32_t codepoint=c.ch?:' ';
+            if(codepoint!=' '&&vc<5461){
+                float ax,ay,au0,av0,au1,av1;
+                [self atlasLookupForCodepoint:codepoint flags:flags fg:fg outX:&ax outY:&ay outU0:&au0 outV0:&av0 outU1:&au1 outV1:&av1];
+                v[vc*12]=px;v[vc*12+1]=py;v[vc*12+2]=_cellWidth;v[vc*12+3]=_cellHeight;v[vc*12+4]=au0;v[vc*12+5]=av0;v[vc*12+6]=au1;v[vc*12+7]=av1;v[vc*12+8]=((fg>>16)&0xFF)/255.0;v[vc*12+9]=((fg>>8)&0xFF)/255.0;v[vc*12+10]=(fg&0xFF)/255.0;v[vc*12+11]=1.0;vc++;
+            }
+        }
+    }
+    _mtlVertexCount=vc*6;
+    id<MTLCommandBuffer> cmd=[_mtlCommandQueue commandBuffer];
+    MTLRenderPassDescriptor *desc=[MTLRenderPassDescriptor renderPassDescriptor];
+    desc.colorAttachments[0].texture=drawable.texture;desc.colorAttachments[0].loadAction=MTLLoadActionClear;
+    desc.colorAttachments[0].clearColor=MTLClearColorMake(((defaultBackground>>16)&0xFF)/255.0,((defaultBackground>>8)&0xFF)/255.0,(defaultBackground&0xFF)/255.0,1.0);
+    desc.colorAttachments[0].storeAction=MTLStoreActionStore;
+    id<MTLRenderCommandEncoder> enc=[cmd renderCommandEncoderWithDescriptor:desc];
+    [enc setRenderPipelineState:_mtlPipeline];
+    [enc setVertexBytes:v length:vc*12*sizeof(float) atIndex:0];
+    float viewport[2]={viewSize.width,viewSize.height};
+    [enc setVertexBytes:viewport length:8 atIndex:1];
+    [enc setFragmentTexture:_atlasTexture atIndex:0];
+    if(_mtlVertexCount)[enc drawPrimitives:MTLPrimitiveTypeTriangle vertexStart:0 vertexCount:_mtlVertexCount];
+    [enc endEncoding];
+    [cmd presentDrawable:drawable];[cmd commit];
+    }
+}
+#endif
 - (void)drawRect:(NSRect)dirtyRect {
+#if METAL_ENABLED
+    if(_useMetalRenderer&&_mtlPipeline){return;}
+#endif
     @synchronized(_gridLockToken) {
     [self.config.background setFill];NSRectFill(dirtyRect);CGFloat pad=self.config.padding+self.leadingOverlayInset,top=self.config.padding+self.safeAreaInsets.top+self.topContentInset;NSShadow *phosphor=nil;if(self.config.glow>0){phosphor=[NSShadow new];phosphor.shadowColor=[self.config.accent colorWithAlphaComponent:self.config.glow];phosphor.shadowBlurRadius=1+self.config.glow*3;phosphor.shadowOffset=NSZeroSize;}
     NSInteger firstRow=MAX(0,(NSInteger)floor((NSMinY(dirtyRect)-top)/MAX(1,_cellHeight))),lastRow=MIN((NSInteger)_rows,(NSInteger)ceil((NSMaxY(dirtyRect)-top)/MAX(1,_cellHeight)));NSInteger firstColumn=MAX(0,(NSInteger)floor((NSMinX(dirtyRect)-pad)/MAX(1,_cellWidth))),lastColumn=MIN((NSInteger)_cols,(NSInteger)ceil((NSMaxX(dirtyRect)-pad)/MAX(1,_cellWidth)));if(lastRow<firstRow)lastRow=firstRow;if(lastColumn<firstColumn)lastColumn=firstColumn;
