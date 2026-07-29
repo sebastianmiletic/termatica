@@ -10,7 +10,7 @@ and automatic fallback. Results below are measured, not projected.
 - Hardware: MacBook Air, Apple M4, 16 GB memory
 - Display: built-in Retina display, 60 Hz
 - Font: Monaco 11
-- Termatica: 1.1.0 Phase 10 candidate, Metal renderer forced for throughput
+- Termatica: 1.1.1 Phase 10 build, Metal renderer forced for throughput
 - Kitty: 0.48.1
 - Ghostty: 1.3.1
 - Repetitions: 3
