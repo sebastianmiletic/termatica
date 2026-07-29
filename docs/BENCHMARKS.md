@@ -1,70 +1,85 @@
 # Terminal benchmarks
 
-The #1 macOS terminal. Leads Kitty and Ghostty on all six parser and render throughput axes, with sub-1ms paint, under 20MB memory, and under 1MB bundle size.
+Termatica is optimized for a small native bundle and low memory use. The
+current AppKit renderer is the reliable fallback for the planned Phase 10 Metal
+backend. Results below are measured, not projected.
 
 ## Test system
 
-- Date: 2026-07-28
-- Hardware: MacBook Air, Apple M4 (10 cores), 16 GB memory
-- OS: macOS 26.5.2
+- Date: 2026-07-29
+- Hardware: MacBook Air, Apple M4, 16 GB memory
+- Display: built-in Retina display, 60 Hz
 - Font: Monaco 11
-- Termatica: 0.8.1, Metal GPU renderer, universal release build
-- Kitty: 0.48.1 official macOS release
-- Ghostty: 1.3.1 installed macOS release
-- Repetitions: 5
+- Termatica: 1.0.1 pre-Phase-10 build, AppKit renderer
+- Kitty: 0.48.1
+- Ghostty: 1.3.1
+- Repetitions: 3
+- Raw results: `/tmp/termatica-v101-prephase10`
 
-Run the same suite with:
+Run the suite with:
 
 ```sh
 make release
-KITTY_APP=/Applications/kitty.app \
-GHOSTTY_APP=/Applications/Ghostty.app \
-BENCHMARK_REPETITIONS=5 \
-make benchmark
+make benchmark-harness
+BENCHMARK_REPETITIONS=3 make benchmark
 ```
 
-## Parser throughput (kitten __benchmark__, higher is better)
+## End-to-end throughput
 
-| Terminal | ASCII | Unicode | CSI-heavy |
+`kitten __benchmark__` includes PTY transport and terminal model updates.
+
+| Parser | ASCII | Unicode | CSI-heavy |
 |---|---:|---:|---:|
-| **Termatica** | **130.2 MB/s** | **106.5 MB/s** | **93.6 MB/s** |
-| Kitty | 76.3 | 100.4 | 32.9 |
-| Ghostty | 54.3 | 76.9 | 31.1 |
+| Termatica | 44.9 MB/s | 36.2 MB/s | **54.0 MB/s** |
+| Kitty | **75.1 MB/s** | **101.1 MB/s** | 43.5 MB/s |
+| Ghostty | 56.6 MB/s | 78.2 MB/s | 30.0 MB/s |
 
-## Render-enabled throughput
-
-| Terminal | ASCII | Unicode | CSI-heavy |
+| Render enabled | ASCII | Unicode | CSI-heavy |
 |---|---:|---:|---:|
-| **Termatica** | **128.1 MB/s** | **83.1 MB/s** | **102.6 MB/s** |
-| Kitty | 76.1 | 40.5 | 32.2 |
-| Ghostty | 57.0 | 84.2 | 30.3 |
+| Termatica | 43.5 MB/s | 34.7 MB/s | **53.2 MB/s** |
+| Kitty | **74.1 MB/s** | 22.3 MB/s | 42.9 MB/s |
+| Ghostty | 58.2 MB/s | **88.6 MB/s** | 30.4 MB/s |
 
-## Core throughput (in-process, excludes PTY and rendering)
+Termatica leads CSI-heavy throughput. ASCII and Unicode PTY/model throughput
+remain open optimization targets.
 
-| Case | Termatica |
-|---|---:|
-| ASCII | 138.3 MiB/s |
-| Unicode | 104.4 MiB/s |
-| CSI-heavy | 66.8 MiB/s |
+## Internal throughput
 
-## Paint and frame compliance
+| Case | Decoder only | Decoder + screen model |
+|---|---:|---:|
+| ASCII | 372.0 MiB/s | 111.6 MiB/s |
+| Unicode | 367.1 MiB/s | 73.1 MiB/s |
+| CSI-heavy | 354.4 MiB/s | 64.7 MiB/s |
+
+The decoder-only benchmark uses the C decoder sink and excludes PTY, model, and
+rendering work. The core benchmark includes screen mutation and scrollback.
+
+## Paint and sustained output
 
 | Measurement | Termatica |
 |---|---:|
-| Paint p50 | 0.87 ms |
-| Paint p95 | 1.20 ms |
-| Paint p99 | 1.30 ms |
+| ASCII viewport paint p50 | 2.11 ms |
+| ASCII viewport paint p95 | 2.17 ms |
+| ASCII viewport paint p99 | 2.26 ms |
 | Frames over 60 Hz budget | **0 / 240** |
 | Frames over 120 Hz budget | **0 / 240** |
-| Sustained throughput | 147.0 MiB/s |
-| Sustained CV | 0.0035 |
+| Frames over 240 Hz budget | **0 / 240** |
+| Sustained throughput | 101.2 MiB/s |
+| Minimum 250 ms window | 97.2 MiB/s |
+
+Paint is a warmed, full-surface offscreen AppKit `cacheDisplay` measurement of
+an ASCII terminal viewport after a one-line scroll. It is not key-to-photon
+latency and does not claim the same frame cost for Unicode fallback shaping,
+images, transparency, or visual effects.
 
 ## Memory and size
 
-| Terminal | Idle memory | App bundle |
+| Terminal | Idle physical footprint | App bundle allocation |
 |---|---:|---:|
-| **Termatica** | **19.2 MiB** | **915 KiB** |
-| Kitty | 117.8 MiB | 160,080 KiB |
-| Ghostty | 81.3 MiB | 63,484 KiB |
+| Termatica | **37.3 MiB** | **940 KiB** |
+| Kitty | 120.4 MiB | 160,080 KiB |
+| Ghostty | 82.7 MiB | 63,484 KiB |
 
-**6.1× less memory than Kitty. 3.9× less than Ghostty. 193× smaller bundle than Kitty. 76× smaller than Ghostty.**
+The Termatica bundle contains the universal arm64/x86_64 app. Its native
+benchmark and regression harness is built separately and is not shipped in the
+bundle.

@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>The #1 macOS terminal. Faster than Kitty and Ghostty on every benchmark axis.</strong></p>
+<p align="center"><strong>A compact, native, terminal-first macOS terminal.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -18,34 +18,35 @@
   <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
-Termatica is a real PTY-backed terminal written in Objective-C and AppKit with Metal GPU acceleration. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface.
+Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. An immutable render-snapshot contract prepares the current AppKit renderer for the optional Phase 10 Metal backend.
 
-The universal v0.6.0 app is **919,939 bytes / 898.4 KiB** — under 1 MB — and runs natively on Apple Silicon and Intel Macs. That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB).
+The current universal app is under 1 MiB and runs natively on Apple Silicon and Intel Macs.
 
-## The #1 macOS terminal
+## Measured performance
 
 On a reproducible `kitten __benchmark__` suite against Kitty 0.48.1 and Ghostty 1.3.1 on Apple M4:
 
 | Benchmark | Termatica | Kitty | Ghostty |
 |---|---:|---:|---:|
-| ASCII parser | **130.2 MB/s** | 76.3 | 54.3 |
-| Unicode parser | **106.5 MB/s** | 100.4 | 76.9 |
-| CSI-heavy parser | **93.6 MB/s** | 32.9 | 31.1 |
-| ASCII render | **128.1 MB/s** | 76.1 | 57.0 |
-| Unicode render | **83.1 MB/s** | 40.5 | 84.2 |
-| CSI render | **102.6 MB/s** | 32.2 | 30.3 |
-| Paint p50 | **0.87 ms** | — | — |
+| ASCII parser | 44.9 MB/s | **75.1** | 56.6 |
+| Unicode parser | 36.2 MB/s | **101.1** | 78.2 |
+| CSI-heavy parser | **54.0 MB/s** | 43.5 | 30.0 |
+| ASCII render | 43.5 MB/s | **74.1** | 58.2 |
+| Unicode render | 34.7 MB/s | 22.3 | **88.6** |
+| CSI render | **53.2 MB/s** | 42.9 | 30.4 |
+| ASCII viewport paint p50 | **2.11 ms** | — | — |
 | 60 Hz overshoot | **0 / 240** | — | — |
 | 120 Hz overshoot | **0 / 240** | — | — |
-| Idle memory | **19.2 MiB** | 117.8 | 81.3 |
-| App bundle | **915 KiB** | 160,080 KiB | 63,484 KiB |
+| 240 Hz overshoot | **0 / 240** | — | — |
+| Idle memory | **37.3 MiB** | 120.4 | 82.7 |
+| App bundle | **940 KiB** | 160,080 KiB | 63,484 KiB |
 
-Termatica leads Kitty and Ghostty on all six parser and render throughput axes, uses 6.1× less memory, is 193× smaller in bundle size, maintains perfect frame compliance on both 60 Hz and 120 Hz with sub-1ms paint, and includes Metal GPU rendering, Sixel images with scaling and HLS color support, Kitty graphics protocol with GIF animation and virtual placements, scrollback search with match counter, window splits, remote control IPC, visual bell, config hot-reload, font feature settings, and theme-aware inline image rendering.
+Termatica currently leads CSI-heavy parser and render throughput while remaining substantially smaller and lighter at idle. The frame-compliance measurement is a warmed full-surface AppKit repaint of a standard ASCII terminal viewport; Unicode and CSI performance are reported separately above.
 
 ## What makes it different
 
-- The fastest macOS terminal: leads Kitty and Ghostty on all six parser and render throughput axes
-- Metal GPU rendering via CAMetalLayer with runtime-compiled shaders — 0.87ms paint p50, zero frame overshoots
+- C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
+- Immutable render snapshots and a complete AppKit fallback for the planned Metal backend
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
@@ -188,14 +189,13 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Universal app: **953,891 bytes / 931.5 KiB** — under 1 MB
-- Universal executable: **907,088 bytes**
-- Clean one-tab physical footprint with Metal GPU: **19.2 MiB**
+- Universal app allocation: **940 KiB** — under 1 MiB
+- Clean one-tab physical footprint: **37.3 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
 
-That is **193× smaller than Kitty** (160 MB) and **76× smaller than Ghostty** (63 MB) on disk, and **6.1× less memory** than Kitty (117.8 MiB) at idle.
+The same run measured Kitty at 120.4 MiB and Ghostty at 82.7 MiB idle physical footprint.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 

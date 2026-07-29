@@ -4,16 +4,17 @@
 
 | Feature | Termatica | Kitty | Ghostty |
 |---|:---:|:---:|:---:|
-| Metal GPU rendering | ✅ | ✅ OpenGL | ✅ Metal |
-| Glyph atlas texture | ✅ 2048×2048 | ✅ | ✅ |
-| Full GPU cell renderer | ✅ drawPrimitives | ✅ | ✅ |
-| GPU image compositing | ✅ | ✅ | ✅ |
-| GPU cursor rendering | ✅ | ✅ | ✅ |
+| Metal GPU rendering | Phase 10 | ✅ OpenGL | ✅ Metal |
+| Immutable render snapshot | ✅ | ✅ | ✅ |
+| AppKit fallback renderer | ✅ | — | — |
+| GPU image compositing | Phase 10 | ✅ | ✅ |
+| GPU cursor rendering | Phase 10 | ✅ | ✅ |
 | Zero-frame overshoot (60Hz) | ✅ 0/240 | — | — |
 | Zero-frame overshoot (120Hz) | ✅ 0/240 | — | — |
-| Sub-1ms paint | ✅ 0.87ms | — | — |
-| Under 20MB memory | ✅ 19.2MB | ❌ 118MB | ❌ 81MB |
-| Under 1MB bundle | ✅ 915KB | ❌ 160MB | ❌ 63MB |
+| Zero-frame overshoot (240Hz) | ✅ 0/240 | — | — |
+| ASCII viewport paint p50 | 2.11ms | — | — |
+| Under 40MB memory | ✅ 37.3MB | ❌ 120MB | ❌ 83MB |
+| Under 1MB bundle | ✅ 940KB | ❌ 160MB | ❌ 63MB |
 
 ## Terminal protocols
 

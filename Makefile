@@ -1,5 +1,6 @@
 APP := build/Termatica.app
 BIN := $(APP)/Contents/MacOS/Termatica
+BENCH := build/TermaticaBenchmark
 CLI := $(APP)/Contents/MacOS/termatica
 SHORTCLI := $(APP)/Contents/MacOS/t
 ZIP := dist/Termatica-macOS-universal.zip
@@ -14,7 +15,7 @@ SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
 COMMON := -fobjc-arc -fmodules -O3 -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon
 
-.PHONY: all release run clean size install check package benchmark-core benchmark-experience benchmark
+.PHONY: all release run clean size install check package benchmark-harness benchmark-decoder benchmark-core benchmark-experience benchmark
 
 all: release
 
@@ -30,6 +31,13 @@ $(BIN): $(SOURCES)
 	xcrun clang $(COMMON) -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
 	lipo -create $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
 	strip -x $@
+
+$(BENCH): $(SOURCES)
+	@mkdir -p $(dir $@)
+	xcrun clang $(COMMON) -DTERMATICA_BENCHMARKS=1 -arch $$(uname -m) -o $@ $(SOURCES)
+	strip -x $@
+
+benchmark-harness: $(BENCH)
 
 $(CLI): $(BIN)
 	ln -sf Termatica $@
@@ -60,27 +68,30 @@ size: release
 	@find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {printf "%d bytes bundle (%.1f KiB)\n",s,s/1024}'
 	@stat -f '%z bytes executable' $(BIN)
 
-benchmark-core: release
-	TERMATICA_CONFIG_DIR=/tmp/termatica-core-benchmark $(BIN) --benchmark-core 33554432
+benchmark-decoder: $(BENCH)
+	TERMATICA_CONFIG_DIR=/tmp/termatica-decoder-benchmark $(BENCH) --benchmark-decoder 33554432
 
-benchmark-experience: release
-	TERMATICA_CONFIG_DIR=/tmp/termatica-experience-benchmark $(BIN) --benchmark-experience 240 3
+benchmark-core: $(BENCH)
+	TERMATICA_CONFIG_DIR=/tmp/termatica-core-benchmark $(BENCH) --benchmark-core 33554432
 
-benchmark: release
+benchmark-experience: $(BENCH)
+	TERMATICA_CONFIG_DIR=/tmp/termatica-experience-benchmark $(BENCH) --benchmark-experience 240 3
+
+benchmark: release $(BENCH)
 	scripts/benchmark-terminals.sh
 
 install: release
 	ditto $(APP) /Applications/Termatica.app
 
-check: release
+check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 0.9.7$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.0.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 0.9.7'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.0.1'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -160,7 +171,8 @@ check: release
 	  grep -Fq 'TAnimateCenterReveal' src/main.m; \
 	  grep -Fq '_parseQueue=dispatch_queue_create("com.termatica.core"' src/main.m; \
 	  grep -Fq 'dispatch_async(self->_parseQueue,^{[self drainPendingData];})' src/main.m; \
-	  grep -Fq 'take=MIN((NSUInteger)32768,available)' src/main.m; \
+	  grep -Fq 'dataWithBytesNoCopy:buffer' src/main.m; \
+	  grep -Fq 'TDecoderConsume(&_decoder' src/main.m; \
 	  grep -Fq 'routeWheelLines:lines event:event' src/main.m; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/zsh/.zshenv; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/share/fish/vendor_conf.d/termatica.fish; \
@@ -184,7 +196,8 @@ check: release
 	  zsh -n scripts/benchmark-terminals.sh; \
 	  python3 -B -c 'compile(open("scripts/benchmark_probe.py").read(), "scripts/benchmark_probe.py", "exec")'; \
 	  python3 -B -c 'compile(open("scripts/tui_mouse_probe.py").read(), "scripts/tui_mouse_probe.py", "exec")'; \
-	  TERMATICA_CONFIG_DIR="$$tmp/self-test" $(BIN) --terminal-self-test | grep -q '^terminal-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/self-test" $(BENCH) --terminal-self-test | grep -q '^terminal-self-test ok'; \
+	  $(BENCH) --decoder-self-test | grep -q '^decoder-self-test ok'; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  fixture="$$tmp/release-fixture"; \
 	  mkdir -p "$$fixture" "$$tmp/install-target"; \
@@ -201,7 +214,7 @@ check: release
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 0.9.7 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.0.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

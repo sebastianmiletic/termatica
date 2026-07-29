@@ -1,6 +1,11 @@
 # Metal Renderer + Render Thread + Glyph Atlas + Zero-Copy Drain
 ## Single-Prompt Implementation Plan
 
+> **Superseded safety model:** Do not implement the split-lock or mutable
+> zero-copy sections below against the current terminal. Phase 10 must follow
+> [PHASE10_RENDER_CONTRACT.md](PHASE10_RENDER_CONTRACT.md) and consume
+> `TRenderSnapshot`. This document is retained only as historical design input.
+
 This document describes the complete plan for implementing four architectural improvements in one focused work session. Each is described at the code level with exact files, functions, and approach.
 
 ---

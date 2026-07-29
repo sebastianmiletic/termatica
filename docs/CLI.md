@@ -106,6 +106,8 @@ Set `TERMATICA_CONFIG_DIR=/some/folder` to redirect configuration and completion
 
 ## Benchmarks
 
-`make benchmark-core` measures Termatica's parser and screen model without PTY or presentation overhead. `make benchmark-experience` measures offscreen scroll-paint duration, parse-to-paint duration, sustained-output stability, and process CPU time. `make benchmark` runs the full local comparison against installed Kitty and Ghostty builds and writes raw results below `/tmp/termatica-benchmark-results`.
+`make benchmark-decoder` measures the incremental C decoder without PTY, screen-model, or presentation overhead. `make benchmark-core` measures the decoder and screen model together. `make benchmark-experience` measures offscreen scroll-paint duration, parse-to-paint duration, sustained-output stability, and process CPU time. These internal benchmarks run through the native-architecture `build/TermaticaBenchmark` harness, which is not included in the app bundle.
+
+`make benchmark` runs the full local comparison against installed Kitty and Ghostty builds and writes raw results below `/tmp/termatica-benchmark-results`.
 
 Use `KITTY_APP`, `GHOSTTY_APP`, `BENCHMARK_REPETITIONS`, and `BENCHMARK_OUTPUT` to select apps and control the run. Methodology and current measurements are in [Terminal benchmarks](BENCHMARKS.md).

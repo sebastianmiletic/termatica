@@ -12,10 +12,11 @@ kitty="$kitty_app/Contents/MacOS/kitty"
 ghostty="$ghostty_app/Contents/MacOS/ghostty"
 term="$term_app/Contents/MacOS/Termatica"
 term_cli="$term_app/Contents/MacOS/termatica"
+term_bench=${TERM_BENCHMARK:-"$root/build/TermaticaBenchmark"}
 probe="$root/scripts/benchmark_probe.py"
 config=/tmp/termatica-benchmark-config
 
-for required in "$term" "$term_cli" "$ghostty" "$kitty" "$kitten" "$probe"; do
+for required in "$term" "$term_cli" "$term_bench" "$ghostty" "$kitty" "$kitten" "$probe"; do
   if [[ ! -x "$required" ]]; then
     print -u2 "missing executable: $required"
     exit 2
@@ -153,8 +154,9 @@ measure_memory() {
 
 run_official "" parser
 run_official "--render" render
-TERMATICA_CONFIG_DIR="$config" "$term" --benchmark-core 33554432 > "$output/termatica-core.json"
-TERMATICA_CONFIG_DIR="$config" "$term" --benchmark-experience 240 3 > "$output/termatica-experience.json"
+TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-decoder 33554432 > "$output/termatica-decoder.json"
+TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-core 33554432 > "$output/termatica-core.json"
+TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-experience 240 3 > "$output/termatica-experience.json"
 measure_memory termatica
 measure_memory kitty
 measure_memory ghostty

@@ -1,6 +1,14 @@
 #import "TerminalCore.h"
 
 enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDecodeDCS, TDecodeDCSEscape };
+enum { TDecoderStringLimit = 1398208 };
+
+@implementation TRenderSnapshot
+- (instancetype)initWithGeneration:(uint64_t)generation metrics:(TRenderMetrics)metrics cells:(NSData *)cells underlineStyles:(NSData *)underlineStyles links:(NSDictionary<NSNumber *,NSString *> *)links images:(NSDictionary<NSNumber *,id> *)images cursorX:(NSUInteger)cursorX cursorY:(NSUInteger)cursorY cursorVisible:(BOOL)cursorVisible fullDamage:(BOOL)fullDamage damagedRows:(NSRange)damagedRows {
+    if((self=[super init])){_generation=generation;_metrics=metrics;_cells=[cells copy];_underlineStyles=[underlineStyles copy];_links=[links copy]?:@{};_images=[images copy]?:@{};_cursorX=cursorX;_cursorY=cursorY;_cursorVisible=cursorVisible;_fullDamage=fullDamage;_damagedRows=damagedRows;}
+    return self;
+}
+@end
 
 NSUInteger TAppendUTF16(unichar *buffer,NSUInteger length,uint32_t codepoint) {
     if(!codepoint)codepoint=' ';
@@ -12,52 +20,159 @@ NSUInteger TAppendUTF16(unichar *buffer,NSUInteger length,uint32_t codepoint) {
     return length;
 }
 
+typedef struct {uint32_t first,last;} TUnicodeRange;
+
+static inline BOOL TUnicodeInRanges(uint32_t cp,const TUnicodeRange *ranges,size_t count) {
+    size_t low=0,high=count;
+    while(low<high){size_t middle=low+(high-low)/2;TUnicodeRange range=ranges[middle];if(cp<range.first)high=middle;else if(cp>range.last)low=middle+1;else return YES;}
+    return NO;
+}
+
 BOOL TUnicodeCombining(uint32_t cp) {
-    return (cp>=0x0300&&cp<=0x036F)||(cp>=0x0483&&cp<=0x0489)||(cp>=0x0591&&cp<=0x05BD)||(cp>=0x05BF&&cp<=0x05C7)||(cp>=0x0610&&cp<=0x061A)||(cp>=0x064B&&cp<=0x065F)||(cp==0x0670)||(cp>=0x06D6&&cp<=0x06ED)||(cp==0x0711)||(cp>=0x0730&&cp<=0x074A)||(cp>=0x07A6&&cp<=0x07B0)||(cp>=0x07EB&&cp<=0x07F3)||(cp>=0x0816&&cp<=0x082D)||(cp>=0x08D3&&cp<=0x0903)||(cp>=0x093A&&cp<=0x094F)||(cp>=0x0981&&cp<=0x09CD)||(cp>=0x0A01&&cp<=0x0A4D)||(cp>=0x0A81&&cp<=0x0ACD)||(cp>=0x0B01&&cp<=0x0BCD)||(cp>=0x0C00&&cp<=0x0CCD)||(cp>=0x0D00&&cp<=0x0D4D)||(cp>=0x0E31&&cp<=0x0E4E)||(cp>=0x0EB1&&cp<=0x0ECD)||(cp>=0x0F18&&cp<=0x0FBC)||(cp>=0x102B&&cp<=0x103E)||(cp>=0x17B4&&cp<=0x17D3)||(cp>=0x1AB0&&cp<=0x1AFF)||(cp>=0x1DC0&&cp<=0x1DFF)||(cp>=0x20D0&&cp<=0x20FF)||(cp>=0xFE00&&cp<=0xFE0F)||(cp>=0xFE20&&cp<=0xFE2F)||(cp>=0x1F3FB&&cp<=0x1F3FF)||(cp>=0xE0020&&cp<=0xE007F)||(cp>=0xE0100&&cp<=0xE01EF)||cp==0x200D;
+    static const TUnicodeRange ranges[]={
+        {0x0300,0x036F},{0x0483,0x0489},{0x0591,0x05BD},{0x05BF,0x05C7},{0x0610,0x061A},{0x064B,0x065F},{0x0670,0x0670},{0x06D6,0x06ED},
+        {0x0711,0x0711},{0x0730,0x074A},{0x07A6,0x07B0},{0x07EB,0x07F3},{0x0816,0x082D},{0x08D3,0x0903},{0x093A,0x094F},{0x0981,0x09CD},
+        {0x0A01,0x0A4D},{0x0A81,0x0ACD},{0x0B01,0x0BCD},{0x0C00,0x0CCD},{0x0D00,0x0D4D},{0x0E31,0x0E4E},{0x0EB1,0x0ECD},{0x0F18,0x0FBC},
+        {0x102B,0x103E},{0x17B4,0x17D3},{0x1AB0,0x1AFF},{0x1DC0,0x1DFF},{0x200D,0x200D},{0x20D0,0x20FF},{0xFE00,0xFE0F},{0xFE20,0xFE2F},
+        {0x1F3FB,0x1F3FF},{0xE0020,0xE007F},{0xE0100,0xE01EF}
+    };
+    return TUnicodeInRanges(cp,ranges,sizeof(ranges)/sizeof(ranges[0]));
 }
 
 BOOL TUnicodeRegional(uint32_t cp){return cp>=0x1F1E6&&cp<=0x1F1FF;}
 
 BOOL TUnicodeWide(uint32_t cp) {
-    return cp>=0x1100&&((cp<=0x115F)||(cp==0x2329||cp==0x232A)||(cp>=0x2E80&&cp<=0xA4CF&&cp!=0x303F)||(cp>=0xAC00&&cp<=0xD7A3)||(cp>=0xF900&&cp<=0xFAFF)||(cp>=0xFE10&&cp<=0xFE19)||(cp>=0xFE30&&cp<=0xFE6F)||(cp>=0xFF00&&cp<=0xFF60)||(cp>=0xFFE0&&cp<=0xFFE6)||(cp>=0x1F000&&cp<=0x1FAFF)||(cp>=0x20000&&cp<=0x3FFFD));
+    static const TUnicodeRange ranges[]={{0x1100,0x115F},{0x2329,0x232A},{0x2E80,0xA4CF},{0xAC00,0xD7A3},{0xF900,0xFAFF},{0xFE10,0xFE19},{0xFE30,0xFE6F},{0xFF00,0xFF60},{0xFFE0,0xFFE6},{0x1F000,0x1FAFF},{0x20000,0x3FFFD}};
+    return cp!=0x303F&&TUnicodeInRanges(cp,ranges,sizeof(ranges)/sizeof(ranges[0]));
 }
 
-@implementation TTerminalDecoder {
-    int _state;
-    int _parameters[20];
-    NSUInteger _parameterIndex;
-    uint8_t _prefix;
-    NSMutableString *_osc;
-    uint32_t _utf8Code;
-    int _utf8Needed;
+void TDecoderInit(TDecoderState *decoder) {
+    if(!decoder)return;
+    memset(decoder,0,sizeof(*decoder));
 }
 
-- (instancetype)init {if((self=[super init])){_osc=[NSMutableString string];[self reset];}return self;}
-- (void)reset {_state=TDecodeText;_parameterIndex=0;_prefix=0;_utf8Code=0;_utf8Needed=0;memset(_parameters,0,sizeof(_parameters));[_osc setString:@""];}
-
-- (void)consumeTextByte:(uint8_t)byte codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control {
-    if(byte==27){_state=TDecodeEscape;return;}
-    if(byte<32||byte==127){control(byte);return;}
-    if(_utf8Needed){if((byte&0xC0)!=0x80){_utf8Needed=0;codepoint(0xFFFD);[self consumeTextByte:byte codepoint:codepoint control:control];return;}_utf8Code=(_utf8Code<<6)|(byte&0x3F);if(--_utf8Needed==0)codepoint(_utf8Code);}
-    else if(byte<0x80)codepoint(byte);
-    else if((byte&0xE0)==0xC0){_utf8Code=byte&0x1F;_utf8Needed=1;}
-    else if((byte&0xF0)==0xE0){_utf8Code=byte&0x0F;_utf8Needed=2;}
-    else if((byte&0xF8)==0xF0){_utf8Code=byte&0x07;_utf8Needed=3;}
-    else codepoint(0xFFFD);
+void TDecoderReset(TDecoderState *decoder) {
+    if(!decoder)return;
+    decoder->state=TDecodeText;
+    decoder->parameterIndex=0;
+    decoder->prefix=0;
+    decoder->utf8Code=0;
+    decoder->utf8Needed=0;
+    decoder->stringLength=0;
+    decoder->codepointCount=0;
+    memset(decoder->parameters,0,sizeof(decoder->parameters));
 }
 
-- (void)consumeData:(NSData *)data ascii:(TASCIIHandler)ascii codepoint:(TCodepointHandler)codepoint control:(TControlHandler)control escape:(TEscapeHandler)escape csi:(TCSIHandler)csi osc:(TOSCHandler)osc {
-    const uint8_t *bytes=data.bytes;
-    for(NSUInteger index=0;index<data.length;index++){
-        uint8_t byte=bytes[index];
-        if(_state==TDecodeText&&!_utf8Needed&&byte>=32&&byte<127){NSUInteger start=index;while(index+1<data.length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;ascii(bytes+start,index-start+1);continue;}
-        if(_state==TDecodeOSC){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeOSCEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
-        if(_state==TDecodeOSCEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeOSC;continue;}
-        if(_state==TDecodeDCS){if(byte==7){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else if(byte==27)_state=TDecodeDCSEscape;else if(byte>=32&&_osc.length<1398208)[_osc appendFormat:@"%c",byte];continue;}
-        if(_state==TDecodeDCSEscape){if(byte=='\\'){osc([_osc copy]);[_osc setString:@""];_state=TDecodeText;}else _state=TDecodeDCS;continue;}
-        if(_state==TDecodeEscape){_state=TDecodeText;if(byte=='['){_state=TDecodeCSI;memset(_parameters,0,sizeof(_parameters));_parameterIndex=0;_prefix=0;}else if(byte==']'){[_osc setString:@""];_state=TDecodeOSC;}else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){[_osc setString:@""];_state=TDecodeDCS;}else escape(byte);continue;}
-        if(_state==TDecodeCSI){if(byte=='?'||byte=='>'||byte=='<'||byte=='='){_prefix=byte;continue;}if(byte>='0'&&byte<='9'){_parameters[_parameterIndex]=_parameters[_parameterIndex]*10+byte-'0';continue;}if(byte==';'||byte==':'){if(_parameterIndex<19)_parameterIndex++;continue;}if(byte>=0x40&&byte<=0x7E){csi(byte,_prefix,_parameters,_parameterIndex+1);_state=TDecodeText;}continue;}
-        [self consumeTextByte:byte codepoint:codepoint control:control];
+void TDecoderDestroy(TDecoderState *decoder) {
+    if(!decoder)return;
+    free(decoder->stringBytes);
+    memset(decoder,0,sizeof(*decoder));
+}
+
+static inline void TDecoderAppendStringByte(TDecoderState *decoder,uint8_t byte) {
+    if(decoder->stringLength>=TDecoderStringLimit)return;
+    if(decoder->stringLength==decoder->stringCapacity){
+        size_t capacity=decoder->stringCapacity?MIN((size_t)TDecoderStringLimit,decoder->stringCapacity*2):256;
+        uint8_t *next=realloc(decoder->stringBytes,capacity);
+        if(!next)return;
+        decoder->stringBytes=next;
+        decoder->stringCapacity=capacity;
     }
+    decoder->stringBytes[decoder->stringLength++]=byte;
 }
-@end
+
+static inline void TDecoderEmitString(TDecoderState *decoder,const TDecoderSink *sink) {
+    if(sink->string)sink->string(sink->context,decoder->stringBytes,decoder->stringLength);
+    decoder->stringLength=0;
+}
+
+static inline void TDecoderFlushCodepoints(TDecoderState *decoder,const TDecoderSink *sink) {
+    if(!decoder->codepointCount)return;
+    if(sink->codepoints)sink->codepoints(sink->context,decoder->codepointBuffer,decoder->codepointCount);
+    else if(sink->codepoint)for(size_t i=0;i<decoder->codepointCount;i++)sink->codepoint(sink->context,decoder->codepointBuffer[i]);
+    decoder->codepointCount=0;
+}
+
+static inline void TDecoderEmitCodepoint(TDecoderState *decoder,const TDecoderSink *sink,uint32_t codepoint) {
+    decoder->codepointBuffer[decoder->codepointCount++]=codepoint;
+    if(decoder->codepointCount==sizeof(decoder->codepointBuffer)/sizeof(decoder->codepointBuffer[0]))TDecoderFlushCodepoints(decoder,sink);
+}
+
+static inline void TDecoderConsumeTextByte(TDecoderState *decoder,uint8_t byte,const TDecoderSink *sink) {
+retry:
+    if(byte==27){TDecoderFlushCodepoints(decoder,sink);decoder->state=TDecodeEscape;return;}
+    if(byte<32||byte==127){TDecoderFlushCodepoints(decoder,sink);if(sink->control)sink->control(sink->context,byte);return;}
+    if(decoder->utf8Needed){
+        if((byte&0xC0)!=0x80){
+            decoder->utf8Needed=0;
+            TDecoderEmitCodepoint(decoder,sink,0xFFFD);
+            goto retry;
+        }
+        decoder->utf8Code=(decoder->utf8Code<<6)|(byte&0x3F);
+        if(--decoder->utf8Needed==0)TDecoderEmitCodepoint(decoder,sink,decoder->utf8Code);
+    } else if(byte<0x80) {
+        TDecoderEmitCodepoint(decoder,sink,byte);
+    } else if((byte&0xE0)==0xC0) {
+        decoder->utf8Code=byte&0x1F;decoder->utf8Needed=1;
+    } else if((byte&0xF0)==0xE0) {
+        decoder->utf8Code=byte&0x0F;decoder->utf8Needed=2;
+    } else if((byte&0xF8)==0xF0) {
+        decoder->utf8Code=byte&0x07;decoder->utf8Needed=3;
+    } else TDecoderEmitCodepoint(decoder,sink,0xFFFD);
+}
+
+void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,const TDecoderSink *sink) {
+    if(!decoder||!bytes||!sink)return;
+    for(size_t index=0;index<length;index++){
+        uint8_t byte=bytes[index];
+        if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte>=32&&byte<127){
+            TDecoderFlushCodepoints(decoder,sink);
+            size_t start=index;
+            while(index+1<length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;
+            if(sink->ascii)sink->ascii(sink->context,bytes+start,index-start+1);
+            continue;
+        }
+        if(decoder->state==TDecodeOSC){
+            if(byte==7){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
+            else if(byte==27)decoder->state=TDecodeOSCEscape;
+            else if(byte>=32)TDecoderAppendStringByte(decoder,byte);
+            continue;
+        }
+        if(decoder->state==TDecodeOSCEscape){
+            if(byte=='\\'){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
+            else decoder->state=TDecodeOSC;
+            continue;
+        }
+        if(decoder->state==TDecodeDCS){
+            if(byte==7){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
+            else if(byte==27)decoder->state=TDecodeDCSEscape;
+            else if(byte>=32)TDecoderAppendStringByte(decoder,byte);
+            continue;
+        }
+        if(decoder->state==TDecodeDCSEscape){
+            if(byte=='\\'){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
+            else decoder->state=TDecodeDCS;
+            continue;
+        }
+        if(decoder->state==TDecodeEscape){
+            decoder->state=TDecodeText;
+            if(byte=='['){decoder->state=TDecodeCSI;memset(decoder->parameters,0,sizeof(decoder->parameters));decoder->parameterIndex=0;decoder->prefix=0;}
+            else if(byte==']'){decoder->stringLength=0;decoder->state=TDecodeOSC;}
+            else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){decoder->stringLength=0;decoder->state=TDecodeDCS;}
+            else{TDecoderFlushCodepoints(decoder,sink);if(sink->escape)sink->escape(sink->context,byte);}
+            continue;
+        }
+        if(decoder->state==TDecodeCSI){
+            if(byte=='?'||byte=='>'||byte=='<'||byte=='='){decoder->prefix=byte;continue;}
+            if(byte>='0'&&byte<='9'){decoder->parameters[decoder->parameterIndex]=decoder->parameters[decoder->parameterIndex]*10+byte-'0';continue;}
+            if(byte==';'||byte==':'){if(decoder->parameterIndex<19)decoder->parameterIndex++;continue;}
+            if(byte>=0x40&&byte<=0x7E){
+                TDecoderFlushCodepoints(decoder,sink);if(sink->csi)sink->csi(sink->context,byte,decoder->prefix,decoder->parameters,decoder->parameterIndex+1);
+                decoder->state=TDecodeText;
+            }
+            continue;
+        }
+        TDecoderConsumeTextByte(decoder,byte,sink);
+    }
+    TDecoderFlushCodepoints(decoder,sink);
+}
