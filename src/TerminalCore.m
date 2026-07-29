@@ -5,7 +5,7 @@ enum { TDecoderStringLimit = 1398208 };
 
 @implementation TRenderSnapshot
 - (instancetype)initWithGeneration:(uint64_t)generation metrics:(TRenderMetrics)metrics cells:(NSData *)cells underlineStyles:(NSData *)underlineStyles selectionMask:(NSData *)selectionMask searchMask:(NSData *)searchMask linkMask:(NSData *)linkMask graphemes:(NSArray<NSString *> *)graphemes style:(NSDictionary<NSString *,id> *)style links:(NSDictionary<NSNumber *,NSString *> *)links images:(NSDictionary<NSNumber *,id> *)images cursorX:(NSUInteger)cursorX cursorY:(NSUInteger)cursorY cursorVisible:(BOOL)cursorVisible historyCount:(NSUInteger)historyCount historyOffset:(NSInteger)historyOffset fullDamage:(BOOL)fullDamage damagedRows:(NSRange)damagedRows {
-    if((self=[super init])){_generation=generation;_metrics=metrics;_cells=[cells copy]?:NSData.data;_underlineStyles=[underlineStyles copy]?:NSData.data;_selectionMask=[selectionMask copy]?:NSData.data;_searchMask=[searchMask copy]?:NSData.data;_linkMask=[linkMask copy]?:NSData.data;_graphemes=[graphemes copy]?:@[];_style=[style copy]?:@{};_links=[links copy]?:@{};_images=[images copy]?:@{};_cursorX=cursorX;_cursorY=cursorY;_cursorVisible=cursorVisible;_historyCount=historyCount;_historyOffset=historyOffset;_fullDamage=fullDamage;_damagedRows=damagedRows;}
+    if((self=[super init])){_generation=generation;_metrics=metrics;_cells=cells?:NSData.data;_underlineStyles=underlineStyles?:NSData.data;_selectionMask=selectionMask?:NSData.data;_searchMask=searchMask?:NSData.data;_linkMask=linkMask?:NSData.data;_graphemes=[graphemes copy]?:@[];_style=style?:@{};_links=[links copy]?:@{};_images=[images copy]?:@{};_cursorX=cursorX;_cursorY=cursorY;_cursorVisible=cursorVisible;_historyCount=historyCount;_historyOffset=historyOffset;_fullDamage=fullDamage;_damagedRows=damagedRows;}
     return self;
 }
 - (BOOL)isValid {
@@ -70,6 +70,7 @@ void TDecoderReset(TDecoderState *decoder) {
     decoder->utf8Code=0;
     decoder->utf8Needed=0;
     decoder->stringLength=0;
+    decoder->stringDiscarded=false;
     decoder->codepointCount=0;
     memset(decoder->parameters,0,sizeof(decoder->parameters));
 }
@@ -80,21 +81,33 @@ void TDecoderDestroy(TDecoderState *decoder) {
     memset(decoder,0,sizeof(*decoder));
 }
 
-static inline void TDecoderAppendStringByte(TDecoderState *decoder,uint8_t byte) {
-    if(decoder->stringLength>=TDecoderStringLimit)return;
-    if(decoder->stringLength==decoder->stringCapacity){
-        size_t capacity=decoder->stringCapacity?MIN((size_t)TDecoderStringLimit,decoder->stringCapacity*2):256;
+static inline void TDecoderAppendStringBytes(TDecoderState *decoder,const uint8_t *bytes,size_t length) {
+    if(decoder->stringDiscarded||!length)return;
+    if(!decoder->stringLength){
+        uint8_t first=bytes[0];
+        BOOL osc=decoder->state==TDecodeOSC;
+        BOOL accepted=osc?(first=='0'||first=='1'||first=='2'||first=='5'||first=='7'||first=='8'||first=='9'||first=='b'||first=='e'):(first=='G'||first=='q');
+        if(!accepted){decoder->stringDiscarded=true;return;}
+    }
+    size_t available=TDecoderStringLimit-decoder->stringLength,take=MIN(available,length);
+    if(!take)return;
+    size_t required=decoder->stringLength+take;
+    if(required>decoder->stringCapacity){
+        size_t capacity=decoder->stringCapacity?:256;
+        while(capacity<required)capacity=MIN((size_t)TDecoderStringLimit,capacity*2);
         uint8_t *next=realloc(decoder->stringBytes,capacity);
         if(!next)return;
         decoder->stringBytes=next;
         decoder->stringCapacity=capacity;
     }
-    decoder->stringBytes[decoder->stringLength++]=byte;
+    memcpy(decoder->stringBytes+decoder->stringLength,bytes,take);
+    decoder->stringLength+=take;
 }
 
 static inline void TDecoderEmitString(TDecoderState *decoder,const TDecoderSink *sink) {
-    if(sink->string)sink->string(sink->context,decoder->stringBytes,decoder->stringLength);
+    if(!decoder->stringDiscarded&&sink->string)sink->string(sink->context,decoder->stringBytes,decoder->stringLength);
     decoder->stringLength=0;
+    decoder->stringDiscarded=false;
 }
 
 static inline void TDecoderFlushCodepoints(TDecoderState *decoder,const TDecoderSink *sink) {
@@ -143,10 +156,16 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
             if(sink->ascii)sink->ascii(sink->context,bytes+start,index-start+1);
             continue;
         }
+        if(decoder->state==TDecodeOSC||decoder->state==TDecodeDCS){
+            size_t remaining=length-index;const uint8_t *escape=memchr(bytes+index,27,remaining),*bell=memchr(bytes+index,7,remaining),*stop=NULL;
+            if(escape&&bell)stop=escape<bell?escape:bell;else stop=escape?escape:bell;
+            size_t run=stop?(size_t)(stop-(bytes+index)):remaining;
+            if(run){TDecoderAppendStringBytes(decoder,bytes+index,run);index+=run-1;continue;}
+        }
         if(decoder->state==TDecodeOSC){
             if(byte==7){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
             else if(byte==27)decoder->state=TDecodeOSCEscape;
-            else if(byte>=32)TDecoderAppendStringByte(decoder,byte);
+            else if(byte>=32){size_t start=index;while(index+1<length&&bytes[index+1]>=32)index++;TDecoderAppendStringBytes(decoder,bytes+start,index-start+1);}
             continue;
         }
         if(decoder->state==TDecodeOSCEscape){
@@ -157,7 +176,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         if(decoder->state==TDecodeDCS){
             if(byte==7){TDecoderFlushCodepoints(decoder,sink);TDecoderEmitString(decoder,sink);decoder->state=TDecodeText;}
             else if(byte==27)decoder->state=TDecodeDCSEscape;
-            else if(byte>=32)TDecoderAppendStringByte(decoder,byte);
+            else if(byte>=32){size_t start=index;while(index+1<length&&bytes[index+1]>=32)index++;TDecoderAppendStringBytes(decoder,bytes+start,index-start+1);}
             continue;
         }
         if(decoder->state==TDecodeDCSEscape){
@@ -168,8 +187,8 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         if(decoder->state==TDecodeEscape){
             decoder->state=TDecodeText;
             if(byte=='['){decoder->state=TDecodeCSI;memset(decoder->parameters,0,sizeof(decoder->parameters));decoder->parameterIndex=0;decoder->prefix=0;}
-            else if(byte==']'){decoder->stringLength=0;decoder->state=TDecodeOSC;}
-            else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){decoder->stringLength=0;decoder->state=TDecodeDCS;}
+            else if(byte==']'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeOSC;}
+            else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeDCS;}
             else{TDecoderFlushCodepoints(decoder,sink);if(sink->escape)sink->escape(sink->context,byte);}
             continue;
         }

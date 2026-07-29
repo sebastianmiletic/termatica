@@ -1,84 +1,139 @@
 # Terminal benchmarks
 
-Termatica is optimized for a small native bundle and low memory use. Phase 10
-adds an opt-in Metal renderer while retaining AppKit as the reliable default
-and automatic fallback. Results below are measured, not projected.
+This is the current six-terminal macOS performance snapshot for Termatica
+1.2.0. The comparison is measured rather than projected, and known gaps are
+kept visible.
 
-## Test system
+## Test system and method
 
 - Date: 2026-07-29
-- Hardware: MacBook Air, Apple M4, 16 GB memory
-- Display: built-in Retina display, 60 Hz
-- Font: Monaco 11
-- Termatica: 1.1.1 Phase 10 build, Metal renderer forced for throughput
+- Hardware: Apple M4 Mac, 16 GB memory
+- OS: macOS 26.5.2 (25F84), arm64
+- Font: Monaco 11 in every terminal, with system fallback for missing glyphs
+- Termatica: 1.2.0, Metal renderer explicitly selected for the throughput runs
 - Kitty: 0.48.1
 - Ghostty: 1.3.1
-- Repetitions: 3
-- Raw results: `/tmp/termatica-phase10-metal-threeway-final`
-- Native Metal frame run: 240 frames, repeated after final renderer changes
+- Alacritty: 0.17.0
+- WezTerm: 20240203-110809-5046fc22
+- Rio: 0.5.2
+- Raw output: `/tmp/termatica-benchmark-20260729-v120-final-base`,
+  `/tmp/termatica-benchmark-20260729-v120-extra`, and
+  `/tmp/termatica-benchmark-20260729-v120-resources`
 
-Run the suite with:
+The external throughput figures are fresh three-repeat `kitten __benchmark__`
+runs. Each terminal received the same cases. Higher throughput is better.
+
+Startup uses 15 interleaved launches per terminal (14 valid Kitty samples after
+one corrupt timestamp was rejected) and measures process launch
+to the point where the child shell can execute and fsync a probe file. It is
+not first-frame or key-to-photon latency. Resource figures are the median of
+three launches after a five-second settle, followed by four one-second CPU
+samples.
+
+The complete source regression gate passed immediately before the run:
 
 ```sh
-make release
-make benchmark-harness
-BENCHMARK_REPETITIONS=10 BENCHMARK_TIMEOUT_SECONDS=300 make benchmark
+make check
 ```
 
-## Results
+## End-to-end throughput
 
-Higher throughput is better; lower latency, memory, and size are better.
-`kitten __benchmark__` supplies the identical end-to-end workload to all three
-terminals. Its render mode enables terminal rendering, but remains an
-asynchronous throughput test rather than a frame-time measurement.
+All values are MB/s.
 
-| Measurement | Termatica | Kitty | Ghostty |
-|---|---:|---:|---:|
-| Parser ASCII | **154.5 MB/s** | 74.3 MB/s | 55.8 MB/s |
-| Parser Unicode | **128.1 MB/s** | 100.6 MB/s | 78.4 MB/s |
-| Parser unique grapheme cells | **97.9 MB/s** | 27.9 MB/s | 36.0 MB/s |
-| Parser CSI-heavy | **88.2 MB/s** | 32.0 MB/s | 29.9 MB/s |
-| Parser long escape codes | 91.7 MB/s | **259.5 MB/s** | 58.7 MB/s |
-| Parser images | 120.5 MB/s | **245.9 MB/s** | 44.5 MB/s |
-| Render-enabled ASCII | **156.2 MB/s** | 73.6 MB/s | 57.3 MB/s |
-| Render-enabled Unicode | **125.6 MB/s** | 42.7 MB/s | 91.0 MB/s |
-| Render-enabled unique grapheme cells | **95.1 MB/s** | 10.5 MB/s | 35.4 MB/s |
-| Render-enabled CSI-heavy | **85.2 MB/s** | 32.2 MB/s | 26.1 MB/s |
-| Render-enabled long escape codes | 88.2 MB/s | **267.9 MB/s** | 52.0 MB/s |
-| Render-enabled images | 118.2 MB/s | **244.7 MB/s** | 37.6 MB/s |
-| Core + scrollback ASCII | **82.4 MB/s** | 58.3 MB/s | 56.9 MB/s |
-| Core + scrollback Unicode | **92.5 MB/s** | 83.6 MB/s | 79.6 MB/s |
-| Core + scrollback CSI-heavy | **87.5 MB/s** | 33.1 MB/s | 30.6 MB/s |
-| Startup median, 5 runs | **7.879 ms** | 8.982 ms | 8.331 ms |
-| Idle physical footprint, active Metal | **51.3 MiB** | 117.5 MiB | 87.5 MiB |
-| Default AppKit idle physical footprint | **32.1 MiB** | 117.5 MiB | 87.5 MiB |
-| App bundle allocation | **1,036 KiB** | 160,080 KiB | 63,484 KiB |
-| Termatica decoder ASCII | 355.4 MiB/s | Not exposed | Not exposed |
-| Termatica decoder Unicode | 376.9 MiB/s | Not exposed | Not exposed |
-| Termatica decoder CSI-heavy | 394.7 MiB/s | Not exposed | Not exposed |
-| Termatica screen core ASCII | 103.2 MiB/s | Not exposed | Not exposed |
-| Termatica screen core Unicode | 70.8 MiB/s | Not exposed | Not exposed |
-| Termatica screen core CSI-heavy | 61.0 MiB/s | Not exposed | Not exposed |
-| Metal paint p50 / p95 / p99, median of 3 runs | 1.341 / 1.607 / 2.150 ms | Not exposed | Not exposed |
-| Frames over 60 / 120 / 240 Hz budget | **0 / 0 / 0 in each 240-frame run** | Not exposed | Not exposed |
-| Universal app file size | **1,021,676 bytes** | Not exposed | Not exposed |
+| Mode / workload | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
+|---|---:|---:|---:|---:|---:|---:|
+| Parser ASCII | **163.5** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
+| Parser Unicode | **127.7** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
+| Parser unique graphemes | **99.7** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
+| Parser CSI-heavy | **86.4** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
+| Parser long escapes | 234.9 | **262.2** | 58.6 | 80.3 | 92.2 | 64.1 |
+| Parser images | 202.9 | **247.1** | 44.4 | 169.7 | 100.6 | 94.2 |
+| Render ASCII | **141.4** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
+| Render Unicode | **123.5** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
+| Render unique graphemes | **96.1** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
+| Render CSI-heavy | **85.6** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
+| Render long escapes | **265.3** | 260.2 | 56.9 | 91.1 | 16.5 | 97.9 |
+| Render images | 218.9 | **241.6** | 42.6 | 180.0 | 15.3 | 136.9 |
+| Scrollback ASCII | **90.2** | 59.0 | 56.2 | 66.6 | 6.9 | 65.9 |
+| Scrollback Unicode | **99.2** | 83.6 | 79.3 | 88.5 | 8.4 | 29.9 |
+| Scrollback CSI-heavy | **85.1** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
 
-The installed Kitty and Ghostty macOS executables do not expose an equivalent
-in-process decoder, screen-model, or offscreen frame benchmark. Their former
-gaps are covered where a fair external comparison exists: unique graphemes,
-long escape codes, images, and the official scrollback mode. Internal rows
-remain explicitly non-comparable rather than assigning synthetic results.
+Termatica leads 12 of the 15 cases. Kitty leads parser long escapes and both
+image cases; Termatica leads render long escapes.
 
-Termatica leads 13 of the 15 comparable throughput cases. Kitty remains the
-measured target for long escape codes and image protocol throughput; Ghostty
-does not lead a row in this run. The active Metal footprint is still lower than
-Kitty and Ghostty, but it exceeds Termatica's 40 MiB rollout gate, so AppKit
-remains the default.
+The geometric mean across these heterogeneous cases is useful only as a compact
+summary, not as a substitute for the workload rows:
 
-The Metal paint benchmark measures immutable snapshot construction plus CPU
-command encoding plus GPU execution for an ASCII viewport after a one-line
-scroll. It excludes display-vsync wait and is not key-to-photon latency.
+| Terminal | Two-batch geometric mean |
+|---|---:|
+| Termatica | **130.5 MB/s** |
+| Kitty | 72.7 MB/s |
+| Alacritty | 69.8 MB/s |
+| Rio | 48.4 MB/s |
+| Ghostty | 47.2 MB/s |
+| WezTerm | 13.2 MB/s |
 
-The Termatica bundle contains the universal arm64/x86_64 app. The exact sum of
-shipped file bytes is below 1 MiB; filesystem allocation is higher. Its native
-benchmark and regression harness is built separately and is not shipped.
+## Startup, memory, idle CPU, and bundle size
+
+Lower is better. RSS and physical footprint are both included because macOS
+shared and compressed memory accounting can rank processes differently.
+
+| Terminal | Shell-ready median / p95 | RSS median | Physical footprint median | Idle CPU median | App allocation |
+|---|---:|---:|---:|---:|---:|
+| Termatica | 9.045 / 11.604 ms | **85.2 MiB** | **29.3 MiB** | **0.000%** | **1,013 KiB** |
+| Kitty | 8.729 / 10.720 ms | 118.2 MiB | 73.7 MiB | **0.000%** | 160,080 KiB |
+| Ghostty | **8.324 / 11.937 ms** | 130.9 MiB | 94.4 MiB | 0.025% | 63,484 KiB |
+| Alacritty | 9.880 / 13.973 ms | 90.6 MiB | 66.1 MiB | 0.025% | 14,328 KiB |
+| WezTerm | 9.286 / 14.923 ms | 106.4 MiB | **45.4 MiB** | 0.325% | 275,100 KiB |
+| Rio | 9.264 / 14.045 ms | 97.3 MiB | 46.1 MiB | 0.025% | 41,992 KiB |
+
+Termatica is not the startup winner in this run, but its shell-ready median is
+6.2% lower and p95 is 8.3% lower than the preceding 1.1.1 snapshot. Its default
+AppKit path has the lowest measured RSS and physical footprint and remains under
+30 MiB in all three five-second samples (29.2/29.3/29.4 MiB). Termatica is also
+the clear bundle-size winner and its idle CPU was below sampling resolution.
+
+## Termatica internal measurements
+
+Competitors do not expose equivalent in-process entry points, so these rows are
+Termatica diagnostics and are not cross-terminal wins.
+
+| Measurement | Result |
+|---|---:|
+| C decoder ASCII / Unicode / CSI | 364.8 / 385.6 / 388.3 MiB/s |
+| Screen core ASCII / Unicode / CSI | 102.5 / 73.2 / 61.5 MiB/s |
+| AppKit offscreen paint p50 / p95 / p99 | 1.533 / 1.648 / 1.715 ms |
+| AppKit frames over 60 / 120 / 240 Hz budget | 0 / 0 / 0 of 240 |
+| Metal p50, median of three 240-frame runs | 1.314 ms |
+| Metal p95 / p99, median of three runs | 2.214 / 3.516 ms |
+| Metal frames over 60 / 120 Hz budget | 0 / 0 in every run |
+| Metal frames over 240 Hz budget | 0 / 0 / 0 across the three runs |
+| Exact universal app file bytes | 1,037,662 bytes |
+| Universal executable bytes | 989,888 bytes |
+
+The Metal test includes immutable snapshot construction, CPU command encoding,
+and GPU execution but excludes display-vsync wait. The AppKit test is a warmed
+offscreen cache-display path. Their timings are useful regression signals but
+are not directly interchangeable.
+
+## Interpretation and remaining proof gaps
+
+`kitten __benchmark__` is a common end-to-end workload, but it is still Kitty's
+benchmark protocol. Render mode allows asynchronous rendering and therefore
+does not measure latency to illuminated pixels.
+
+WezTerm logged invalid-padding errors while consuming the Kitty image payload.
+Image values for terminals that do not fully implement the Kitty graphics
+protocol can represent rapid rejection or discard rather than image decode and
+display, and should not be read as equivalent image-rendering work.
+
+This run does not claim measured key-to-photon input latency, first visible
+frame latency, electrical energy, GPU utilization, resize smoothness, or
+interactive TUI responsiveness. Those require a high-speed camera or
+photodiode, Instruments or privileged power sampling, and scripted real-window
+interaction. Feature coverage and correctness also remain separate from speed.
+
+Homebrew warns that its Alacritty 0.17.0 cask does not pass the macOS Gatekeeper
+check and is scheduled to be disabled on 2026-09-01. That packaging caveat does
+not change its measured results, but it matters when treating the installed
+cask as a shipping-quality comparison.

@@ -89,12 +89,12 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.1.1$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.2.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.1.1'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.2.0'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -154,7 +154,7 @@ check: release $(BENCH)
 	  grep -Fq 'BOOL animateWindow=self.window.isVisible&&self.config.tabAnimations' src/main.m; \
 	  grep -Fq 'tabRailAvailable {return _terminals.count>1&&!self.config.hyprlandLayout;}' src/main.m; \
 	  grep -Fq 'if(![self tabRailAvailable]){_animateTabLayout=NO;[self suppressTabRail]' src/main.m; \
-	  grep -Fq '[controller animateLaunchReveal];[controller showWindow:nil]' src/main.m; \
+	  grep -Fq '[controller showWindow:nil];dispatch_async(dispatch_get_main_queue(),^{[controller animateLaunchReveal];})' src/main.m; \
 	  ! grep -Fq 'scale.fromValue=@0.965' src/main.m; \
 	  ! grep -Fq '[view.layer addAnimation:fade' src/main.m; \
 	  grep -Fq 'CGPathAddRoundedRect(path,NULL,NSRectToCGRect(terminal.frame),14,14)' src/main.m; \
@@ -181,7 +181,7 @@ check: release $(BENCH)
 	  test -f $(APP)/Contents/Resources/ShellIntegration/share/fish/vendor_conf.d/termatica.fish; \
 	  zsh -n Resources/ShellIntegration/zsh/.zshenv Resources/ShellIntegration/termatica.zsh; \
 	  bash -n Resources/ShellIntegration/termatica.bash; \
-	  grep -Fq 'terminal.wantsLayer=YES' src/main.m; \
+	  grep -Fq 'terminal.wantsLayer=tile||animateTerminal||[terminal usesMetalRenderer]' src/main.m; \
 	  grep -Fq '_scrollAccumulator' src/main.m; \
 	  grep -Fq '_alternateScroll' src/main.m; \
 	  grep -Fq 'poll(&descriptor,1,20)' src/main.m; \
@@ -218,7 +218,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.1.1 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.2.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
