@@ -4,9 +4,17 @@ enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDe
 enum { TDecoderStringLimit = 1398208 };
 
 @implementation TRenderSnapshot
-- (instancetype)initWithGeneration:(uint64_t)generation metrics:(TRenderMetrics)metrics cells:(NSData *)cells underlineStyles:(NSData *)underlineStyles links:(NSDictionary<NSNumber *,NSString *> *)links images:(NSDictionary<NSNumber *,id> *)images cursorX:(NSUInteger)cursorX cursorY:(NSUInteger)cursorY cursorVisible:(BOOL)cursorVisible fullDamage:(BOOL)fullDamage damagedRows:(NSRange)damagedRows {
-    if((self=[super init])){_generation=generation;_metrics=metrics;_cells=[cells copy];_underlineStyles=[underlineStyles copy];_links=[links copy]?:@{};_images=[images copy]?:@{};_cursorX=cursorX;_cursorY=cursorY;_cursorVisible=cursorVisible;_fullDamage=fullDamage;_damagedRows=damagedRows;}
+- (instancetype)initWithGeneration:(uint64_t)generation metrics:(TRenderMetrics)metrics cells:(NSData *)cells underlineStyles:(NSData *)underlineStyles selectionMask:(NSData *)selectionMask searchMask:(NSData *)searchMask linkMask:(NSData *)linkMask graphemes:(NSArray<NSString *> *)graphemes style:(NSDictionary<NSString *,id> *)style links:(NSDictionary<NSNumber *,NSString *> *)links images:(NSDictionary<NSNumber *,id> *)images cursorX:(NSUInteger)cursorX cursorY:(NSUInteger)cursorY cursorVisible:(BOOL)cursorVisible historyCount:(NSUInteger)historyCount historyOffset:(NSInteger)historyOffset fullDamage:(BOOL)fullDamage damagedRows:(NSRange)damagedRows {
+    if((self=[super init])){_generation=generation;_metrics=metrics;_cells=[cells copy]?:NSData.data;_underlineStyles=[underlineStyles copy]?:NSData.data;_selectionMask=[selectionMask copy]?:NSData.data;_searchMask=[searchMask copy]?:NSData.data;_linkMask=[linkMask copy]?:NSData.data;_graphemes=[graphemes copy]?:@[];_style=[style copy]?:@{};_links=[links copy]?:@{};_images=[images copy]?:@{};_cursorX=cursorX;_cursorY=cursorY;_cursorVisible=cursorVisible;_historyCount=historyCount;_historyOffset=historyOffset;_fullDamage=fullDamage;_damagedRows=damagedRows;}
     return self;
+}
+- (BOOL)isValid {
+    NSUInteger count=_metrics.rows*_metrics.columns;
+    if(!_generation||!_metrics.rows||!_metrics.columns||_metrics.cellWidth<=0||_metrics.cellHeight<=0||_metrics.scale<=0||_metrics.viewportWidth<=0||_metrics.viewportHeight<=0)return NO;
+    if(_cells.length!=count*sizeof(TCell)||_underlineStyles.length!=count||_selectionMask.length!=count||_searchMask.length!=count||_linkMask.length!=count)return NO;
+    if(_cursorX>=_metrics.columns||_cursorY>=_metrics.rows)return NO;
+    if(_damagedRows.length&&NSMaxRange(_damagedRows)>_metrics.rows)return NO;
+    return YES;
 }
 @end
 

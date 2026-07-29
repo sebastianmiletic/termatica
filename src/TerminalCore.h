@@ -16,6 +16,8 @@ typedef struct {
     double cellWidth;
     double cellHeight;
     double scale;
+    double viewportWidth;
+    double viewportHeight;
 } TRenderMetrics;
 
 @interface TRenderSnapshot : NSObject
@@ -23,27 +25,44 @@ typedef struct {
 @property(nonatomic,readonly) TRenderMetrics metrics;
 @property(nonatomic,readonly) NSData *cells;
 @property(nonatomic,readonly) NSData *underlineStyles;
+@property(nonatomic,readonly) NSData *selectionMask;
+@property(nonatomic,readonly) NSData *searchMask;
+@property(nonatomic,readonly) NSData *linkMask;
+@property(nonatomic,readonly) NSArray<NSString *> *graphemes;
+@property(nonatomic,readonly) NSDictionary<NSString *,id> *style;
 @property(nonatomic,readonly) NSDictionary<NSNumber *,NSString *> *links;
 @property(nonatomic,readonly) NSDictionary<NSNumber *,id> *images;
 @property(nonatomic,readonly) NSUInteger cursorX;
 @property(nonatomic,readonly) NSUInteger cursorY;
 @property(nonatomic,readonly) BOOL cursorVisible;
+@property(nonatomic,readonly) NSUInteger historyCount;
+@property(nonatomic,readonly) NSInteger historyOffset;
 @property(nonatomic,readonly) BOOL fullDamage;
 @property(nonatomic,readonly) NSRange damagedRows;
 - (instancetype)initWithGeneration:(uint64_t)generation
                            metrics:(TRenderMetrics)metrics
                              cells:(NSData *)cells
                    underlineStyles:(NSData *)underlineStyles
+                     selectionMask:(NSData *)selectionMask
+                        searchMask:(NSData *)searchMask
+                          linkMask:(NSData *)linkMask
+                         graphemes:(NSArray<NSString *> *)graphemes
+                             style:(NSDictionary<NSString *,id> *)style
                              links:(NSDictionary<NSNumber *,NSString *> *)links
                             images:(NSDictionary<NSNumber *,id> *)images
                            cursorX:(NSUInteger)cursorX
                            cursorY:(NSUInteger)cursorY
                      cursorVisible:(BOOL)cursorVisible
+                      historyCount:(NSUInteger)historyCount
+                     historyOffset:(NSInteger)historyOffset
                         fullDamage:(BOOL)fullDamage
                        damagedRows:(NSRange)damagedRows;
+- (BOOL)isValid;
 @end
 
 @protocol TRenderBackend <NSObject>
+@property(nonatomic,readonly) NSString *name;
+@property(nonatomic,readonly) uint64_t lastPresentedGeneration;
 - (BOOL)configureWithMetrics:(TRenderMetrics)metrics error:(NSError **)error;
 - (void)presentSnapshot:(TRenderSnapshot *)snapshot;
 - (void)invalidateCaches;

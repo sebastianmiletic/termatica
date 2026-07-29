@@ -1,8 +1,8 @@
 # Phase 10 render contract
 
-Phase 10 replaces only the consumer of `TRenderSnapshot`. It must not change
+Phase 10 replaces only the consumer of `TRenderSnapshot`. It does not change
 the decoder, PTY queue, terminal model ownership, or snapshot producer while
-the renderer is being introduced.
+the renderer is active.
 
 ## Ownership
 
@@ -30,6 +30,19 @@ and sustained-output tests pass. Metal initialization, shader, drawable,
 device, or command-buffer failure must switch back to AppKit without dropping
 terminal output.
 
+## Implemented backend
+
+`TMetalRenderBackend` uses a `CAMetalLayer`, runtime-compiled shaders, an R8
+CoreText glyph atlas, instanced quads, direct `CGImage` texture uploads, and a
+serial latest-snapshot-wins queue. It renders backgrounds, ANSI styles,
+selection/search, Unicode and wide cells, underlines and links, cursor styles,
+inline images, scanlines, vignette, glow, and scroll position.
+
+Set `appearance.renderer` to `"metal"` or launch with
+`TERMATICA_RENDERER=metal`. AppKit remains the default because full-resolution
+Retina drawable storage measured above the 40 MiB idle rollout gate. Forced
+initialization and command failures are covered by `--renderer-self-test`.
+
 ## Prohibited designs
 
 - Separate locks that allow a renderer to read the grid while parsing mutates it.
@@ -48,3 +61,7 @@ terminal output.
   not crash, deadlock, corrupt cells, or lose output.
 - The final app remains below 40 MiB idle physical footprint and 1 MiB bundle
   size.
+
+The shipped default satisfies both limits. The opt-in Metal backend satisfies
+the bundle limit but currently measures 51.4 MiB idle on the test system, so it
+is not eligible to become the default yet.

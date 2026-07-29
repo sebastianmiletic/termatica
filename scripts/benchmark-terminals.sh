@@ -65,6 +65,18 @@ wait_for_ghostty_process() {
   return 1
 }
 
+launch_ghostty() {
+  local command=$1 marker=$2
+  local runner="$marker.ghostty.zsh"
+  {
+    print '#!/bin/zsh'
+    print -r -- "$command"
+  } > "$runner"
+  chmod 700 "$runner"
+  open -na "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
+    --font-size=11 "--command=/bin/zsh $runner"
+}
+
 configure_term_command() {
   local command=$1
   TERMATICA_CONFIG_DIR="$config" "$term_cli" config set shell '"/bin/zsh"' >/dev/null
@@ -95,8 +107,8 @@ run_official() {
   pids=()
 
   : > "$output/ghostty-$suffix.txt"
-  open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
-    --font-size=11 -e /bin/zsh -lc "$command > '$output/ghostty-$suffix.txt' 2>&1; exit"
+  launch_ghostty "$command > '$output/ghostty-$suffix.txt' 2>&1; exit" \
+    "$output/ghostty-$suffix.txt"
   local ghost_pid
   ghost_pid=$(wait_for_ghostty_process "$output/ghostty-$suffix.txt")
   pids+=($ghost_pid)
@@ -124,8 +136,7 @@ measure_startup() {
         /usr/bin/python3 "$probe" "$stamp" >/dev/null 2>&1 &
       pid=$!
     else
-      open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
-        --font-size=11 -e /usr/bin/python3 "$probe" "$stamp"
+      launch_ghostty "/usr/bin/python3 '$probe' '$stamp'" "$stamp"
       pid=$(wait_for_ghostty_process "$stamp")
       pids+=($pid)
     fi
@@ -154,8 +165,7 @@ measure_memory() {
       /usr/bin/python3 "$probe" "$stamp" >/dev/null 2>&1 &
     pid=$!
   else
-    open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
-      --font-size=11 -e /usr/bin/python3 "$probe" "$stamp"
+    launch_ghostty "/usr/bin/python3 '$probe' '$stamp'" "$stamp"
     pid=$(wait_for_ghostty_process "$stamp")
     pids+=($pid)
     wait_for_file "$stamp"

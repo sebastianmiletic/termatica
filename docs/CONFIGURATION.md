@@ -33,7 +33,8 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
     "glow": 0,
     "scanlines": 0,
     "vignette": 0,
-    "cursorStyle": "block"
+    "cursorStyle": "block",
+    "renderer": "appkit"
   },
   "system": {
     "restoreSession": true,
@@ -145,6 +146,7 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
 | `scanlines` | float | `0` | CRT scanline intensity (0.0–1.0) |
 | `vignette` | float | `0` | Edge vignette intensity (0.0–1.0) |
 | `cursorStyle` | string | `"block"` | Cursor style: `"block"`, `"bar"`, or `"underline"` |
+| `renderer` | string | `"appkit"` | Rendering backend: `"appkit"` or opt-in `"metal"` |
 
 ### System (nested under `"system"`)
 
@@ -246,7 +248,8 @@ Themes are JSON files in `~/.config/termatica/themes/` or the bundled `Resources
     "glow": 0,
     "scanlines": 0,
     "vignette": 0,
-    "cursorStyle": "block"
+    "cursorStyle": "block",
+    "renderer": "appkit"
   },
   "palette": ["#FF6B6B", "#7CE38B", "#67B7F7", "..."],
   "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]

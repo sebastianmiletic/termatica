@@ -18,7 +18,7 @@
   <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
-Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. An immutable render-snapshot contract prepares the current AppKit renderer for the optional Phase 10 Metal backend.
+Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Phase 10 adds an opt-in Metal renderer behind an immutable snapshot boundary, with automatic AppKit fallback.
 
 The current universal app is under 1 MiB and runs natively on Apple Silicon and Intel Macs.
 
