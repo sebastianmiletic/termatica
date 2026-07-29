@@ -7,6 +7,8 @@ ghostty_app=${GHOSTTY_APP:-/Applications/Ghostty.app}
 kitty_app=${KITTY_APP:-/Applications/kitty.app}
 output=${BENCHMARK_OUTPUT:-/tmp/termatica-benchmark-results}
 repetitions=${BENCHMARK_REPETITIONS:-10}
+benchmark_cases=${BENCHMARK_CASES:-"ascii unicode unique_unicode csi images long_escape_codes"}
+benchmark_timeout_seconds=${BENCHMARK_TIMEOUT_SECONDS:-300}
 kitten="$kitty_app/Contents/MacOS/kitten"
 kitty="$kitty_app/Contents/MacOS/kitty"
 ghostty="$ghostty_app/Contents/MacOS/ghostty"
@@ -34,11 +36,32 @@ trap cleanup EXIT INT TERM
 
 wait_for_file() {
   local file_path=$1
-  for _ in {1..240}; do
+  local attempts=$((benchmark_timeout_seconds * 4))
+  for ((index = 0; index < attempts; index++)); do
     [[ -s "$file_path" ]] && return 0
     sleep 0.25
   done
   print -u2 "timed out waiting for $file_path"
+  return 1
+}
+
+find_ghostty_process() {
+  local marker=$1
+  ps -axo pid=,command= | awk -v marker="$marker" \
+    'index($0, marker) && index($0, "Ghostty.app/Contents/MacOS/ghostty") && !index($0, "awk -v marker=") && !found {print $1; found=1}'
+}
+
+wait_for_ghostty_process() {
+  local marker=$1 pid
+  for _ in {1..100}; do
+    pid=$(find_ghostty_process "$marker")
+    if [[ -n "$pid" ]]; then
+      print "$pid"
+      return 0
+    fi
+    sleep 0.1
+  done
+  print -u2 "timed out finding Ghostty process for $marker"
   return 1
 }
 
@@ -50,8 +73,8 @@ configure_term_command() {
 }
 
 run_official() {
-  local render_flag=$1 suffix=$2 command
-  command="$kitten __benchmark__ $render_flag --repetitions $repetitions ascii unicode csi"
+  local render_flag=$1 suffix=$2 cases=${3:-$benchmark_cases} command
+  command="$kitten __benchmark__ $render_flag --repetitions $repetitions $cases"
 
   : > "$output/termatica-$suffix.txt"
   configure_term_command "$command > '$output/termatica-$suffix.txt' 2>&1; exit"
@@ -74,11 +97,12 @@ run_official() {
   : > "$output/ghostty-$suffix.txt"
   open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
     --font-size=11 -e /bin/zsh -lc "$command > '$output/ghostty-$suffix.txt' 2>&1; exit"
-  wait_for_file "$output/ghostty-$suffix.txt"
   local ghost_pid
-  ghost_pid=$(ps -axo pid=,command= | awk -v marker="$output/ghostty-$suffix.txt" \
-    'index($0, marker) && index($0, "Ghostty.app/Contents/MacOS/ghostty") && !found {print $1; found=1}')
-  [[ -n "$ghost_pid" ]] && kill "$ghost_pid" 2>/dev/null || true
+  ghost_pid=$(wait_for_ghostty_process "$output/ghostty-$suffix.txt")
+  pids+=($ghost_pid)
+  wait_for_file "$output/ghostty-$suffix.txt"
+  kill "$ghost_pid" 2>/dev/null || true
+  pids=()
 }
 
 measure_startup() {
@@ -102,16 +126,17 @@ measure_startup() {
     else
       open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
         --font-size=11 -e /usr/bin/python3 "$probe" "$stamp"
-      pid=
+      pid=$(wait_for_ghostty_process "$stamp")
+      pids+=($pid)
     fi
     wait_for_file "$stamp"
     child=$(<"$stamp")
     /usr/bin/python3 -c "print(round(($child-$start)/1_000_000, 3))" >> "$result"
     if [[ -n "${pid:-}" ]]; then
       kill "$pid" 2>/dev/null || true
+      pids=()
     else
-      pid=$(ps -axo pid=,command= | awk -v marker="$stamp" \
-        'index($0, marker) && index($0, "Ghostty.app/Contents/MacOS/ghostty") && !found {print $1; found=1}')
+      pid=$(find_ghostty_process "$stamp")
       [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
     fi
   done
@@ -131,9 +156,9 @@ measure_memory() {
   else
     open -n "$ghostty_app" --args --config-file=/dev/null --font-family=Monaco \
       --font-size=11 -e /usr/bin/python3 "$probe" "$stamp"
+    pid=$(wait_for_ghostty_process "$stamp")
+    pids+=($pid)
     wait_for_file "$stamp"
-    pid=$(ps -axo pid=,command= | awk -v marker="$stamp" \
-      'index($0, marker) && index($0, "Ghostty.app/Contents/MacOS/ghostty") && !found {print $1; found=1}')
   fi
   wait_for_file "$stamp"
   sleep 1
@@ -143,6 +168,7 @@ measure_memory() {
       'Physical footprint:|Physical footprint \\(peak\\):'
   } > "$output/$name-memory.txt"
   kill "$pid" 2>/dev/null || true
+  pids=()
 }
 
 {
@@ -154,6 +180,7 @@ measure_memory() {
 
 run_official "" parser
 run_official "--render" render
+run_official "--with-scrollback" scrollback "ascii unicode csi"
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-decoder 33554432 > "$output/termatica-decoder.json"
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-core 33554432 > "$output/termatica-core.json"
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-experience 240 3 > "$output/termatica-experience.json"
