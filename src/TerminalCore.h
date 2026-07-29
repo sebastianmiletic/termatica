@@ -65,7 +65,7 @@ typedef struct {
     uint8_t *stringBytes;
     size_t stringLength;
     size_t stringCapacity;
-    uint32_t codepointBuffer[64];
+    uint32_t codepointBuffer[512];
     size_t codepointCount;
 } TDecoderState;
 

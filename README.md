@@ -28,20 +28,20 @@ On a reproducible `kitten __benchmark__` suite against Kitty 0.48.1 and Ghostty 
 
 | Benchmark | Termatica | Kitty | Ghostty |
 |---|---:|---:|---:|
-| ASCII parser | 44.9 MB/s | **75.1** | 56.6 |
-| Unicode parser | 36.2 MB/s | **101.1** | 78.2 |
-| CSI-heavy parser | **54.0 MB/s** | 43.5 | 30.0 |
-| ASCII render | 43.5 MB/s | **74.1** | 58.2 |
-| Unicode render | 34.7 MB/s | 22.3 | **88.6** |
-| CSI render | **53.2 MB/s** | 42.9 | 30.4 |
-| ASCII viewport paint p50 | **2.11 ms** | — | — |
+| ASCII parser | **165.0 MB/s** | 77.9 | 55.3 |
+| Unicode parser | **113.7 MB/s** | 102.6 | 78.4 |
+| CSI-heavy parser | **78.2 MB/s** | 43.9 | 31.0 |
+| ASCII render | **150.7 MB/s** | 76.9 | 57.7 |
+| Unicode render | **108.4 MB/s** | 69.6 | 71.1 |
+| CSI render | **72.0 MB/s** | 43.8 | 29.1 |
+| ASCII viewport paint p50 | **2.10 ms** | — | — |
 | 60 Hz overshoot | **0 / 240** | — | — |
 | 120 Hz overshoot | **0 / 240** | — | — |
 | 240 Hz overshoot | **0 / 240** | — | — |
-| Idle memory | **37.3 MiB** | 120.4 | 82.7 |
-| App bundle | **940 KiB** | 160,080 KiB | 63,484 KiB |
+| Idle memory | **37.7 MiB** | 120.2 | 80.7 |
+| App bundle | **956 KiB** | 160,080 KiB | 63,484 KiB |
 
-Termatica currently leads CSI-heavy parser and render throughput while remaining substantially smaller and lighter at idle. The frame-compliance measurement is a warmed full-surface AppKit repaint of a standard ASCII terminal viewport; Unicode and CSI performance are reported separately above.
+Termatica leads every measured parser and render throughput case while remaining substantially smaller and lighter at idle. The frame-compliance measurement is a warmed full-surface AppKit repaint of a standard ASCII terminal viewport; Unicode and CSI performance are reported separately above.
 
 ## What makes it different
 
