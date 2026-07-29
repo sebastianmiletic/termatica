@@ -122,6 +122,13 @@ static inline void TDecoderEmitCodepoint(TDecoderState *decoder,const TDecoderSi
     if(decoder->codepointCount==sizeof(decoder->codepointBuffer)/sizeof(decoder->codepointBuffer[0]))TDecoderFlushCodepoints(decoder,sink);
 }
 
+static inline const uint8_t *TDecoderFindStringStop(const uint8_t *bytes,size_t length) {
+    const uint64_t ones=UINT64_C(0x0101010101010101),highs=UINT64_C(0x8080808080808080),bells=UINT64_C(0x0707070707070707),escapes=UINT64_C(0x1b1b1b1b1b1b1b1b);
+    while(length>=8){uint64_t word;memcpy(&word,bytes,8);uint64_t bell=word^bells,escape=word^escapes;if(((bell-ones)&~bell&highs)|((escape-ones)&~escape&highs)){for(size_t i=0;i<8;i++)if(bytes[i]==7||bytes[i]==27)return bytes+i;}bytes+=8;length-=8;}
+    while(length){if(*bytes==7||*bytes==27)return bytes;bytes++;length--;}
+    return NULL;
+}
+
 static inline void TDecoderConsumeTextByte(TDecoderState *decoder,uint8_t byte,const TDecoderSink *sink) {
 retry:
     if(byte==27){TDecoderFlushCodepoints(decoder,sink);decoder->state=TDecodeEscape;return;}
@@ -171,8 +178,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
             continue;
         }
         if(decoder->state==TDecodeOSC||decoder->state==TDecodeDCS){
-            size_t remaining=length-index;const uint8_t *escape=memchr(bytes+index,27,remaining),*bell=memchr(bytes+index,7,remaining),*stop=NULL;
-            if(escape&&bell)stop=escape<bell?escape:bell;else stop=escape?escape:bell;
+            size_t remaining=length-index;const uint8_t *stop=TDecoderFindStringStop(bytes+index,remaining);
             size_t run=stop?(size_t)(stop-(bytes+index)):remaining;
             if(run){TDecoderAppendStringBytes(decoder,bytes+index,run);index+=run-1;continue;}
         }

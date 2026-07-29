@@ -28,18 +28,18 @@ Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same worklo
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
-| Parser ASCII (MB/s) | **166.6** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
-| Parser Unicode (MB/s) | **132.4** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
-| Parser unique graphemes (MB/s) | **101.7** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
-| Parser CSI-heavy (MB/s) | **93.7** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
-| Parser long escapes (MB/s) | 259.8 | **262.2** | 58.6 | 80.3 | 92.2 | 64.1 |
-| Parser images (MB/s) | **248.3** | 247.1 | 44.4 | 169.7 | 100.6 | 94.2 |
-| Render ASCII (MB/s) | **163.3** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
-| Render Unicode (MB/s) | **130.8** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
-| Render unique graphemes (MB/s) | **98.9** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
-| Render CSI-heavy (MB/s) | **90.6** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
-| Render long escapes (MB/s) | 249.9 | **260.2** | 56.9 | 91.1 | 16.5 | 97.9 |
-| Render images (MB/s) | **251.7** | 241.6 | 42.6 | 180.0 | 15.3 | 136.9 |
+| Parser ASCII (MB/s) | **165.0** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
+| Parser Unicode (MB/s) | **134.4** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
+| Parser unique graphemes (MB/s) | **104.1** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
+| Parser CSI-heavy (MB/s) | **92.6** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
+| Parser long escapes (MB/s) | **270.6** | 262.2 | 58.6 | 80.3 | 92.2 | 64.1 |
+| Parser images (MB/s) | **257.6** | 247.1 | 44.4 | 169.7 | 100.6 | 94.2 |
+| Render ASCII (MB/s) | **169.0** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
+| Render Unicode (MB/s) | **133.2** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
+| Render unique graphemes (MB/s) | **102.9** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
+| Render CSI-heavy (MB/s) | **91.8** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
+| Render long escapes (MB/s) | **294.6** | 260.2 | 56.9 | 91.1 | 16.5 | 97.9 |
+| Render images (MB/s) | **288.8** | 241.6 | 42.6 | 180.0 | 15.3 | 136.9 |
 | Scrollback ASCII (MB/s) | **96.7** | 59.0 | 56.2 | 66.6 | 6.9 | 65.9 |
 | Scrollback Unicode (MB/s) | **106.9** | 83.6 | 79.3 | 88.5 | 8.4 | 29.9 |
 | Scrollback CSI-heavy (MB/s) | **92.6** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
@@ -47,7 +47,7 @@ Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same worklo
 | Idle physical footprint (MiB) | **29.4** | 73.7 | 94.4 | 66.1 | 45.4 | 46.1 |
 | App allocation (KiB) | **984.1** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
 
-Termatica leads 13 of 15 throughput workloads and has a 140.0 MB/s geometric mean across them, versus 72.7 MB/s for the next result. Kitty remains 0.9% faster at parser long escapes and 4.1% faster at render long escapes; Ghostty has the lowest startup median. See the [full methodology and limitations](docs/BENCHMARKS.md).
+Termatica leads all 15 throughput workloads and has a 144.8 MB/s geometric mean across them, versus 72.7 MB/s for the next result. Ghostty retains the lowest startup median. See the [full methodology and limitations](docs/BENCHMARKS.md).
 
 ## What makes it different
 
@@ -57,7 +57,7 @@ Termatica leads 13 of 15 throughput workloads and has a 140.0 MB/s geometric mea
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
 - Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Codex-compatible Kitty keyboard handling (flags 0-31 + REP), modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
-- Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, and a visible position indicator
+- Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, Codex inline-viewport routing, and a visible position indicator
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus
 - Plain JSON settings that remain user- and AI-readable after installation
 - Named configs that can be created, switched, renamed, and deleted without leaving the terminal

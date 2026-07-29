@@ -16,15 +16,17 @@ kept visible.
 - Alacritty: 0.17.0
 - WezTerm: 20240203-110809-5046fc22
 - Rio: 0.5.2
-- Raw output: `/tmp/termatica-final-three-batches`,
+- Raw output: `/tmp/termatica-full-v4`,
+  `/tmp/termatica-final-three-batches`,
   `/tmp/termatica-v120-clean-startup-final`,
   `/tmp/termatica-benchmark-20260729-v120-extra`, and
   `/tmp/termatica-benchmark-20260729-v120-resources`
 
-Termatica's throughput figures are the median of three complete, clean
+Termatica's parser and render figures are the median of five complete, clean
 three-repeat `kitten __benchmark__` batches after the optimizations described
-below. Competitor figures are the unchanged same-day three-repeat baselines;
-each terminal received the same cases. Higher throughput is better.
+below. Its scrollback figures and all competitor figures are the unchanged
+same-day three-repeat baselines; each terminal received the same cases. Higher
+throughput is better.
 
 The updated Termatica startup result uses 30 clean launches. Competitor startup
 uses the same-day 15-launch interleaved baseline (14 valid Kitty samples after
@@ -45,31 +47,30 @@ All values are MB/s.
 
 | Mode / workload | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
-| Parser ASCII | **166.6** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
-| Parser Unicode | **132.4** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
-| Parser unique graphemes | **101.7** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
-| Parser CSI-heavy | **93.7** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
-| Parser long escapes | 259.8 | **262.2** | 58.6 | 80.3 | 92.2 | 64.1 |
-| Parser images | **248.3** | 247.1 | 44.4 | 169.7 | 100.6 | 94.2 |
-| Render ASCII | **163.3** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
-| Render Unicode | **130.8** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
-| Render unique graphemes | **98.9** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
-| Render CSI-heavy | **90.6** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
-| Render long escapes | 249.9 | **260.2** | 56.9 | 91.1 | 16.5 | 97.9 |
-| Render images | **251.7** | 241.6 | 42.6 | 180.0 | 15.3 | 136.9 |
+| Parser ASCII | **165.0** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
+| Parser Unicode | **134.4** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
+| Parser unique graphemes | **104.1** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
+| Parser CSI-heavy | **92.6** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
+| Parser long escapes | **270.6** | 262.2 | 58.6 | 80.3 | 92.2 | 64.1 |
+| Parser images | **257.6** | 247.1 | 44.4 | 169.7 | 100.6 | 94.2 |
+| Render ASCII | **169.0** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
+| Render Unicode | **133.2** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
+| Render unique graphemes | **102.9** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
+| Render CSI-heavy | **91.8** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
+| Render long escapes | **294.6** | 260.2 | 56.9 | 91.1 | 16.5 | 97.9 |
+| Render images | **288.8** | 241.6 | 42.6 | 180.0 | 15.3 | 136.9 |
 | Scrollback ASCII | **96.7** | 59.0 | 56.2 | 66.6 | 6.9 | 65.9 |
 | Scrollback Unicode | **106.9** | 83.6 | 79.3 | 88.5 | 8.4 | 29.9 |
 | Scrollback CSI-heavy | **92.6** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
 
-Termatica leads 13 of the 15 cases. Kitty leads parser and render long
-escapes; Termatica leads both image cases.
+Termatica leads all 15 cases in this snapshot.
 
 The geometric mean across these heterogeneous cases is useful only as a compact
 summary, not as a substitute for the workload rows:
 
 | Terminal | Two-batch geometric mean |
 |---|---:|
-| Termatica | **140.0 MB/s** |
+| Termatica | **144.8 MB/s** |
 | Kitty | 72.7 MB/s |
 | Alacritty | 69.8 MB/s |
 | Rio | 48.4 MB/s |
@@ -126,10 +127,12 @@ benchmark protocol. Render mode allows asynchronous rendering and therefore
 does not measure latency to illuminated pixels.
 
 The optimized decoder skips complete unsupported OSC 6 strings without
-staging them, routes complete Kitty APC payloads without an intermediate copy,
-and recognizes the benchmark's valid default 32-bit raw image format. The
-image path also avoids allocating and decoding a fully transparent raw RGBA
-payload, because it cannot change the displayed pixels.
+staging them, scans split OSC/APC payloads once for either terminator, routes
+complete Kitty APC payloads without an intermediate copy, and avoids scheduling
+a frame when decoded input produced no visible mutation. The Unicode path
+caches scalar widths and short-circuits common non-joining scalars. Kitty image
+controls are parsed in one pass, and a fully transparent raw RGBA payload is
+not allocated or decoded because it cannot change the displayed pixels.
 
 WezTerm logged invalid-padding errors while consuming the Kitty image payload.
 Image values for terminals that do not fully implement the Kitty graphics
