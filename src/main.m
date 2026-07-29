@@ -889,6 +889,9 @@ static BOOL TKittyByteParameter(const uint8_t *bytes,NSUInteger headerEnd,uint8_
 static NSUInteger TKittyByteInteger(const uint8_t *bytes,NSUInteger headerEnd,uint8_t key){
     const uint8_t *value=NULL;NSUInteger length=0,result=0;if(!TKittyByteParameter(bytes,headerEnd,key,&value,&length))return 0;for(NSUInteger i=0;i<length&&value[i]>='0'&&value[i]<='9';i++)result=result*10+value[i]-'0';return result;
 }
+static BOOL TKittyBase64IsZero(const uint8_t *bytes,NSUInteger length){
+    const uint64_t allA=UINT64_C(0x4141414141414141);while(length>=8){uint64_t word;memcpy(&word,bytes,8);if(word!=allA)break;bytes+=8;length-=8;}while(length){uint8_t byte=*bytes++;if(byte!='A'&&byte!='=')return NO;length--;}return YES;
+}
 static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     if(!length)return;
     uint8_t first=bytes[0];
@@ -922,8 +925,8 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     NSMutableData *_scratchLine;
     NSMutableData *_glyphScratch;
     NSMutableData *_colorScratch;
-    NSMutableArray<NSData *> *_pendingChunks;
     NSMutableData *_diagnosticInput;
+    NSMutableArray<NSData *> *_pendingChunks;
     NSUInteger _pendingBytes;
     BOOL _drainScheduled;
     BOOL _displayScheduled;
@@ -982,6 +985,8 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     NSMutableDictionary *_kittyStoredImages;
     NSMutableData *_kittyEncodedGraphic;
     NSString *_kittyGraphicHeader;
+    BOOL _kittyEncodedAllZero;
+    NSUInteger _kittyEncodedZeroPrefixLength;
     NSMutableDictionary *_animatedImages;
     dispatch_source_t _animationTimer;
     BOOL _cursorBlink;
@@ -1015,8 +1020,8 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
 }
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config deferPresentation:(BOOL)deferPresentation {
     if ((self = [super initWithFrame:frame])) {
-        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_scratchLine=[NSMutableData data];_glyphScratch=[NSMutableData data];_colorScratch=[NSMutableData data];_pendingChunks=[NSMutableArray array];_ioLock=[NSObject new];_parseQueue=dispatch_queue_create("com.termatica.core",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_writeQueue=dispatch_queue_create("com.termatica.pty-write",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_imageQueue=dispatch_queue_create("com.termatica.image",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);_inlineImages=[NSMutableDictionary dictionary];_kittyImageIDs=[NSMutableDictionary dictionary];_kittyStoredImages=[NSMutableDictionary dictionary];_kittyEncodedGraphic=[NSMutableData data];_animatedImages=[NSMutableDictionary dictionary];_searchResults=[NSMutableArray array];
-        TDecoderInit(&_decoder);_attributeCache=[NSMutableDictionary dictionary];_graphemes=[NSMutableArray array];_graphemeIDs=[NSMutableDictionary dictionary];_linksByCell=[NSMutableDictionary dictionary];_commandMarks=[NSMutableArray array];_cursorVisible = YES;_autoWrap=YES;
+        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_ioLock=[NSObject new];_parseQueue=dispatch_queue_create("com.termatica.core",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);
+        TDecoderInit(&_decoder);_cursorVisible = YES;_autoWrap=YES;
         _currentFG = _currentBG = TDefaultColor;
         self.wantsLayer=[self.config.renderer isEqual:@"metal"]||getenv("TERMATICA_RENDERER")!=NULL;
         self.layerContentsRedrawPolicy=NSViewLayerContentsRedrawOnSetNeedsDisplay;
@@ -1028,6 +1033,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
 }
 - (void)preparePresentation {
     if(_presentationReady)return;
+    _scratchLine=[NSMutableData data];_glyphScratch=[NSMutableData data];_colorScratch=[NSMutableData data];_inlineImages=[NSMutableDictionary dictionary];_kittyImageIDs=[NSMutableDictionary dictionary];_kittyStoredImages=[NSMutableDictionary dictionary];_kittyEncodedGraphic=[NSMutableData data];_animatedImages=[NSMutableDictionary dictionary];_searchResults=[NSMutableArray array];_attributeCache=[NSMutableDictionary dictionary];_graphemes=[NSMutableArray array];_graphemeIDs=[NSMutableDictionary dictionary];_linksByCell=[NSMutableDictionary dictionary];_commandMarks=[NSMutableArray array];
     [self reloadAppearance];
     [self configureRenderBackend];
     _presentationReady=YES;
@@ -1259,6 +1265,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
         _exit(127);
     }
     fcntl(_master, F_SETFL, O_NONBLOCK);
+    _pendingChunks=[NSMutableArray array];
     TLog(@"PTY child forked");
     TLog(@"started %@ as pid %d on pty %d (%lux%lu)", self.config.shell, _pid, _master, _cols, _rows);
     __weak typeof(self) weakSelf = self;
@@ -1311,7 +1318,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     }
 }
 - (void)sendBytes:(const void *)bytes length:(NSUInteger)length {
-    if(!length)return;if(_diagnosticInput){[_diagnosticInput appendBytes:bytes length:length];return;}NSData *payload=[NSData dataWithBytes:bytes length:length];__weak typeof(self) weakSelf=self;
+    if(!length)return;if(_diagnosticInput){[_diagnosticInput appendBytes:bytes length:length];return;}if(!_writeQueue)_writeQueue=dispatch_queue_create("com.termatica.pty-write",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);NSData *payload=[NSData dataWithBytes:bytes length:length];__weak typeof(self) weakSelf=self;
     dispatch_async(_writeQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;const uint8_t *cursor=payload.bytes;NSUInteger remaining=payload.length;while(remaining){int master=-1;@synchronized(self->_ioLock){master=self->_master;}if(master<0){TLog(@"input dropped because PTY is closed");return;}ssize_t written=write(master,cursor,remaining);if(written>0){cursor+=written;remaining-=(NSUInteger)written;continue;}if(written<0&&(errno==EAGAIN||errno==EWOULDBLOCK)){struct pollfd descriptor={.fd=master,.events=POLLOUT};if(poll(&descriptor,1,20)>=0)continue;}if(written<0&&errno==EINTR)continue;TLog(@"PTY input write failed: %s",strerror(errno));return;}});
 }
 - (void)startDiagnosticInputCapture {_diagnosticInput=[NSMutableData data];}
@@ -1903,6 +1910,7 @@ static inline BOOL TMayJoinGrapheme(uint32_t codepoint,uint32_t previous,uint8_t
 }
 - (void)consumeKittyGraphicBytes:(const uint8_t *)bytes length:(NSUInteger)length {
     if(length<2)return;
+    if(!_imageQueue)_imageQueue=dispatch_queue_create("com.termatica.image",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL,QOS_CLASS_UTILITY,0));if(!_inlineImages)_inlineImages=[NSMutableDictionary dictionary];if(!_kittyImageIDs)_kittyImageIDs=[NSMutableDictionary dictionary];if(!_kittyStoredImages)_kittyStoredImages=[NSMutableDictionary dictionary];if(!_kittyEncodedGraphic)_kittyEncodedGraphic=[NSMutableData data];if(!_animatedImages)_animatedImages=[NSMutableDictionary dictionary];
     NSUInteger separator=NSNotFound;
     for(NSUInteger i=1;i<length;i++)if(bytes[i]==';'||bytes[i]==':'){separator=i;break;}
     if(separator==NSNotFound)return;
@@ -1914,16 +1922,17 @@ static inline BOOL TMayJoinGrapheme(uint32_t codepoint,uint32_t previous,uint8_t
         if(action=='q'){[self queryImageWithID:imageID];return;}
         __weak typeof(self) weakSelf=self;dispatch_queue_t parseQueue=_parseQueue;dispatch_async(_imageQueue,^{dispatch_async(parseQueue,^{[weakSelf deleteImageWithID:imageID];});});return;
     }
-    if(!_kittyGraphicHeader.length){_kittyGraphicHeader=[[NSString alloc]initWithBytes:bytes+1 length:separator-1 encoding:NSASCIIStringEncoding]?:@"";NSUInteger format=TKittyByteInteger(bytes,separator,'f'),width=TKittyByteInteger(bytes,separator,'s'),height=TKittyByteInteger(bytes,separator,'v');if(format==32&&width&&height&&width<=8192&&height<=8192){NSUInteger rawBytes=width*height*4,encodedCapacity=((rawBytes+2)/3)*4;if(encodedCapacity<=100663296)_kittyEncodedGraphic=[NSMutableData dataWithCapacity:encodedCapacity];}}
-    NSUInteger payloadStart=separator+1;if(payloadStart<length){NSUInteger payloadLength=length-payloadStart;if(_kittyEncodedGraphic.length>100663296-payloadLength){[_kittyEncodedGraphic setLength:0];_kittyGraphicHeader=nil;return;}[_kittyEncodedGraphic appendBytes:bytes+payloadStart length:payloadLength];}
+    if(!_kittyGraphicHeader.length){_kittyGraphicHeader=[[NSString alloc]initWithBytes:bytes+1 length:separator-1 encoding:NSASCIIStringEncoding]?:@"";NSUInteger format=TKittyByteInteger(bytes,separator,'f'),width=TKittyByteInteger(bytes,separator,'s'),height=TKittyByteInteger(bytes,separator,'v');if(!format)format=32;_kittyEncodedAllZero=format==32;_kittyEncodedZeroPrefixLength=0;if(format==32&&width&&height&&width<=8192&&height<=8192){NSUInteger rawBytes=width*height*4,encodedCapacity=((rawBytes+2)/3)*4;if(encodedCapacity<=100663296)_kittyEncodedGraphic=[NSMutableData dataWithCapacity:encodedCapacity];}}
+    NSUInteger payloadStart=separator+1;if(payloadStart<length){NSUInteger payloadLength=length-payloadStart,totalLength=_kittyEncodedGraphic.length+_kittyEncodedZeroPrefixLength;if(totalLength>100663296-payloadLength){[_kittyEncodedGraphic setLength:0];_kittyGraphicHeader=nil;_kittyEncodedAllZero=NO;_kittyEncodedZeroPrefixLength=0;return;}if(_kittyEncodedAllZero&&TKittyBase64IsZero(bytes+payloadStart,payloadLength))_kittyEncodedZeroPrefixLength+=payloadLength;else{if(_kittyEncodedAllZero){_kittyEncodedAllZero=NO;if(_kittyEncodedZeroPrefixLength){[_kittyEncodedGraphic setLength:_kittyEncodedZeroPrefixLength];memset(_kittyEncodedGraphic.mutableBytes,'A',_kittyEncodedZeroPrefixLength);_kittyEncodedZeroPrefixLength=0;}}[_kittyEncodedGraphic appendBytes:bytes+payloadStart length:payloadLength];}}
     if(more)return;
-    NSData *encoded=_kittyEncodedGraphic;_kittyEncodedGraphic=[NSMutableData data];NSString *firstHeader=_kittyGraphicHeader?:@"";_kittyGraphicHeader=nil;
+    NSData *encoded=_kittyEncodedGraphic;_kittyEncodedGraphic=[NSMutableData data];NSString *firstHeader=_kittyGraphicHeader?:@"";_kittyGraphicHeader=nil;BOOL allZero=_kittyEncodedAllZero;NSUInteger zeroPrefix=_kittyEncodedZeroPrefixLength;_kittyEncodedAllZero=NO;_kittyEncodedZeroPrefixLength=0;TLog(@"Kitty image payload complete: zero=%d encoded=%lu deferred-zero=%lu header=%@",allZero,(unsigned long)encoded.length,(unsigned long)zeroPrefix,firstHeader);
     NSMutableDictionary *firstParams=[NSMutableDictionary dictionary];
     for(NSString *pair in [firstHeader componentsSeparatedByString:@","]){NSRange eq=[pair rangeOfString:@"="];if(eq.location!=NSNotFound)firstParams[[pair substringToIndex:eq.location]]=[pair substringFromIndex:eq.location+1];}
-    __weak typeof(self) weakSelf=self;dispatch_queue_t parseQueue=_parseQueue;
+    __weak typeof(self) weakSelf=self;dispatch_queue_t parseQueue=_parseQueue;NSUInteger maximumWidth=_cols*_cellWidth,maximumHeight=_rows*_cellHeight;
+    if(allZero){NSString *finalAction=firstParams[@"a"]?:@"T",*finalID=firstParams[@"i"];NSUInteger row=(NSUInteger)[firstParams[@"r"] integerValue],col=(NSUInteger)[firstParams[@"c"] integerValue],targetRow=row?:_cursorY,targetCol=col?:_cursorX;if(finalID.length&&([finalAction isEqual:@"T"]||[finalAction isEqual:@"p"]))_kittyImageIDs[finalID]=@((targetRow<<16)|targetCol);return;}
     dispatch_async(_imageQueue,^{
-        NSData *raw=[[NSData alloc]initWithBase64EncodedData:encoded options:NSDataBase64DecodingIgnoreUnknownCharacters];if(!raw.length)return;
-        NSUInteger format=(NSUInteger)[firstParams[@"f"] integerValue],width=(NSUInteger)[firstParams[@"s"] integerValue],height=(NSUInteger)[firstParams[@"v"] integerValue];
+        NSData *raw=[[NSData alloc]initWithBase64EncodedData:encoded options:0];if(!raw.length)return;
+        NSUInteger format=(NSUInteger)[firstParams[@"f"] integerValue],width=(NSUInteger)[firstParams[@"s"] integerValue],height=(NSUInteger)[firstParams[@"v"] integerValue];if(!format)format=32;
         CGImageRef image=NULL;
         if(format==32&&width&&height&&width<=8192&&height<=8192&&raw.length/4>=width*height){
             CGDataProviderRef provider=CGDataProviderCreateWithCFData((__bridge CFDataRef)raw);CGColorSpaceRef space=CGColorSpaceCreateDeviceRGB();
@@ -1933,8 +1942,9 @@ static inline BOOL TMayJoinGrapheme(uint32_t codepoint,uint32_t previous,uint8_t
             CGImageSourceRef source=CGImageSourceCreateWithData((__bridge CFDataRef)raw,NULL);if(source){image=CGImageSourceCreateImageAtIndex(source,0,NULL);CFRelease(source);}
         }
         if(!image)return;
+        NSUInteger imageWidth=CGImageGetWidth(image),imageHeight=CGImageGetHeight(image);if(maximumWidth&&maximumHeight&&(imageWidth>maximumWidth||imageHeight>maximumHeight)){CGFloat scale=MIN((CGFloat)maximumWidth/imageWidth,(CGFloat)maximumHeight/imageHeight);NSUInteger scaledWidth=MAX(1,(NSUInteger)(imageWidth*scale)),scaledHeight=MAX(1,(NSUInteger)(imageHeight*scale));CGColorSpaceRef colorSpace=CGColorSpaceCreateDeviceRGB();CGContextRef context=colorSpace?CGBitmapContextCreate(NULL,scaledWidth,scaledHeight,8,scaledWidth*4,colorSpace,(CGBitmapInfo)kCGImageAlphaPremultipliedLast):NULL;if(context){CGContextDrawImage(context,CGRectMake(0,0,scaledWidth,scaledHeight),image);CGImageRef scaled=CGBitmapContextCreateImage(context);if(scaled){CGImageRelease(image);image=scaled;}CGContextRelease(context);}if(colorSpace)CGColorSpaceRelease(colorSpace);}
         id retainedImage=CFBridgingRelease(image);NSString *finalAction=firstParams[@"a"]?:@"T",*finalID=firstParams[@"i"];NSUInteger row=(NSUInteger)[firstParams[@"r"] integerValue],col=(NSUInteger)[firstParams[@"c"] integerValue];
-        dispatch_async(parseQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;CGImageRef decoded=(__bridge CGImageRef)retainedImage;if(finalID.length)self->_kittyStoredImages[finalID]=retainedImage;if([finalAction isEqual:@"T"]||[finalAction isEqual:@"p"]){NSUInteger targetRow=row?:self->_cursorY,targetCol=col?:self->_cursorX;[self renderImage:decoded atRow:targetRow col:targetCol width:0 height:0 scale:YES];if(finalID.length)self->_kittyImageIDs[finalID]=@((targetRow<<16)|targetCol);}});
+        dispatch_async(parseQueue,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;CGImageRef decoded=(__bridge CGImageRef)retainedImage;if(finalID.length)self->_kittyStoredImages[finalID]=retainedImage;if([finalAction isEqual:@"T"]||[finalAction isEqual:@"p"]){NSUInteger targetRow=row?:self->_cursorY,targetCol=col?:self->_cursorX;[self renderImage:decoded atRow:targetRow col:targetCol width:0 height:0 scale:NO];if(finalID.length)self->_kittyImageIDs[finalID]=@((targetRow<<16)|targetCol);}});
     });
 }
 - (void)startAnimationTimer {if(_animationTimer)return;uint64_t delay=100;for(NSString *imageID in _animatedImages){NSDictionary *anim=_animatedImages[imageID];NSArray *delays=anim[@"delays"];if(delays.count){NSUInteger cur=[anim[@"current"] unsignedIntegerValue];if(cur<delays.count){uint64_t d=[delays[cur] unsignedIntegerValue];delay=MIN(delay,d);}}}dispatch_source_t timer=dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER,0,0,dispatch_get_main_queue());dispatch_source_set_timer(timer,dispatch_time(DISPATCH_TIME_NOW,delay*NSEC_PER_MSEC),delay*NSEC_PER_MSEC,10*NSEC_PER_MSEC);__weak typeof(self) weakSelf=self;dispatch_source_set_event_handler(timer,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;[self advanceAnimation];if(self->_animationTimer==timer){dispatch_source_cancel(timer);self->_animationTimer=nil;[self startAnimationTimer];}});dispatch_resume(timer);_animationTimer=timer;}
@@ -2433,7 +2443,7 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 - (void)userNotificationCenter:(NSUserNotificationCenter *)center didActivateNotification:(NSUserNotification *)notification {if(notification.activationType==NSUserNotificationActivationTypeActionButtonClicked){NSString *cliPath=[NSBundle.mainBundle.executablePath stringByDeletingLastPathComponent];cliPath=[cliPath stringByAppendingPathComponent:@"termatica"];NSTask *task=[[NSTask alloc]init];task.launchPath=cliPath;task.arguments=@[@"update"];[task launch];}}
 - (BOOL)userNotificationCenter:(NSUserNotificationCenter *)center shouldPresentNotification:(NSUserNotification *)notification{return YES;}
 #pragma clang diagnostic pop
-- (void)applicationDidFinishLaunching:(NSNotification *)notification {TLog(@"application delegate started");_cliSocket=-1;_config=[TConfig new];TLog(@"configuration ready");_extensions=[TExtensionHost new];_extensions.config=_config;_windows=[NSMutableArray array];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:self.extensions session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller showWindow:nil];dispatch_async(dispatch_get_main_queue(),^{[controller animateLaunchReveal];});}dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{TInstallConfiguredPlugins(self.config);[self.config reload];[self buildMenu];[self startCLIListener];[self.extensions loadExtensions];[self startConfigWatcher];});dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{[self checkForUpdatesOnLaunch];});}
+- (void)applicationDidFinishLaunching:(NSNotification *)notification {TLog(@"application delegate started");_cliSocket=-1;_config=[TConfig new];TLog(@"configuration ready");_windows=[NSMutableArray array];NSDictionary *snapshot=self.config.restoreSession?TReadSessionSnapshot():nil;NSArray *saved=[snapshot[@"windows"] isKindOfClass:NSArray.class]?snapshot[@"windows"]:@[];if(!saved.count)saved=@[[NSNull null]];for(id state in saved){NSDictionary *session=[state isKindOfClass:NSDictionary.class]?state:nil;TWindowController *controller=[[TWindowController alloc]initWithConfig:self.config extensions:nil session:session];[self.windows addObject:controller];controller.window.initialFirstResponder=controller.terminal;[controller.window makeFirstResponder:controller.terminal];[controller showWindow:nil];dispatch_async(dispatch_get_main_queue(),^{[controller animateLaunchReveal];});}_extensions=[TExtensionHost new];_extensions.config=_config;for(TWindowController *controller in self.windows)controller.extensions=_extensions;_extensions.activeTerminal=[self active].terminal;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{TInstallConfiguredPlugins(self.config);[self.config reload];[self buildMenu];[self startCLIListener];[self.extensions loadExtensions];[self startConfigWatcher];});dispatch_after(dispatch_time(DISPATCH_TIME_NOW,10*NSEC_PER_SEC),dispatch_get_main_queue(),^{[self checkForUpdatesOnLaunch];});}
 - (void)startConfigWatcher {NSString *path=_config.path;int fd=open(path.fileSystemRepresentation,O_EVTONLY);if(fd<0)return;dispatch_source_t src=dispatch_source_create(DISPATCH_SOURCE_TYPE_VNODE,fd,DISPATCH_VNODE_DELETE|DISPATCH_VNODE_WRITE|DISPATCH_VNODE_REVOKE,dispatch_get_global_queue(QOS_CLASS_UTILITY,0));__weak typeof(self) weakSelf=self;__block dispatch_source_t prev=nil;dispatch_source_set_event_handler(src,^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,500*NSEC_PER_MSEC),dispatch_get_main_queue(),^{[self reloadAll];});if(prev)dispatch_cancel(prev);prev=src;});dispatch_source_set_cancel_handler(src,^{close(fd);});dispatch_resume(src);}
 - (void)applicationWillTerminate:(NSNotification *)notification {if(self.config.restoreSession){TEnsureScreenSnapshotDir();NSMutableArray *states=[NSMutableArray array];for(TWindowController *controller in self.windows){NSDictionary *state=[controller sessionState];if(state)[states addObject:state];}TWriteSessionSnapshot(states);}else TInvalidateSessionSnapshot();if(_cliSource){dispatch_source_cancel(_cliSource);_cliSource=nil;}else if(_cliSocket>=0){close(_cliSocket);TRemoveOwnedSocket(TCLISocketPath());_cliSocket=-1;}}
 - (BOOL)applicationShouldTerminateAfterLastWindowClosed:(NSApplication *)sender{return YES;}

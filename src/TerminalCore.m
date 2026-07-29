@@ -149,6 +149,20 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
     if(!decoder||!bytes||!sink)return;
     for(size_t index=0;index<length;index++){
         uint8_t byte=bytes[index];
+        if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte==27&&index+3<length){
+            if(bytes[index+1]==']'&&bytes[index+2]=='6'&&bytes[index+3]==';'){
+                const uint8_t *end=memchr(bytes+index+4,7,length-index-4);
+                if(end){index=(size_t)(end-bytes);continue;}
+            }else if(bytes[index+1]=='_'&&bytes[index+2]=='G'){
+                const uint8_t *end=memchr(bytes+index+3,27,length-index-3);
+                if(end&&end+1<bytes+length&&end[1]=='\\'){
+                    TDecoderFlushCodepoints(decoder,sink);
+                    if(sink->string)sink->string(sink->context,bytes+index+2,(size_t)(end-(bytes+index+2)));
+                    index=(size_t)(end-bytes)+1;
+                    continue;
+                }
+            }
+        }
         if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte>=32&&byte<127){
             TDecoderFlushCodepoints(decoder,sink);
             size_t start=index;

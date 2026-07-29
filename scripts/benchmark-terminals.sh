@@ -5,6 +5,9 @@ root=${0:A:h:h}
 term_app=${TERM_APP:-"$root/build/Termatica.app"}
 ghostty_app=${GHOSTTY_APP:-/Applications/Ghostty.app}
 kitty_app=${KITTY_APP:-/Applications/kitty.app}
+alacritty_app=${ALACRITTY_APP:-/Applications/Alacritty.app}
+wezterm_app=${WEZTERM_APP:-/Applications/WezTerm.app}
+rio_app=${RIO_APP:-/Applications/Rio.app}
 output=${BENCHMARK_OUTPUT:-/tmp/termatica-benchmark-results}
 repetitions=${BENCHMARK_REPETITIONS:-10}
 benchmark_cases=${BENCHMARK_CASES:-"ascii unicode unique_unicode csi images long_escape_codes"}
@@ -12,6 +15,9 @@ benchmark_timeout_seconds=${BENCHMARK_TIMEOUT_SECONDS:-300}
 kitten="$kitty_app/Contents/MacOS/kitten"
 kitty="$kitty_app/Contents/MacOS/kitty"
 ghostty="$ghostty_app/Contents/MacOS/ghostty"
+alacritty="$alacritty_app/Contents/MacOS/alacritty"
+wezterm="$wezterm_app/Contents/MacOS/wezterm"
+rio="$rio_app/Contents/MacOS/rio"
 term="$term_app/Contents/MacOS/Termatica"
 term_cli="$term_app/Contents/MacOS/termatica"
 term_bench=${TERM_BENCHMARK:-"$root/build/TermaticaBenchmark"}
@@ -26,6 +32,13 @@ for required in "$term" "$term_cli" "$term_bench" "$ghostty" "$kitty" "$kitten" 
 done
 
 mkdir -p "$output" "$config"
+extra_terminals=()
+[[ -x "$alacritty" ]] && extra_terminals+=(alacritty)
+[[ -x "$wezterm" ]] && extra_terminals+=(wezterm)
+[[ -x "$rio" ]] && extra_terminals+=(rio)
+mkdir -p "$config/rio/rio"
+print 'local wezterm = require "wezterm"\nreturn { font = wezterm.font("Monaco"), font_size = 11.0, enable_tab_bar = false, window_close_confirmation = "NeverPrompt" }' > "$config/wezterm.lua"
+print '[fonts]\nfamily = "Monaco"\nsize = 11' > "$config/rio/rio/config.toml"
 pids=()
 cleanup() {
   for pid in $pids; do
@@ -84,6 +97,37 @@ configure_term_command() {
     "[\"-lc\",\"${command//\"/\\\"}\"]" >/dev/null
 }
 
+launch_extra() {
+  local name=$1 command=$2 log=$3
+  case "$name" in
+    alacritty)
+      "$alacritty" --config-file /dev/null -o 'font.normal.family="Monaco"' \
+        -o font.size=11 -e /bin/zsh -lc "$command" >"$log" 2>&1 &
+      ;;
+    wezterm)
+      "$wezterm" --config-file "$config/wezterm.lua" start --always-new-process -- \
+        /bin/zsh -lc "$command" >"$log" 2>&1 &
+      ;;
+    rio)
+      XDG_CONFIG_HOME="$config/rio" "$rio" -e /bin/zsh -lc "$command" >"$log" 2>&1 &
+      ;;
+  esac
+  print $!
+}
+
+run_extra_official() {
+  local name=$1 render_flag=$2 suffix=$3 cases=${4:-$benchmark_cases}
+  local command="$kitten __benchmark__ $render_flag --repetitions $repetitions $cases"
+  local result="$output/$name-$suffix.txt" pid
+  : > "$result"
+  pid=$(launch_extra "$name" "$command > '$result' 2>&1; exit" "$output/$name-$suffix-app.log")
+  pids+=($pid)
+  wait_for_file "$result"
+  kill "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+  pids=()
+}
+
 run_official() {
   local render_flag=$1 suffix=$2 cases=${3:-$benchmark_cases} command
   command="$kitten __benchmark__ $render_flag --repetitions $repetitions $cases"
@@ -135,9 +179,12 @@ measure_startup() {
       "$kitty" --config NONE -o font_family=Monaco -o font_size=11 \
         /usr/bin/python3 "$probe" "$stamp" >/dev/null 2>&1 &
       pid=$!
-    else
+    elif [[ "$name" == ghostty ]]; then
       launch_ghostty "/usr/bin/python3 '$probe' '$stamp'" "$stamp"
       pid=$(wait_for_ghostty_process "$stamp")
+      pids+=($pid)
+    else
+      pid=$(launch_extra "$name" "/usr/bin/python3 '$probe' '$stamp'" "$output/$name-startup-$index.log")
       pids+=($pid)
     fi
     wait_for_file "$stamp"
@@ -164,11 +211,14 @@ measure_memory() {
     "$kitty" --config NONE -o font_family=Monaco -o font_size=11 \
       /usr/bin/python3 "$probe" "$stamp" >/dev/null 2>&1 &
     pid=$!
-  else
+  elif [[ "$name" == ghostty ]]; then
     launch_ghostty "/usr/bin/python3 '$probe' '$stamp'" "$stamp"
     pid=$(wait_for_ghostty_process "$stamp")
     pids+=($pid)
     wait_for_file "$stamp"
+  else
+    pid=$(launch_extra "$name" "/usr/bin/python3 '$probe' '$stamp'" "$output/$name-memory-app.log")
+    pids+=($pid)
   fi
   wait_for_file "$stamp"
   sleep 1
@@ -186,19 +236,29 @@ measure_memory() {
   print "termatica\t$("$term" --version | awk 'NR==1{print}')\t$(( $(du -sk "$term_app" | awk '{print $1}') ))"
   print "ghostty\t$("$ghostty" +version | awk 'NR==1{print}')\t$(( $(du -sk "$ghostty_app" | awk '{print $1}') ))"
   print "kitty\t$("$kitty" --version)\t$(( $(du -sk "$kitty_app" | awk '{print $1}') ))"
+  [[ -x "$alacritty" ]] && print "alacritty\t$("$alacritty" --version | awk 'NR==1{print}')\t$(( $(du -sk "$alacritty_app" | awk '{print $1}') ))"
+  [[ -x "$wezterm" ]] && print "wezterm\t$("$wezterm" --version | awk 'NR==1{print}')\t$(( $(du -sk "$wezterm_app" | awk '{print $1}') ))"
+  [[ -x "$rio" ]] && print "rio\t$("$rio" --version | awk 'NR==1{print}')\t$(( $(du -sk "$rio_app" | awk '{print $1}') ))"
 } > "$output/environment.tsv"
 
 run_official "" parser
 run_official "--render" render
 run_official "--with-scrollback" scrollback "ascii unicode csi"
+for name in $extra_terminals; do
+  run_extra_official "$name" "" parser
+  run_extra_official "$name" "--render" render
+  run_extra_official "$name" "--with-scrollback" scrollback "ascii unicode csi"
+done
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-decoder 33554432 > "$output/termatica-decoder.json"
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-core 33554432 > "$output/termatica-core.json"
 TERMATICA_CONFIG_DIR="$config" "$term_bench" --benchmark-experience 240 3 > "$output/termatica-experience.json"
 measure_memory termatica
 measure_memory kitty
 measure_memory ghostty
+for name in $extra_terminals; do measure_memory "$name"; done
 measure_startup termatica ""
 measure_startup kitty ""
 measure_startup ghostty ""
+for name in $extra_terminals; do measure_startup "$name" ""; done
 
 print "Benchmark results: $output"

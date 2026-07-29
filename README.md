@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>A compact, native, terminal-first macOS terminal.</strong></p>
+<p align="center"><strong>The best overall-performing macOS terminal in our six-terminal benchmark—native, under 1 MiB, and shell-ready in 8.8 ms.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -18,30 +18,36 @@
   <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
-Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Phase 10 adds an opt-in Metal renderer behind an immutable snapshot boundary, with automatic AppKit fallback.
+Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current universal app is under 1 MiB and runs natively on Apple Silicon and Intel Macs.
+The current universal app is **1,013.5 KiB**, uses **29.4 MiB** of memory at idle, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.817 ms median / 9.305 ms p95**.
 
 ## Measured performance
 
-On a reproducible `kitten __benchmark__` suite against Kitty 0.48.1 and Ghostty 1.3.1 on Apple M4:
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
-| Benchmark | Termatica | Kitty | Ghostty |
-|---|---:|---:|---:|
-| ASCII parser | **165.0 MB/s** | 77.9 | 55.3 |
-| Unicode parser | **113.7 MB/s** | 102.6 | 78.4 |
-| CSI-heavy parser | **78.2 MB/s** | 43.9 | 31.0 |
-| ASCII render | **150.7 MB/s** | 76.9 | 57.7 |
-| Unicode render | **108.4 MB/s** | 69.6 | 71.1 |
-| CSI render | **72.0 MB/s** | 43.8 | 29.1 |
-| ASCII viewport paint p50 | **2.10 ms** | — | — |
-| 60 Hz overshoot | **0 / 240** | — | — |
-| 120 Hz overshoot | **0 / 240** | — | — |
-| 240 Hz overshoot | **0 / 240** | — | — |
-| Idle memory | **37.7 MiB** | 120.2 | 80.7 |
-| App bundle | **956 KiB** | 160,080 KiB | 63,484 KiB |
+| Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
+|---|---:|---:|---:|---:|---:|---:|
+| Parser ASCII (MB/s) | **166.6** | 74.2 | 54.1 | 56.3 | 18.2 | 67.5 |
+| Parser Unicode (MB/s) | **132.4** | 101.6 | 78.9 | 57.0 | 15.2 | 49.5 |
+| Parser unique graphemes (MB/s) | **101.7** | 27.1 | 36.1 | 28.6 | 27.8 | 41.0 |
+| Parser CSI-heavy (MB/s) | **93.7** | 32.2 | 31.2 | 36.6 | 6.7 | 33.3 |
+| Parser long escapes (MB/s) | 259.8 | **262.2** | 58.6 | 80.3 | 92.2 | 64.1 |
+| Parser images (MB/s) | **248.3** | 247.1 | 44.4 | 169.7 | 100.6 | 94.2 |
+| Render ASCII (MB/s) | **163.3** | 73.7 | 56.9 | 82.4 | 11.1 | 122.2 |
+| Render Unicode (MB/s) | **130.8** | 22.8 | 86.0 | 106.0 | 14.0 | 2.9 |
+| Render unique graphemes (MB/s) | **98.9** | 27.1 | 24.8 | 46.5 | 7.0 | 49.2 |
+| Render CSI-heavy (MB/s) | **90.6** | 32.4 | 26.3 | 49.7 | 2.0 | 41.6 |
+| Render long escapes (MB/s) | 249.9 | **260.2** | 56.9 | 91.1 | 16.5 | 97.9 |
+| Render images (MB/s) | **251.7** | 241.6 | 42.6 | 180.0 | 15.3 | 136.9 |
+| Scrollback ASCII (MB/s) | **96.7** | 59.0 | 56.2 | 66.6 | 6.9 | 65.9 |
+| Scrollback Unicode (MB/s) | **106.9** | 83.6 | 79.3 | 88.5 | 8.4 | 29.9 |
+| Scrollback CSI-heavy (MB/s) | **92.6** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
+| Shell-ready median / p95 (ms) | 8.817 / **9.305** | 8.729 / 10.720 | **8.324** / 11.937 | 9.880 / 13.973 | 9.286 / 14.923 | 9.264 / 14.045 |
+| Idle physical footprint (MiB) | **29.4** | 73.7 | 94.4 | 66.1 | 45.4 | 46.1 |
+| App allocation (KiB) | **1,013.5** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
 
-Termatica leads every measured parser and render throughput case while remaining substantially smaller and lighter at idle. The frame-compliance measurement is a warmed full-surface AppKit repaint of a standard ASCII terminal viewport; Unicode and CSI performance are reported separately above.
+Termatica leads 13 of 15 throughput workloads and has a 140.0 MB/s geometric mean across them, versus 72.7 MB/s for the next result. Kitty remains 0.9% faster at parser long escapes and 4.1% faster at render long escapes; Ghostty has the lowest startup median. See the [full methodology and limitations](docs/BENCHMARKS.md).
 
 ## What makes it different
 
@@ -189,13 +195,13 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Universal app allocation: **940 KiB** — under 1 MiB
-- Clean one-tab physical footprint: **37.3 MiB**
+- Universal app allocation: **1,013.5 KiB** (**1,037,806 bytes**) — under 1 MiB
+- Clean one-tab physical footprint: **29.4 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
 
-The same run measured Kitty at 120.4 MiB and Ghostty at 82.7 MiB idle physical footprint.
+The same benchmark snapshot measured Kitty at 73.7 MiB and Ghostty at 94.4 MiB idle physical footprint.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 
