@@ -1,6 +1,6 @@
 cask "termatica" do
   version "1.1.1"
-  sha256 "466312bc1b74477b8055b17a66694f7414f8f6b5deafee5b950dc7ea3f037f7a"
+  sha256 "fe7a3caaf68fb3f5b34c41ef613d17963ffa8cb05102d86a778a1b04276248c1"
 
   url "https://github.com/sebastianmiletic/termatica/releases/download/v#{version}/Termatica-macOS-universal.dmg"
   name "Termatica"
