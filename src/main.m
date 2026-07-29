@@ -970,6 +970,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     BOOL _pixelMouse;
     BOOL _synchronizedUpdates;
     BOOL _inlineViewportMode;
+    BOOL _inlineViewportPagerActive;
     NSData *_primaryScreen;
     NSData *_primaryUnderlineStyles;
     NSUInteger _primaryCols, _primaryRows, _primaryCursorX, _primaryCursorY;
@@ -1435,7 +1436,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
         case 'r': {
             NSUInteger top = (NSUInteger)(TCSIParameter(parameters,count,0,1) - 1);
             NSUInteger bottom = (NSUInteger)(TCSIParameter(parameters,count,1,(int)_rows) - 1);
-            if (top < bottom && bottom < _rows) { _scrollTop = top; _scrollBottom = bottom; _cursorX = _cursorY = 0;if(_synchronizedUpdates&&(top||bottom+1<_rows))_inlineViewportMode=YES; }
+            if (top < bottom && bottom < _rows) { _scrollTop = top; _scrollBottom = bottom; _cursorX = _cursorY = 0;if(_synchronizedUpdates&&!_alternateScreen&&_bracketedPaste&&_focusReporting&&_kittyKeyboardFlags&&(top||bottom+1<_rows))_inlineViewportMode=YES; }
             break;
         }
         case 'h': case 'l': if(prefix)for(NSUInteger i=0;i<count;i++)[self setPrivateMode:parameters[i] enabled:command=='h'];break;
@@ -1493,14 +1494,14 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     int v = 8 + (i - 232) * 10; return (v<<16)|(v<<8)|v;
 }
 - (void)enterAlternateScreen {
-    if(_alternateScreen)return;_inlineViewportMode=NO;[self normalizeRows];_primaryScreen=[NSData dataWithBytes:_cells length:_cols*_rows*sizeof(TCell)];_primaryUnderlineStyles=_underlineStyles?[NSData dataWithBytes:_underlineStyles length:_cols*_rows]:nil;_primaryCols=_cols;_primaryRows=_rows;_primaryCursorX=_cursorX;_primaryCursorY=_cursorY;_alternateScreen=YES;_historyOffset=0;[self eraseDisplay:2];_cursorX=_cursorY=0;[self markAllDamage];
+    if(_alternateScreen)return;_inlineViewportMode=_inlineViewportPagerActive=NO;[self normalizeRows];_primaryScreen=[NSData dataWithBytes:_cells length:_cols*_rows*sizeof(TCell)];_primaryUnderlineStyles=_underlineStyles?[NSData dataWithBytes:_underlineStyles length:_cols*_rows]:nil;_primaryCols=_cols;_primaryRows=_rows;_primaryCursorX=_cursorX;_primaryCursorY=_cursorY;_alternateScreen=YES;_historyOffset=0;[self eraseDisplay:2];_cursorX=_cursorY=0;[self markAllDamage];
 }
 - (void)leaveAlternateScreen {
     if(!_alternateScreen)return;TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols*_rows;i++)_cells[i]=blank;if(_underlineStyles)memset(_underlineStyles,0,_cols*_rows);NSUInteger copyRows=MIN(_rows,_primaryRows),copyCols=MIN(_cols,_primaryCols);const TCell *saved=_primaryScreen.bytes;const uint8_t *savedUnderlines=_primaryUnderlineStyles.bytes;for(NSUInteger y=0;y<copyRows;y++){memcpy(_cells+y*_cols,saved+y*_primaryCols,copyCols*sizeof(TCell));if(_underlineStyles&&savedUnderlines)memcpy(_underlineStyles+y*_cols,savedUnderlines+y*_primaryCols,copyCols);}_cursorX=MIN(_primaryCursorX,_cols-1);_cursorY=MIN(_primaryCursorY,_rows-1);_primaryScreen=nil;_primaryUnderlineStyles=nil;_alternateScreen=NO;_historyOffset=0;[self markAllDamage];
 }
 - (void)setPrivateMode:(int)mode enabled:(BOOL)enabled {
     if (mode == 25) _cursorVisible = enabled;
-    else if (mode == 2004) {_bracketedPaste = enabled;if(!enabled)_inlineViewportMode=NO;}
+    else if (mode == 2004) {_bracketedPaste = enabled;if(!enabled)_inlineViewportMode=_inlineViewportPagerActive=NO;}
     else if (mode == 1049 || mode == 47 || mode == 1047) {if(enabled)[self enterAlternateScreen];else[self leaveAlternateScreen];}
     else if(mode==1)_applicationCursorKeys=enabled;
     else if(mode==7)_autoWrap=enabled;
@@ -1511,7 +1512,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else if(mode==1006)_sgrMouse=enabled;
     else if(mode==1015)_urxvtMouse=enabled;
     else if(mode==1016)_pixelMouse=enabled;
-    else if(mode==2026)_synchronizedUpdates=enabled;
+    else if(mode==2026){_synchronizedUpdates=enabled;if(enabled&&!_alternateScreen&&_bracketedPaste&&_focusReporting&&_kittyKeyboardFlags)_inlineViewportMode=YES;}
     else if(mode==12){_cursorBlink=enabled;[self startCursorBlink];}
 }
 - (uint32_t)internGrapheme:(NSString *)value {
@@ -1675,7 +1676,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     }
 }
 #pragma clang diagnostic pop
-- (void)resetTerminal {TDecoderReset(&_decoder);_currentFG=_currentBG=TDefaultColor; _currentFlags=0; _cursorX=_cursorY=0;_scrollTop=0;_scrollBottom=_rows-1;_kittyKeyboardFlags=0;_modifyOtherKeys=0;_applicationCursorKeys=NO;_autoWrap=YES;_alternateScroll=NO;_focusReporting=NO;_mouseTrackingMode=0;_utf8Mouse=NO;_sgrMouse=NO;_urxvtMouse=NO;_pixelMouse=NO;_synchronizedUpdates=NO;_inlineViewportMode=NO;_hasLastEmittedCodepoint=NO;_currentLink=nil;[_commandMarks removeAllObjects];[_linksByCell removeAllObjects];if(_alternateScreen)[self leaveAlternateScreen];[self eraseDisplay:2]; }
+- (void)resetTerminal {TDecoderReset(&_decoder);_currentFG=_currentBG=TDefaultColor; _currentFlags=0; _cursorX=_cursorY=0;_scrollTop=0;_scrollBottom=_rows-1;_kittyKeyboardFlags=0;_modifyOtherKeys=0;_applicationCursorKeys=NO;_autoWrap=YES;_alternateScroll=NO;_focusReporting=NO;_mouseTrackingMode=0;_utf8Mouse=NO;_sgrMouse=NO;_urxvtMouse=NO;_pixelMouse=NO;_synchronizedUpdates=NO;_inlineViewportMode=_inlineViewportPagerActive=NO;_hasLastEmittedCodepoint=NO;_currentLink=nil;[_commandMarks removeAllObjects];[_linksByCell removeAllObjects];if(_alternateScreen)[self leaveAlternateScreen];[self eraseDisplay:2]; }
 - (void)clearTerminal { [self eraseDisplay:2]; _cursorX=_cursorY=0; [self clearHistory]; [self refreshTextView];[self setNeedsDisplay:YES]; }
 - (void)clearScrollbackPreservingPrompt {
     [self clearHistory];_historyOffset=0;_hasSelection=NO;
@@ -1828,7 +1829,10 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     // Inline TUIs such as Codex use synchronized updates plus a temporary scroll
     // region on the primary screen. They do not request mouse tracking, so route
     // the wheel to their viewport while preserving Shift-wheel for local history.
-    if(_inlineViewportMode&&!shift){NSString *sequence=lines>0?@"\033[5~":@"\033[6~";for(NSInteger i=0;i<MIN((NSInteger)4,MAX((NSInteger)1,(labs(lines)+2)/3));i++)[self sendString:sequence];return;}
+    if(_inlineViewportMode&&!shift){
+        if(!_inlineViewportPagerActive){if(_kittyKeyboardFlags&1)[self sendString:@"\033[116;5u"];else{uint8_t ctrlT=20;[self sendBytes:&ctrlT length:1];}_inlineViewportPagerActive=YES;}
+        NSString *sequence=[self functionalKeySequenceForKeyCode:lines>0?116:121 modifier:1];for(NSInteger i=0;i<MIN((NSInteger)4,MAX((NSInteger)1,(labs(lines)+2)/3));i++)[self sendString:sequence];return;
+    }
     // Some full-screen CLIs, including Codex, use the alternate screen but do not
     // advertise DEC 1007 alternate-scroll. Keep wheel navigation working there.
     if(_alternateScreen&&!shift){NSString *sequence=lines>0?(_applicationCursorKeys?@"\033OA":@"\033[A"):(_applicationCursorKeys?@"\033OB":@"\033[B");for(NSInteger i=0;i<MIN((NSInteger)32,labs(lines));i++)[self sendString:sequence];return;}
@@ -1879,6 +1883,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 }
 - (void)keyDown:(NSEvent *)e {
     [self updateSecureKeyboardInput];
+    if(e.keyCode==53&&_inlineViewportPagerActive)_inlineViewportPagerActive=NO;
     if(_searchActive){if(e.keyCode==36||e.keyCode==76){[self navigateSearch:(e.modifierFlags&NSEventModifierFlagShift)?-1:1];return;}if(e.keyCode==53){[self closeSearch];return;}}
     if(e.modifierFlags&NSEventModifierFlagCommand){if((e.modifierFlags&NSEventModifierFlagShift)&&[e.charactersIgnoringModifiers.lowercaseString isEqual:@"f"]){[self searchScrollback];return;}if((e.modifierFlags&NSEventModifierFlagShift)&&[e.charactersIgnoringModifiers.lowercaseString isEqual:@"d"]){void(^cb)(void)=self.splitShortcut;if(cb)cb();return;}if([e.charactersIgnoringModifiers.lowercaseString isEqual:@"d"]){void(^cb)(void)=self.splitShortcut;if(cb)cb();return;}if([e.charactersIgnoringModifiers.lowercaseString isEqual:@"]"]){void(^cb)(void)=self.nextSplitShortcut;if(cb)cb();return;}if([e.charactersIgnoringModifiers.lowercaseString isEqual:@"["]){void(^cb)(void)=self.prevSplitShortcut;if(cb)cb();return;}[super keyDown:e];return;}
     NSString *s=nil; unsigned short k=e.keyCode;NSEventModifierFlags mods=e.modifierFlags&NSEventModifierFlagDeviceIndependentFlagsMask;NSInteger modifier=1+((mods&NSEventModifierFlagShift)?1:0)+((mods&NSEventModifierFlagOption)?2:0)+((mods&NSEventModifierFlagControl)?4:0);
@@ -1902,7 +1907,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     }
     return self.launchDirectory.length?self.launchDirectory:NSFileManager.defaultManager.currentDirectoryPath;
 }
-- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"synchronizedUpdates":@(_synchronizedUpdates),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),@"renderer":_renderBackend.name?:@"none",@"renderGeneration":@(_renderBackend.lastPresentedGeneration),@"metalFailed":@(_metalFailed),@"metalFrameChecksum":@(_metalBackend.lastFrameChecksum),@"metalFrameVaried":@(_metalBackend.lastFrameVariedPixels),@"snapshotBuildMs":@(_lastSnapshotBuildMilliseconds),@"metalCPUEncodeMs":@(_metalBackend.lastCPUEncodeMilliseconds),@"metalGPUExecutionMs":@(_metalBackend.lastGPUExecutionMilliseconds)};}}
+- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"inlinePager":@(_inlineViewportPagerActive),@"synchronizedUpdates":@(_synchronizedUpdates),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),@"renderer":_renderBackend.name?:@"none",@"renderGeneration":@(_renderBackend.lastPresentedGeneration),@"metalFailed":@(_metalFailed),@"metalFrameChecksum":@(_metalBackend.lastFrameChecksum),@"metalFrameVaried":@(_metalBackend.lastFrameVariedPixels),@"snapshotBuildMs":@(_lastSnapshotBuildMilliseconds),@"metalCPUEncodeMs":@(_metalBackend.lastCPUEncodeMilliseconds),@"metalGPUExecutionMs":@(_metalBackend.lastGPUExecutionMilliseconds)};}}
 - (void)renderImage:(CGImageRef)image atRow:(NSUInteger)row col:(NSUInteger)col width:(NSUInteger)w height:(NSUInteger)h scale:(BOOL)doScale {
     if(!image)return;
     CGImageRef stored=CGImageCreateCopy(image);if(!stored)return;NSUInteger srcW=CGImageGetWidth(stored),srcH=CGImageGetHeight(stored);
@@ -2542,11 +2547,13 @@ static int TRunTerminalSelfTest(void) {
     NSString *alternateScrollReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];
     if(![alternateScrollReport containsString:@"\033OA"])return 22;
     [terminal consumeData:[@"\033[?1049l" dataUsingEncoding:NSUTF8StringEncoding]];
-    [terminal consumeData:[@"\033[?2026h\033[1;8r\033[?2026l\033[r" dataUsingEncoding:NSUTF8StringEncoding]];
+    [terminal consumeData:[@"\033[?2004h\033[>7u\033[?1004h\033[?2026h\033[1;8r\033[?2026l\033[r" dataUsingEncoding:NSUTF8StringEncoding]];
     [terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:0];
-    if(![[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding] containsString:@"\033[5~"])return 35;
+    NSString *codexOpenReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];
+    if(![codexOpenReport containsString:@"\033[116;5u"]||![codexOpenReport containsString:@"\033[5;1~"]||![terminal.diagnosticState[@"inlinePager"] boolValue])return 35;
     [terminal startDiagnosticInputCapture];[terminal routeWheelLines:-3 event:wheel modifierFlags:0];
-    if(![[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding] containsString:@"\033[6~"])return 36;
+    NSString *codexDownReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];
+    if([codexDownReport containsString:@"\033[116;5u"]||![codexDownReport containsString:@"\033[6;1~"])return 36;
     [terminal consumeData:[@"\033[?2004l" dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:-100000];[terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:0];
     if([terminal finishDiagnosticInputCapture].length||[terminal.diagnosticState[@"offset"] integerValue]<=0||[terminal.diagnosticState[@"inlineViewport"] boolValue])return 37;
     [terminal scrollByLines:-100000];
