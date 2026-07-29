@@ -83,7 +83,7 @@ shared and compressed memory accounting can rank processes differently.
 
 | Terminal | Shell-ready median / p95 | RSS median | Physical footprint median | Idle CPU median | App allocation |
 |---|---:|---:|---:|---:|---:|
-| Termatica | 8.817 / **9.305 ms** | **85.2 MiB** | **29.4 MiB** | **0.000%** | **1,013.5 KiB** |
+| Termatica | 8.817 / **9.305 ms** | **85.2 MiB** | **29.4 MiB** | **0.000%** | **981.5 KiB** |
 | Kitty | 8.729 / 10.720 ms | 118.2 MiB | 73.7 MiB | **0.000%** | 160,080 KiB |
 | Ghostty | **8.324 / 11.937 ms** | 130.9 MiB | 94.4 MiB | 0.025% | 63,484 KiB |
 | Alacritty | 9.880 / 13.973 ms | 90.6 MiB | 66.1 MiB | 0.025% | 14,328 KiB |
@@ -111,8 +111,8 @@ Termatica diagnostics and are not cross-terminal wins.
 | Metal p95 / p99, median of three runs | 2.214 / 3.516 ms |
 | Metal frames over 60 / 120 Hz budget | 0 / 0 in every run |
 | Metal frames over 240 Hz budget | 0 / 0 / 0 across the three runs |
-| Exact universal app file bytes | 1,037,806 bytes |
-| Universal executable bytes | 990,032 bytes |
+| Exact universal app file bytes | 1,005,038 bytes |
+| Universal executable bytes | 957,264 bytes |
 
 The Metal test includes immutable snapshot construction, CPU command encoding,
 and GPU execution but excludes display-vsync wait. The AppKit test is a warmed

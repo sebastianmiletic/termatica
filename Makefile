@@ -13,7 +13,7 @@ SHELL_INTEGRATION_RESOURCES := $(patsubst Resources/ShellIntegration/%,$(APP)/Co
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
-COMMON := -fobjc-arc -fmodules -O3 -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon -framework Metal -framework CoreText
+COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon -framework Metal -framework CoreText
 
 .PHONY: all release run clean size install check package benchmark-harness benchmark-decoder benchmark-core benchmark-experience benchmark-metal benchmark
 
@@ -27,14 +27,14 @@ release: $(BIN) $(CLI) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATIO
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(ARCH_DIR)
-	xcrun clang $(COMMON) -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
-	xcrun clang $(COMMON) -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
+	xcrun clang $(COMMON) -O3 -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
+	xcrun clang $(COMMON) -Oz -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
 	lipo -create $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
 	strip -x $@
 
 $(BENCH): $(SOURCES)
 	@mkdir -p $(dir $@)
-	xcrun clang $(COMMON) -DTERMATICA_BENCHMARKS=1 -arch $$(uname -m) -o $@ $(SOURCES)
+	xcrun clang $(COMMON) -O3 -DTERMATICA_BENCHMARKS=1 -arch $$(uname -m) -o $@ $(SOURCES)
 	strip -x $@
 
 benchmark-harness: $(BENCH)
