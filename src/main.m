@@ -2748,7 +2748,7 @@ static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
     (void)argc;(void)argv;(void)config;
     if(!isatty(STDIN_FILENO)||!isatty(STDOUT_FILENO)){fputs("termatica bench: run this command inside the Termatica terminal.\n",stderr);return 2;}
     NSString *supportDir=[[[NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject URLByAppendingPathComponent:@"Termatica"] path];
-    if(!supportDir)[NSFileManager.defaultManager createDirectoryAtPath:supportDir withIntermediateDirectories:YES attributes:nil error:nil];
+    [NSFileManager.defaultManager createDirectoryAtPath:supportDir withIntermediateDirectories:YES attributes:nil error:nil];
     NSString *helperPath=[supportDir stringByAppendingPathComponent:@"termyx-engine-bench"];
     NSString *binaryPath=[NSBundle.mainBundle.executablePath copy];
     BOOL helperExists=[[NSFileManager defaultManager] fileExistsAtPath:helperPath];

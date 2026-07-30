@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.1
+
+- Fixed `termatica bench` helper install failing on first run (the Application Support directory was not being created).
+
 ## 1.3.0
 
 - Redesigned `termatica bench` (`t b`): on first run it offers to install a small helper tool called **termyx engine bench**. When you run a benchmark, Termatica closes and the helper opens in a separate macOS Terminal window and runs the full benchmark suite using your Termatica binary (9 throughput workloads: parser/render/scrollback × ASCII/Unicode/CSI-heavy), each with 1 warmup + 5 measured passes (median), then shows a results table comparing your Termatica numbers against the published six-terminal reference, and offers to reopen Termatica. No Dock bounce, no second app copy.
