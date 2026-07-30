@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.3
+
+- Anchored the prompt to the top of the terminal window. Content no longer reserves the title-bar safe area as empty space, so the command line sits at the top where it belongs.
+- Restored the black icon and GitHub repository logo (white wordmark on a black background) with rounded corners.
+- Added Option (Alt) keybindings for word movement and editing in zsh and bash shell integration (Option+Left/Right, Option+Up/Down, Option+Home/End, Option+B/F/D/Backspace).
+- Removed dead code: the unused `code` CLI, the `configs` CLI, and the module browser.
+
 ## 1.2.2
 
 - Lightened the app icon and GitHub repository logo from pure black to a grey background so it reads as grey and white. Rounded corners are retained.

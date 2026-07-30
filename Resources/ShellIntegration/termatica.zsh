@@ -23,4 +23,19 @@ if [[ -o interactive && -z "${TERMATICA_SHELL_INTEGRATION_ACTIVE:-}" ]]; then
 
   add-zsh-hook precmd _termatica_precmd
   add-zsh-hook preexec _termatica_preexec
+
+  # Option (Alt) keybindings for word movement and editing.
+  # Termatica sends CSI 1;3 <final> for Option+arrows and ESC-prefixed chars for Option+printable.
+  bindkey '\e[1;3C' forward-word      # Option+Right  - forward word
+  bindkey '\e[1;3D' backward-word     # Option+Left   - backward word
+  bindkey '\e[1;3A' up-line          # Option+Up     - up one line
+  bindkey '\e[1;3B' down-line        # Option+Down   - down one line
+  bindkey '\e[1;3H' beginning-of-line # Option+Home   - start of line
+  bindkey '\e[1;3F' end-of-line       # Option+End    - end of line
+  bindkey '\eb'     backward-word     # Option+B      - backward word
+  bindkey '\ef'     forward-word      # Option+F      - forward word
+  bindkey '\ed'     kill-word         # Option+D      - delete word forward
+  bindkey '\e\x7f'  backward-kill-word # Option+Backspace - delete word backward
+  bindkey '\e<'     beginning-of-buffer-or-history  # Option+<  - top of buffer
+  bindkey '\e>'     end-of-buffer-or-history         # Option+>  - bottom of buffer
 fi
