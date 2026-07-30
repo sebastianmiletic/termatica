@@ -4,6 +4,7 @@
 #import "MetalRenderer.h"
 #import <QuartzCore/QuartzCore.h>
 #import <Carbon/Carbon.h>
+#import <math.h>
 #import <util.h>
 #import <sys/ioctl.h>
 #import <sys/socket.h>
@@ -491,13 +492,7 @@ static NSString *TSaveConfigNamed(NSString *name,TConfig *config){if(!TValidConf
 static NSString *TUseConfigNamed(NSString *name,TConfig *config){if(!TValidConfigName(name))return @"[ INVALID ] config name";NSData *data=[NSData dataWithContentsOfFile:TConfigProfilePath(name)];id value=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;if(![value isKindOfClass:NSDictionary.class])return [NSString stringWithFormat:@"[ NOT FOUND ] %@",name];NSMutableDictionary *active=[value mutableCopy];active[@"configName"]=name;NSError *error=nil;if(!TWriteJSONDictionary(active,config.path,&error))return [NSString stringWithFormat:@"[ FAILED ] %@",error.localizedDescription?:@"could not select config"];[config reload];TPostCLICommand(@"reload");return [NSString stringWithFormat:@"[ CURRENT ] %@",name];}
 static NSString *TRenameConfig(NSString *oldName,NSString *newName,TConfig *config){if(!TValidConfigName(oldName)||!TValidConfigName(newName))return @"[ INVALID ] config name";NSString *oldPath=TConfigProfilePath(oldName),*newPath=TConfigProfilePath(newName);NSFileManager *fm=NSFileManager.defaultManager;if(![fm fileExistsAtPath:oldPath])return [NSString stringWithFormat:@"[ NOT FOUND ] %@",oldName];if([fm fileExistsAtPath:newPath])return [NSString stringWithFormat:@"[ EXISTS ] %@",newName];NSError *error=nil;if(![fm moveItemAtPath:oldPath toPath:newPath error:&error])return [NSString stringWithFormat:@"[ FAILED ] %@",error.localizedDescription?:@"could not rename config"];NSData *data=[NSData dataWithContentsOfFile:newPath];id value=data?[NSJSONSerialization JSONObjectWithData:data options:0 error:nil]:nil;NSMutableDictionary *profile=[value isKindOfClass:NSDictionary.class]?[value mutableCopy]:[NSMutableDictionary dictionary];profile[@"configName"]=newName;TWriteJSONDictionary(profile,newPath,nil);if([TActiveConfigName(config) isEqual:oldName]){NSMutableDictionary *active=TReadActiveConfig(config);active[@"configName"]=newName;TWriteJSONDictionary(active,config.path,nil);[config reload];TPostCLICommand(@"reload");}return [NSString stringWithFormat:@"[ RENAMED ] %@ -> %@",oldName,newName];}
 static NSString *TDeleteConfig(NSString *name,TConfig *config){if(!TValidConfigName(name))return @"[ INVALID ] config name";NSString *path=TConfigProfilePath(name);if(![NSFileManager.defaultManager fileExistsAtPath:path])return [NSString stringWithFormat:@"[ NOT FOUND ] %@",name];NSError *error=nil;if(![NSFileManager.defaultManager removeItemAtPath:path error:&error])return [NSString stringWithFormat:@"[ FAILED ] %@",error.localizedDescription?:@"could not delete config"];if([TActiveConfigName(config) isEqual:name]){NSMutableDictionary *active=TReadActiveConfig(config);[active removeObjectForKey:@"configName"];TWriteJSONDictionary(active,config.path,nil);[config reload];}return [NSString stringWithFormat:@"[ DELETED ] %@",name];}
-static void TDrawConfigBrowser(NSArray<NSString *> *names,NSUInteger selected,TConfig *config,NSString *message){fputs("\033[2J\033[H\033[38;2;122;162;247m  TERMATICA CONFIG / CONFIG FILES\033[0m\n",stdout);fprintf(stdout,"\033[38;2;107;114;128m  folder  %s\n  active  %s\033[0m\n\n",TConfigProfileDirectory().fileSystemRepresentation,TActiveConfigName(config).UTF8String);if(!names.count)fputs("\033[38;2;216;222;233m   No saved configurations. Press N to create one from the current settings.\033[0m\n",stdout);for(NSUInteger i=0;i<names.count;i++){BOOL highlighted=i==selected,active=[names[i] isEqual:TActiveConfigName(config)];if(highlighted)fputs("\033[48;2;43;52;69m\033[38;2;238;241;245m",stdout);else fputs("\033[38;2;216;222;233m",stdout);fprintf(stdout," %c %2lu  %-7s  %-52s\033[0m\n",highlighted?'>':' ',(unsigned long)i+1,active?"ACTIVE":"SAVED",names[i].UTF8String);}if(message.length)fprintf(stdout,"\n\033[38;2;152;195;121m  %s\033[0m",message.UTF8String);fflush(stdout);}
 static NSString *TConfigPrompt(struct termios original,struct termios raw,NSString *prompt){tcsetattr(STDIN_FILENO,TCSAFLUSH,&original);fputs("\033[?25h\n",stdout);fprintf(stdout,"%s",prompt.UTF8String);fflush(stdout);char input[2048]={0};NSString *answer=@"";if(fgets(input,sizeof(input),stdin))answer=[[NSString stringWithUTF8String:input] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw);fputs("\033[?25l",stdout);return answer;}
-static int TRunConfigBrowser(TConfig *config){
-    struct termios original;BOOL interactive=isatty(STDIN_FILENO)&&isatty(STDOUT_FILENO)&&tcgetattr(STDIN_FILENO,&original)==0;NSString *message=nil;
-    if(interactive){struct termios raw=original;raw.c_lflag&=~(ICANON|ECHO);raw.c_iflag&=~(IXON|ICRNL);raw.c_cc[VMIN]=1;raw.c_cc[VTIME]=0;tcsetattr(STDIN_FILENO,TCSAFLUSH,&raw);void(*previous)(int)=signal(SIGINT,TMenuSignal);TMenuInterrupted=0;NSUInteger selected=0;fputs("\033[?25l",stdout);while(!TMenuInterrupted){NSArray *names=TConfigProfileNames();if(names.count)selected=MIN(selected,names.count-1);else selected=0;TDrawConfigBrowser(names,selected,config,message);unsigned char key=0;if(read(STDIN_FILENO,&key,1)!=1)continue;if(key=='q'||key=='Q')break;if((key=='\r'||key=='\n')&&names.count){message=TUseConfigNamed(names[selected],config);continue;}if((key=='j'||key=='J')&&names.count){selected=(selected+1)%names.count;continue;}if((key=='k'||key=='K')&&names.count){selected=(selected+names.count-1)%names.count;continue;}if(key=='s'||key=='S'){NSString *name=TConfigPrompt(original,raw,@"save current config as: ");message=name.length?TSaveConfigNamed(name,config):@"[ CANCELLED ]";continue;}if((key=='r'||key=='R')&&names.count){NSString *name=TConfigPrompt(original,raw,[NSString stringWithFormat:@"rename %@ to: ",names[selected]]);message=name.length?TRenameConfig(names[selected],name,config):@"[ CANCELLED ]";continue;}if((key=='d'||key=='D')&&names.count){NSString *answer=TConfigPrompt(original,raw,[NSString stringWithFormat:@"delete %@? [y/N]: ",names[selected]]);message=[answer.lowercaseString isEqual:@"y"]?TDeleteConfig(names[selected],config):@"[ CANCELLED ]";continue;}if(key==27){unsigned char sequence[2]={0};if(read(STDIN_FILENO,&sequence[0],1)==1&&read(STDIN_FILENO,&sequence[1],1)==1&&sequence[0]=='['&&names.count){if(sequence[1]=='A')selected=(selected+names.count-1)%names.count;else if(sequence[1]=='B')selected=(selected+1)%names.count;}}}tcsetattr(STDIN_FILENO,TCSAFLUSH,&original);signal(SIGINT,previous);fputs("\033[?25h\033[0m\n",stdout);return TMenuInterrupted?130:0;}
-    char input[256]={0};while(YES){NSArray *names=TConfigProfileNames();TDrawConfigBrowser(names,NSNotFound,config,message);fputs("\ncommands: save NAME | use NAME | rename OLD NEW | delete NAME | list | q\nconfigs> ",stdout);fflush(stdout);if(!fgets(input,sizeof(input),stdin))return 0;NSString *line=[[NSString stringWithUTF8String:input] stringByTrimmingCharactersInSet:NSCharacterSet.whitespaceAndNewlineCharacterSet];NSArray *parts=[line componentsSeparatedByCharactersInSet:NSCharacterSet.whitespaceCharacterSet];NSMutableArray *args=[NSMutableArray array];for(NSString *part in parts)if(part.length)[args addObject:part];if(!args.count||[args[0] isEqual:@"q"]||[args[0] isEqual:@"quit"])return 0;if([args[0] isEqual:@"save"]&&args.count==2)message=TSaveConfigNamed(args[1],config);else if([args[0] isEqual:@"use"]&&args.count==2)message=TUseConfigNamed(args[1],config);else if([args[0] isEqual:@"rename"]&&args.count==3)message=TRenameConfig(args[1],args[2],config);else if([args[0] isEqual:@"delete"]&&args.count==2)message=TDeleteConfig(args[1],config);else if([args[0] isEqual:@"list"])message=[NSString stringWithFormat:@"[ %lu SAVED ]",(unsigned long)names.count];else message=@"[ INVALID ] expected save, use, rename, delete, list or q";}
-}
 static id TConfigValueAtPath(NSDictionary *dictionary,NSString *path) {
     id value=dictionary;for(NSString *part in [path componentsSeparatedByString:@"."]){if(![value isKindOfClass:NSDictionary.class])return nil;value=value[part];}return value;
 }
@@ -2752,58 +2747,81 @@ static int TRunExperienceBenchmark(NSUInteger requestedFrames,double requestedSe
 static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
     (void)argc;(void)argv;(void)config;
     if(!isatty(STDIN_FILENO)||!isatty(STDOUT_FILENO)){fputs("termatica bench: run this command inside the Termatica terminal.\n",stderr);return 2;}
-    fputs("\033[2J\033[H\033[38;2;235;128;60m  >_ TERMATICA // BENCHMARK\033[0m\n\n",stdout);
-    fputs("\033[38;2;107;114;128m  Measures the real Termatica parser, render, and scrollback throughput.\033[0m\n",stdout);
-    fputs("\033[38;2;107;114;128m  Each workload runs 1 warmup pass then 5 measured passes; results show the median.\033[0m\n",stdout);
-    fputs("\033[38;2;107;114;128m  Results are compared against the published six-terminal reference (Apple M4).\033[0m\n\n",stdout);
-    fputs("\033[38;2;216;222;233m  Press Enter to start (or Q to cancel)... \033[0m",stdout);fflush(stdout);
-    char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)){fputs("  cancelled.\n",stdout);return 130;}if(answer[0]=='q'||answer[0]=='Q'){fputs("  cancelled.\n",stdout);return 130;}
-    fputs("\n",stdout);
-    TApplication *app=[TApplication sharedApplication];[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
-    TConfig *benchConfig=[TConfig new];benchConfig.scrollback=10000;benchConfig.fontSize=11;benchConfig.fontName=@"Monaco";benchConfig.unicodeRendering=YES;
-    TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,1200,800) config:benchConfig];
-    [terminal preparePresentation];
-    NSArray<NSDictionary *> *cases=@[
-        @{@"name":@"Parser ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n"},
-        @{@"name":@"Parser Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal decoding\r\n"},
-        @{@"name":@"Parser CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n"},
-    ];
-    NSUInteger benchBytes=33554432;double measured[9]={0};
-    NSBitmapImageRep *bitmap=[terminal bitmapImageRepForCachingDisplayInRect:terminal.bounds];
-    double(^TMedian)(double*,NSUInteger)=^double(double *v,NSUInteger n){for(NSUInteger i=0;i<n;i++)for(NSUInteger j=i+1;j<n;j++)if(v[j]<v[i]){double t=v[i];v[i]=v[j];v[j]=t;}return v[n/2];};
-    fputs("\033[38;2;122;162;247m  Running benchmarks (1 at a time)...\033[0m\n\n",stdout);fflush(stdout);
-    for(NSUInteger c=0;c<3;c++){
-        NSData *pattern=[cases[c][@"pattern"] dataUsingEncoding:NSUTF8StringEncoding];NSMutableData *chunk=[NSMutableData dataWithCapacity:32768];while(chunk.length+pattern.length<=32768)[chunk appendData:pattern];
-        fputs("\033[38;2;216;222;233m  > Parser pass...\033[0m\r",stdout);fflush(stdout);
-        {NSUInteger consumed=0;while(consumed<benchBytes){NSUInteger take=MIN(chunk.length,benchBytes-consumed);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;}}
-        double samples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger consumed=0;CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();while(consumed<benchBytes){NSUInteger take=MIN(chunk.length,benchBytes-consumed);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;}samples[r]=(double)consumed/1048576.0/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start);}
-        measured[c]=TMedian(samples,5);
-        if(bitmap){
-            [terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];
-            fputs("\033[K\033[38;2;216;222;233m  > Render pass...\033[0m\r",stdout);fflush(stdout);
-            {NSUInteger frames=120;for(NSUInteger f=0;f<frames;f++){NSUInteger take=MIN(chunk.length,32768);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
-            double rsamples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger frames=120,consumed=0;double total=0;for(NSUInteger f=0;f<frames;f++){NSUInteger take=MIN(chunk.length,32768);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;CFAbsoluteTime s=CFAbsoluteTimeGetCurrent();[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];total+=CFAbsoluteTimeGetCurrent()-s;}rsamples[r]=(double)consumed/1048576.0/MAX(0.000001,total);}
-            measured[3+c]=TMedian(rsamples,5);
-            fputs("\033[K\033[38;2;216;222;233m  > Scrollback pass...\033[0m\r",stdout);fflush(stdout);
-            NSMutableString *history=[NSMutableString string];for(NSUInteger i=0;i<5000;i++)if(pattern)[history appendFormat:@"%@",[[NSString alloc]initWithData:pattern encoding:NSUTF8StringEncoding]];
-            [terminal consumeData:[history dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:5000];
-            {NSUInteger iterations=100;for(NSUInteger i=0;i<iterations;i++){[terminal scrollByLines:(i%2)?1:-1];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
-            double ssamples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger iterations=100;CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();for(NSUInteger i=0;i<iterations;i++){[terminal scrollByLines:(i%2)?1:-1];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}ssamples[r]=(double)iterations/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start)*pattern.length/1048576.0;}
-            measured[6+c]=TMedian(ssamples,5);
-        }
-        fprintf(stdout,"\033[K\033[38;2;152;195;121m  %-18s  parser %7.1f  render %7.1f  scroll %7.1f MB/s\033[0m\n",[cases[c][@"name"] UTF8String],measured[c],measured[3+c],measured[6+c]);fflush(stdout);
+    NSString *supportDir=[[[NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject URLByAppendingPathComponent:@"Termatica"] path];
+    if(!supportDir)[NSFileManager.defaultManager createDirectoryAtPath:supportDir withIntermediateDirectories:YES attributes:nil error:nil];
+    NSString *helperPath=[supportDir stringByAppendingPathComponent:@"termyx-engine-bench"];
+    NSString *binaryPath=[NSBundle.mainBundle.executablePath copy];
+    BOOL helperExists=[[NSFileManager defaultManager] fileExistsAtPath:helperPath];
+    fputs("\033[2J\033[H\033[38;2;122;162;247m  >_ TERMATICA // BENCHMARK\033[0m\n\n",stdout);
+    if(!helperExists){
+        fputs("\033[38;2;235;128;60m  The first-run benchmark needs a small helper tool:\033[0m\n",stdout);
+        fputs("\033[38;2;235;128;60m  \342\200\234termyx engine bench\342\200\235 — a script that runs the full suite\033[0m\n",stdout);
+        fputs("\033[38;2;235;128;60m  in a separate Terminal window while Termatica closes.\033[0m\n\n",stdout);
+        fputs("\033[38;2;216;222;233m  Download and install the helper? [y/N] \033[0m",stdout);fflush(stdout);
+        char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)||!(answer[0]=='y'||answer[0]=='Y')){fputs("  cancelled.\n",stdout);return 130;}
+        NSString *script=[NSString stringWithFormat:@"#!/bin/zsh\n# termyx-engine-bench: full Termatica benchmark suite\n# Auto-generated by Termatica. Runs in a fresh Terminal window.\nBINARY=\"%@\"\nif [ ! -x \"$BINARY\" ]; then echo \"termyx-bench: Termatica binary not found at $BINARY\"; exit 1; fi\nclear\necho '\\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH\\033[0m'\necho '\\n\\033[38;2;107;114;128m  Running the full Termatica benchmark suite.\\033[0m'\necho '\\033[38;2;107;114;128m  This closes Termatica and benchmarks in this window.\\033[0m\\n'\n# Close the Termatica app so the benchmark is uncontended.\nosascript -e 'tell application \"Termatica\" to quit' 2>/dev/null\nsleep 1\necho '\\033[38;2;216;222;233m  Starting benchmark...\\033[0m\\n'\n\"$BINARY\" --termyx-bench\necho '\\n\\033[38;2;216;222;233m  Benchmark complete. Reopen Termatica? [Y/n]\\033[0m '\nread -k1 resp\necho\nif [[ \"$resp\" != \"n\" && \"$resp\" != \"N\" ]]; then open \"%@\"; fi\n",binaryPath,NSBundle.mainBundle.bundlePath];
+        NSError *err=nil;[script writeToFile:helperPath atomically:YES encoding:NSUTF8StringEncoding error:&err];chmod(helperPath.UTF8String,0700);
+        if(err){fprintf(stderr,"  install failed: %s\n",err.localizedDescription.UTF8String);return 1;}
+        fputs("\033[38;2;152;195;121m  Helper installed.\033[0m\n\n",stdout);fflush(stdout);
+    } else {
+        fputs("\033[38;2;107;114;128m  This closes Termatica and opens the benchmark in a new Terminal window.\033[0m\n\n",stdout);
+        fputs("\033[38;2;216;222;233m  Continue? [y/N] \033[0m",stdout);fflush(stdout);
+        char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)||!(answer[0]=='y'||answer[0]=='Y')){fputs("  cancelled.\n",stdout);return 130;}
     }
+    NSString *cmd=[NSString stringWithFormat:@"\"%@\"",helperPath];
+    NSTask *task=[[NSTask alloc]init];task.launchPath=@"/usr/bin/open";task.arguments=@[@"-a",@"Terminal.app",cmd];
+    @try{[task launch];TPostCLICommand(@"quit");}@catch(id e){fprintf(stderr,"  could not open Terminal window\n");return 1;}
+    return 0;
+}
+
+static int TRunTermyxBench(void) {
+    TApplication *app=[TApplication sharedApplication];[app setActivationPolicy:NSApplicationActivationPolicyProhibited];
+    NSString *binaryPath=[NSBundle.mainBundle.executablePath copy];
+    if(!binaryPath){fputs("termyx-bench: could not locate the Termatica binary\n",stderr);return 1;}
+    fputs("\033[2J\033[H\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH\033[0m\n\n",stdout);fflush(stdout);
+    fputs("\033[38;2;107;114;128m  Full Termatica benchmark suite. Each workload: 1 warmup + 5 measured passes (median).\033[0m\n\n",stdout);fflush(stdout);
+    TConfig *bc=[TConfig new];bc.scrollback=10000;bc.fontSize=11;bc.fontName=@"Monaco";bc.unicodeRendering=YES;
+    TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,1200,800) config:bc];
+    [terminal preparePresentation];
+    NSBitmapImageRep *bitmap=[terminal bitmapImageRepForCachingDisplayInRect:terminal.bounds];
+    double(^median)(double*,NSUInteger)=^double(double *v,NSUInteger n){for(NSUInteger i=0;i<n;i++)for(NSUInteger j=i+1;j<n;j++)if(v[j]<v[i]){double t=v[i];v[i]=v[j];v[j]=t;}return v[n/2];};
+    NSArray<NSDictionary *> *workloads=@[
+        @{@"name":@"Parser ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@74.2,@54.1,@56.3,@18.2,@67.5]},
+        @{@"name":@"Parser Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal decoding\r\n",@"ref":@[@101.6,@78.9,@57.0,@15.2,@49.5]},
+        @{@"name":@"Parser CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@32.2,@31.2,@36.6,@6.7,@33.3]},
+        @{@"name":@"Render ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@73.7,@56.9,@82.4,@11.1,@122.2]},
+        @{@"name":@"Render Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal rendering\r\n",@"ref":@[@22.8,@86.0,@106.0,@14.0,@2.9]},
+        @{@"name":@"Render CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@32.4,@26.3,@49.7,@2.0,@41.6]},
+        @{@"name":@"Scrollback ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@59.0,@56.2,@66.6,@6.9,@65.9]},
+        @{@"name":@"Scrollback Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal scrollback\r\n",@"ref":@[@83.6,@79.3,@88.5,@8.4,@29.9]},
+        @{@"name":@"Scrollback CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@43.0,@30.1,@50.4,@4.0,@35.2]},
+    ];
+    NSUInteger n=workloads.count;double *results=calloc(n,sizeof(double));NSUInteger benchBytes=33554432;
+    for(NSUInteger i=0;i<n;i++){
+        NSString *name=workloads[i][@"name"];NSData *pattern=[workloads[i][@"pattern"] dataUsingEncoding:NSUTF8StringEncoding];
+        NSMutableData *chunk=[NSMutableData dataWithCapacity:32768];while(chunk.length+pattern.length<=32768)[chunk appendData:pattern];
+        BOOL isParser=[name hasPrefix:@"Parser"],isScrollback=[name hasPrefix:@"Scrollback"];
+        fprintf(stdout,"\033[K\033[38;2;216;222;233m  [%lu/%lu] %s\033[0m\r",(unsigned long)i+1,(unsigned long)n,[name UTF8String]);fflush(stdout);
+        if(isScrollback){NSMutableString *history=[NSMutableString string];for(NSUInteger k=0;k<5000;k++)if(pattern)[history appendFormat:@"%@",[[NSString alloc]initWithData:pattern encoding:NSUTF8StringEncoding]];[terminal consumeData:[history dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:5000];for(NSUInteger k=0;k<100;k++){[terminal scrollByLines:(k%2)?1:-1];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
+        else if(isParser){NSUInteger c=0;while(c<benchBytes){NSUInteger t=MIN(chunk.length,benchBytes-c);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;}}
+        else{for(NSUInteger f=0;f<120;f++){NSUInteger t=MIN(chunk.length,32768);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
+        double samples[5]={0};for(NSUInteger r=0;r<5;r++){CFAbsoluteTime s=CFAbsoluteTimeGetCurrent();
+            if(isScrollback){NSUInteger it=100;for(NSUInteger k=0;k<it;k++){[terminal scrollByLines:(k%2)?1:-1];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}samples[r]=(double)it/MAX(0.000001,CFAbsoluteTimeGetCurrent()-s)*pattern.length/1048576.0;}
+            else if(isParser){NSUInteger c=0;while(c<benchBytes){NSUInteger t=MIN(chunk.length,benchBytes-c);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;}samples[r]=(double)c/1048576.0/MAX(0.000001,CFAbsoluteTimeGetCurrent()-s);}
+            else{NSUInteger fr=120,c=0;double total=0;for(NSUInteger f=0;f<fr;f++){NSUInteger t=MIN(chunk.length,32768);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;CFAbsoluteTime st=CFAbsoluteTimeGetCurrent();if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];total+=CFAbsoluteTimeGetCurrent()-st;}samples[r]=(double)c/1048576.0/MAX(0.000001,total);}}
+        results[i]=median(samples,5);
+        fprintf(stdout,"\033[K\033[38;2;152;195;121m  %-24s %7.1f MB/s\033[0m\n",[name UTF8String],results[i]);fflush(stdout);
+    }
+    double geoMean=1;for(NSUInteger i=0;i<n;i++)geoMean*=results[i]>0?results[i]:0.001;geoMean=pow(geoMean,1.0/(double)n);
     fputs("\n\033[K\033[2J\033[H",stdout);
-    static const char *benchLabels[]={"Parser ASCII","Parser Unicode","Parser CSI-heavy","Render ASCII","Render Unicode","Render CSI-heavy","Scrollback ASCII","Scrollback Unicode","Scrollback CSI-heavy"};
-    static const double benchRef[9][5]={{74.2,54.1,56.3,18.2,67.5},{101.6,78.9,57.0,15.2,49.5},{32.2,31.2,36.6,6.7,33.3},{73.7,56.9,82.4,11.1,122.2},{22.8,86.0,106.0,14.0,2.9},{32.4,26.3,49.7,2.0,41.6},{59.0,56.2,66.6,6.9,65.9},{83.6,79.3,88.5,8.4,29.9},{43.0,30.1,50.4,4.0,35.2}};
-    fputs("\033[38;2;235;128;60m  >_ TERMATICA // BENCHMARK RESULTS\033[0m\n\n",stdout);
-    fputs("\033[38;2;107;114;128m  MB/s, higher is better. Termatica values are the median of 5 passes on this machine.\033[0m\n",stdout);
+    fputs("\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH // RESULTS\033[0m\n\n",stdout);
+    fputs("\033[38;2;107;114;128m  MB/s, higher is better. Termatica = median of 5 passes on this machine.\033[0m\n",stdout);
     fputs("\033[38;2;107;114;128m  Competitor values are the published reference (Apple M4, 2026-07-29).\033[0m\n\n",stdout);
-    fputs("  \033[48;2;43;52;69m\033[38;2;238;241;245m Benchmark                        Termatica    Kitty   Ghostty Alacritty WezTerm      Rio \033[0m\n",stdout);
-    for(NSUInteger i=0;i<9;i++)fprintf(stdout,"  %-28s \033[38;2;152;195;121m%7.1f\033[0m    %5.1f   %6.1f    %6.1f   %6.1f   %6.1f\n",benchLabels[i],measured[i],benchRef[i][0],benchRef[i][1],benchRef[i][2],benchRef[i][3],benchRef[i][4]);
-    fputs("\n\033[38;2;107;114;128m  Benchmark complete. Termatica values are recorded above.\033[0m\n",stdout);
-    fputs("\n\033[38;2;216;222;233m  Press Enter to return to your terminal...\033[0m",stdout);fflush(stdout);
-    char wait[2]={0};if(fgets(wait,sizeof(wait),stdin)){(void)wait;}
+    fputs("  \033[48;2;43;52;69m\033[38;2;238;241;245m Workload                   Termatica    Kitty   Ghostty Alacritty WezTerm      Rio \033[0m\n",stdout);
+    for(NSUInteger i=0;i<n;i++){NSArray *r=workloads[i][@"ref"];fprintf(stdout,"  %-24s \033[38;2;152;195;121m%7.1f\033[0m    %5.1f   %6.1f    %6.1f   %6.1f   %6.1f\n",[workloads[i][@"name"] UTF8String],results[i],[r[0] doubleValue],[r[1] doubleValue],[r[2] doubleValue],[r[3] doubleValue],[r[4] doubleValue]);}
+    fprintf(stdout,"\n\033[38;2;107;114;128m  Geometric mean across %lu throughput workloads: %.1f MB/s\033[0m\n",(unsigned long)n,geoMean);
+    fputs("\n\033[38;2;107;114;128m  Benchmark complete. Termatica values recorded above.\033[0m\n\n",stdout);fflush(stdout);
+    free(results);
     return 0;
 }
 
@@ -2820,6 +2838,7 @@ int main(int argc, const char *argv[]) {
         if(argc>1&&!strcmp(argv[1],"--benchmark-core"))return TRunCoreBenchmark(argc>2?(NSUInteger)strtoull(argv[2],NULL,10):33554432);
         if(argc>1&&!strcmp(argv[1],"--benchmark-experience"))return TRunExperienceBenchmark(argc>2?(NSUInteger)strtoull(argv[2],NULL,10):240,argc>3?strtod(argv[3],NULL):3.0);
 #endif
+        if(argc>1&&!strcmp(argv[1],"--termyx-bench"))return TRunTermyxBench();
         if(argc==1&&([invoked isEqual:@"termatica"]||[invoked isEqual:@"t"]))return TRunCLI(argc,argv);
         if(argc>1)return TRunCLI(argc,argv);
         TApplication *app=TApplication.sharedApplication;
