@@ -20,11 +20,11 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current universal app is **1011.3 KiB**, uses **29.4 MiB** of memory at idle, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.817 ms median / 9.305 ms p95**.
+The current universal app is **1011.7 KiB**, uses **29.4 MiB** of memory at idle, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.817 ms median / 9.305 ms p95**.
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.4, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.5, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
@@ -45,7 +45,7 @@ Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same worklo
 | Scrollback CSI-heavy (MB/s) | **92.6** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
 | Shell-ready median / p95 (ms) | 8.817 / **9.305** | 8.729 / 10.720 | **8.324** / 11.937 | 9.880 / 13.973 | 9.286 / 14.923 | 9.264 / 14.045 |
 | Idle physical footprint (MiB) | **29.4** | 73.7 | 94.4 | 66.1 | 45.4 | 46.1 |
-| App allocation (KiB) | **1011.3** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
+| App allocation (KiB) | **1011.7** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
 
 Termatica leads all 15 throughput workloads and has a 144.8 MB/s geometric mean across them, versus 72.7 MB/s for the next result. Ghostty retains the lowest startup median. See the [full methodology and limitations](docs/BENCHMARKS.md).
 
@@ -197,7 +197,7 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- CI-built universal app allocation: **1011.3 KiB** (**1,035,621 bytes**) — under 1 MiB
+- CI-built universal app allocation: **1011.7 KiB** (**1,035,956 bytes**) — under 1 MiB
 - Clean one-tab physical footprint: **29.4 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**

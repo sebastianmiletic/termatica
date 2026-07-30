@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.5
+
+- Removed the bare default zsh prompt (`%`) and replaced it with a clean directory prompt (`<dir> ❯`) when the user has not customized their prompt.
+- Reaffirmed all prior 1.2.x updates: in-terminal benchmark (`t b`), black rounded-corner icon, Option keybindings, dead code removal, and prompt anchoring to the top of the window.
+
 ## 1.2.4
 
 - Added `termatica bench` (`t b`) to benchmark Termatica in-place. It warns that it will close open terminal sessions, runs parser, render, and scrollback throughput workloads, then displays a results table comparing your Termatica numbers against the published six-terminal reference (Kitty, Ghostty, Alacritty, WezTerm, Rio) and reopens the app.

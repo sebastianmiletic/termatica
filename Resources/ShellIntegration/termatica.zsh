@@ -2,6 +2,13 @@ if [[ -o interactive && -z "${TERMATICA_SHELL_INTEGRATION_ACTIVE:-}" ]]; then
   typeset -g TERMATICA_SHELL_INTEGRATION_ACTIVE=1
   autoload -Uz add-zsh-hook
 
+  # Replace zsh's bare default "%m%# " prompt (which shows just "%") with a
+  # clean directory prompt. Only applies when the default is unchanged.
+  if [[ -z "${TERMATICA_PROMPT_DEFAULTED:-}" && "${PROMPT:-}" == "%m%# " && "${PS1:-}" == "%m%# " ]]; then
+    typeset -g TERMATICA_PROMPT_DEFAULTED=1
+    PROMPT='%F{242}%~%f ❯ '
+  fi
+
   _termatica_precmd() {
     local command_status=$?
     printf '\e]133;D;%d\a\e]133;A\a\e]7;file://%s%s\a' \
