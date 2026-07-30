@@ -819,7 +819,7 @@ static int TRunCLI(int argc, const char *argv[]) {
     NSDictionary *quick=@{@"c":@"config",@"cf":@"config-file",@"u":@"update",@"r":@"reload",@"e":@"editor",@"x":@"run",@"h":@"help",@"v":@"version",@"b":@"bench"};
     arg=quick[arg]?:arg;
     if([arg isEqual:@"--help"]||[arg isEqual:@"-h"]||[arg isEqual:@"help"]){
-        fprintf(stdout,"Termatica %s\n\nUSAGE\n  t <command> [arguments]\n  termatica <command> [arguments]\n\nQUICK\n  t c                Open config files and settings\n  t cf               Open config.json\n  t u [check]        Update or check for an update\n  t r                Reload saved configuration\n  t e <name> ...     Run a terminal editor\n  t x <name> [text]  Run an enabled extension command\n  t b                Benchmark Termatica (closes open sessions)\n  t h / t v          Help / version\n\nCONFIGURATION\n  config             Open the complete categorized terminal config UI\n  config-file        Open the authoritative config.json\n  config-file path   Print the authoritative config path\n\nUPDATES\n  update             Download, verify, and install the latest GitHub release\n  update check       Check GitHub without installing\n\nTOOLS\n  reload             Reload saved configuration in the running app\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro, or Helix\n  run <name> [text]  Run an enabled extension command\n  bench              Benchmark Termatica\n  completions        Generate or install shell completions\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n",TCurrentVersion().UTF8String);return 0;
+        fprintf(stdout,"Termatica %s\n\nUSAGE\n  t <command> [arguments]\n  termatica <command> [arguments]\n\nQUICK\n  t c                Open config files and settings\n  t cf               Open config.json\n  t u [check]        Update or check for an update\n  t r                Reload saved configuration\n  t e <name> ...     Run a terminal editor\n  t x <name> [text]  Run an enabled extension command\n  t b                Benchmark Termatica parser, render, and scrollback\n  t h / t v          Help / version\n\nCONFIGURATION\n  config             Open the complete categorized terminal config UI\n  config-file        Open the authoritative config.json\n  config-file path   Print the authoritative config path\n\nUPDATES\n  update             Download, verify, and install the latest GitHub release\n  update check       Check GitHub without installing\n\nTOOLS\n  reload             Reload saved configuration in the running app\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro, or Helix\n  run <name> [text]  Run an enabled extension command\n  bench              Benchmark Termatica\n  completions        Generate or install shell completions\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n",TCurrentVersion().UTF8String);return 0;
     }
     if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fprintf(stdout,"Termatica %s\n",TCurrentVersion().UTF8String);return 0;}
     if([arg isEqual:@"editor"]||[arg isEqual:@"--editor"]||[arg isEqual:@"edit"]||[arg isEqual:@"--edit"])return TRunEditorCLI(argc,argv);
@@ -2316,7 +2316,7 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
     if((self=[super initWithWindow:nil])){_config=config;_extensions=extensions;_terminals=[NSMutableArray array];_tabButtons=[NSMutableArray array];
         TTerminalView *terminal=[self newTerminalDeferred:YES];[_terminals addObject:terminal];[terminal startShell];self.terminal=terminal;self.extensions.activeTerminal=terminal;
         NSWindow *window=[[TTerminalWindow alloc]initWithContentRect:NSMakeRect(0,0,config->initialWindowWidth,config->initialWindowHeight) styleMask:NSWindowStyleMaskTitled|NSWindowStyleMaskClosable|NSWindowStyleMaskMiniaturizable|NSWindowStyleMaskResizable backing:NSBackingStoreBuffered defer:NO];self.window=window;
-        window.delegate=(id)self;window.title=@"Termatica";window.titleVisibility=NSWindowTitleHidden;window.titlebarAppearsTransparent=YES;window.styleMask|=NSWindowStyleMaskFullSizeContentView;window.minSize=NSMakeSize(config->minimumWindowWidth,config->minimumWindowHeight);window.tabbingMode=NSWindowTabbingModeDisallowed;window.movableByWindowBackground=NO;[window center];
+        window.delegate=(id)self;window.title=@"Termatica";window.titleVisibility=NSWindowTitleHidden;window.titlebarAppearsTransparent=YES;window.styleMask|=NSWindowStyleMaskFullSizeContentView;window.minSize=NSMakeSize(config->minimumWindowWidth,config->minimumWindowHeight);window.tabbingMode=NSWindowTabbingModeDisallowed;window.movableByWindowBackground=NO;window.restorable=NO;[window center];
         _root=[[NSView alloc]initWithFrame:window.contentView.bounds];_root.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;window.contentView=_root;
         _tabRail=[[TTabRailView alloc]initWithFrame:NSZeroRect];_tabRail.config=config;_tabRail.wantsLayer=YES;[_root addSubview:_tabRail];
         _tabEdge=[[TTabEdgeView alloc]initWithFrame:NSZeroRect];_tabEdge.config=config;_tabEdge.wantsLayer=YES;_tabEdge.hidden=YES;_tabEdge.alphaValue=0;[_root addSubview:_tabEdge positioned:NSWindowAbove relativeTo:nil];
@@ -2750,16 +2750,14 @@ static int TRunExperienceBenchmark(NSUInteger requestedFrames,double requestedSe
 #endif
 
 static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
-    (void)argc;(void)argv;
+    (void)argc;(void)argv;(void)config;
     if(!isatty(STDIN_FILENO)||!isatty(STDOUT_FILENO)){fputs("termatica bench: run this command inside the Termatica terminal.\n",stderr);return 2;}
     fputs("\033[2J\033[H\033[38;2;235;128;60m  >_ TERMATICA // BENCHMARK\033[0m\n\n",stdout);
-    fputs("\033[38;2;235;128;60m  WARNING\033[0m  Closes all open terminal sessions and restarts the app.\n",stdout);
-    fputs("         Measures parser, render, and scrollback throughput here.\n\n",stdout);
-    fputs("\033[38;2;216;222;233m  Continue? [y/N] \033[0m",stdout);fflush(stdout);
-    char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)||!(answer[0]=='y'||answer[0]=='Y')){fputs("  cancelled.\n",stdout);return 130;}
+    fputs("\033[38;2;107;114;128m  Measures Termatica parser, render, and scrollback throughput in-process.\033[0m\n",stdout);
+    fputs("\033[38;2;107;114;128m  Results are compared against the published six-terminal reference.\033[0m\n\n",stdout);
+    fputs("\033[38;2;216;222;233m  Press Enter to start (or Q to cancel)... \033[0m",stdout);fflush(stdout);
+    char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)){fputs("  cancelled.\n",stdout);return 130;}if(answer[0]=='q'||answer[0]=='Q'){fputs("  cancelled.\n",stdout);return 130;}
     fputs("\n",stdout);
-    TPostCLICommand(@"quit");
-    sleep(1);
     [TApplication sharedApplication];
     TConfig *benchConfig=[TConfig new];benchConfig.scrollback=10000;benchConfig.fontSize=11;benchConfig.fontName=@"Monaco";benchConfig.unicodeRendering=YES;
     TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,1200,800) config:benchConfig];

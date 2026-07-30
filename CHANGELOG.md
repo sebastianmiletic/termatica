@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.2.6
+
+- Fixed `termatica bench` (`t b`): it no longer quits the running app. The benchmark now runs in-process without closing terminal sessions, measures parser/render/scrollback throughput, shows the results table vs the six-terminal reference, and reopens the app on Enter.
+- The terminal prompt now returns to the top of the window on every launch; the window is non-restorable so previous position is not saved.
+- The app (Dock) icon is now the grey version, while the GitHub repository logo stays the black version.
+- Rendering path verified intact (AppKit present + drawRect pipeline).
+
 ## 1.2.5
 
 - Removed the bare default zsh prompt (`%`) and replaced it with a clean directory prompt (`<dir> ❯`) when the user has not customized their prompt.
