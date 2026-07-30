@@ -24,7 +24,7 @@ The current universal app is **1029.3 KiB**, uses **29.4 MiB** of memory at idle
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.3.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.3.2, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|

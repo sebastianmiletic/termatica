@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.2
+
+- Fixed `termatica bench` closing the app but not running the benchmark. The helper is now launched in a new macOS Terminal window via `osascript` (instead of `open` which failed to execute the script). Also added a "Continue?" confirmation after the first-run helper install.
+
 ## 1.3.1
 
 - Fixed `termatica bench` helper install failing on first run (the Application Support directory was not being created).
