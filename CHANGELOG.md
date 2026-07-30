@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.2.4
+
+- Added `termatica bench` (`t b`) to benchmark Termatica in-place. It warns that it will close open terminal sessions, runs parser, render, and scrollback throughput workloads, then displays a results table comparing your Termatica numbers against the published six-terminal reference (Kitty, Ghostty, Alacritty, WezTerm, Rio) and reopens the app.
+- Reaffirmed the prompt anchoring to the top of the terminal window.
+
 ## 1.2.3
 
 - Anchored the prompt to the top of the terminal window. Content no longer reserves the title-bar safe area as empty space, so the command line sits at the top where it belongs.

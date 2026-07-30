@@ -24,7 +24,7 @@ The current universal app is **1011.3 KiB**, uses **29.4 MiB** of memory at idle
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.3, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.4, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
@@ -197,7 +197,7 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- CI-built universal app allocation: **1011.3 KiB** (**1,035,557 bytes**) — under 1 MiB
+- CI-built universal app allocation: **1011.3 KiB** (**1,035,621 bytes**) — under 1 MiB
 - Clean one-tab physical footprint: **29.4 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
