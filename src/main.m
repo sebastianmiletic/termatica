@@ -2753,14 +2753,16 @@ static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
     (void)argc;(void)argv;(void)config;
     if(!isatty(STDIN_FILENO)||!isatty(STDOUT_FILENO)){fputs("termatica bench: run this command inside the Termatica terminal.\n",stderr);return 2;}
     fputs("\033[2J\033[H\033[38;2;235;128;60m  >_ TERMATICA // BENCHMARK\033[0m\n\n",stdout);
-    fputs("\033[38;2;107;114;128m  Measures Termatica parser, render, and scrollback throughput in-process.\033[0m\n",stdout);
-    fputs("\033[38;2;107;114;128m  Results are compared against the published six-terminal reference.\033[0m\n\n",stdout);
+    fputs("\033[38;2;107;114;128m  Measures the real Termatica parser, render, and scrollback throughput.\033[0m\n",stdout);
+    fputs("\033[38;2;107;114;128m  Each workload runs 1 warmup pass then 5 measured passes; results show the median.\033[0m\n",stdout);
+    fputs("\033[38;2;107;114;128m  Results are compared against the published six-terminal reference (Apple M4).\033[0m\n\n",stdout);
     fputs("\033[38;2;216;222;233m  Press Enter to start (or Q to cancel)... \033[0m",stdout);fflush(stdout);
     char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)){fputs("  cancelled.\n",stdout);return 130;}if(answer[0]=='q'||answer[0]=='Q'){fputs("  cancelled.\n",stdout);return 130;}
     fputs("\n",stdout);
-    [TApplication sharedApplication];
+    TApplication *app=[TApplication sharedApplication];[app setActivationPolicy:NSApplicationActivationPolicyAccessory];
     TConfig *benchConfig=[TConfig new];benchConfig.scrollback=10000;benchConfig.fontSize=11;benchConfig.fontName=@"Monaco";benchConfig.unicodeRendering=YES;
     TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,1200,800) config:benchConfig];
+    [terminal preparePresentation];
     NSArray<NSDictionary *> *cases=@[
         @{@"name":@"Parser ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n"},
         @{@"name":@"Parser Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal decoding\r\n"},
@@ -2768,34 +2770,40 @@ static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
     ];
     NSUInteger benchBytes=33554432;double measured[9]={0};
     NSBitmapImageRep *bitmap=[terminal bitmapImageRepForCachingDisplayInRect:terminal.bounds];
-    fputs("\033[38;2;122;162;247m  Benchmarking...\033[0m\r",stdout);fflush(stdout);
+    double(^TMedian)(double*,NSUInteger)=^double(double *v,NSUInteger n){for(NSUInteger i=0;i<n;i++)for(NSUInteger j=i+1;j<n;j++)if(v[j]<v[i]){double t=v[i];v[i]=v[j];v[j]=t;}return v[n/2];};
+    fputs("\033[38;2;122;162;247m  Running benchmarks (1 at a time)...\033[0m\n\n",stdout);fflush(stdout);
     for(NSUInteger c=0;c<3;c++){
         NSData *pattern=[cases[c][@"pattern"] dataUsingEncoding:NSUTF8StringEncoding];NSMutableData *chunk=[NSMutableData dataWithCapacity:32768];while(chunk.length+pattern.length<=32768)[chunk appendData:pattern];
-        NSUInteger consumed=0;CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();
-        while(consumed<benchBytes){NSUInteger take=MIN(chunk.length,benchBytes-consumed);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;}
-        measured[c]=(double)consumed/1048576.0/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start);
-        if(bitmap){[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];NSUInteger frames=120;consumed=0;double total=0;
-            for(NSUInteger f=0;f<frames;f++){NSUInteger take=MIN(chunk.length,32768);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;CFAbsoluteTime s=CFAbsoluteTimeGetCurrent();[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];total+=CFAbsoluteTimeGetCurrent()-s;}
-            measured[3+c]=(double)consumed/1048576.0/MAX(0.000001,total);
+        fputs("\033[38;2;216;222;233m  > Parser pass...\033[0m\r",stdout);fflush(stdout);
+        {NSUInteger consumed=0;while(consumed<benchBytes){NSUInteger take=MIN(chunk.length,benchBytes-consumed);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;}}
+        double samples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger consumed=0;CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();while(consumed<benchBytes){NSUInteger take=MIN(chunk.length,benchBytes-consumed);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;}samples[r]=(double)consumed/1048576.0/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start);}
+        measured[c]=TMedian(samples,5);
+        if(bitmap){
+            [terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];
+            fputs("\033[K\033[38;2;216;222;233m  > Render pass...\033[0m\r",stdout);fflush(stdout);
+            {NSUInteger frames=120;for(NSUInteger f=0;f<frames;f++){NSUInteger take=MIN(chunk.length,32768);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
+            double rsamples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger frames=120,consumed=0;double total=0;for(NSUInteger f=0;f<frames;f++){NSUInteger take=MIN(chunk.length,32768);[terminal consumeData:take==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,take)]];consumed+=take;CFAbsoluteTime s=CFAbsoluteTimeGetCurrent();[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];total+=CFAbsoluteTimeGetCurrent()-s;}rsamples[r]=(double)consumed/1048576.0/MAX(0.000001,total);}
+            measured[3+c]=TMedian(rsamples,5);
+            fputs("\033[K\033[38;2;216;222;233m  > Scrollback pass...\033[0m\r",stdout);fflush(stdout);
             NSMutableString *history=[NSMutableString string];for(NSUInteger i=0;i<5000;i++)if(pattern)[history appendFormat:@"%@",[[NSString alloc]initWithData:pattern encoding:NSUTF8StringEncoding]];
-            [terminal consumeData:[history dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:5000];NSUInteger iterations=100;start=CFAbsoluteTimeGetCurrent();
-            for(NSUInteger i=0;i<iterations;i++){[terminal scrollByLines:(i%2)?1:-1];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}
-            measured[6+c]=(double)iterations/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start)*pattern.length/1048576.0;
+            [terminal consumeData:[history dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:5000];
+            {NSUInteger iterations=100;for(NSUInteger i=0;i<iterations;i++){[terminal scrollByLines:(i%2)?1:-1];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
+            double ssamples[5]={0};for(NSUInteger r=0;r<5;r++){NSUInteger iterations=100;CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();for(NSUInteger i=0;i<iterations;i++){[terminal scrollByLines:(i%2)?1:-1];[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}ssamples[r]=(double)iterations/MAX(0.000001,CFAbsoluteTimeGetCurrent()-start)*pattern.length/1048576.0;}
+            measured[6+c]=TMedian(ssamples,5);
         }
-        fprintf(stdout,"\033[K\033[38;2;152;195;121m  %-18s %6.1f %6.1f %6.1f\033[0m\r",cases[c][@"name"],measured[c],measured[3+c],measured[6+c]);fflush(stdout);
+        fprintf(stdout,"\033[K\033[38;2;152;195;121m  %-18s  parser %7.1f  render %7.1f  scroll %7.1f MB/s\033[0m\n",[cases[c][@"name"] UTF8String],measured[c],measured[3+c],measured[6+c]);fflush(stdout);
     }
-    fputs("\033[K\033[2J\033[H",stdout);
+    fputs("\n\033[K\033[2J\033[H",stdout);
     static const char *benchLabels[]={"Parser ASCII","Parser Unicode","Parser CSI-heavy","Render ASCII","Render Unicode","Render CSI-heavy","Scrollback ASCII","Scrollback Unicode","Scrollback CSI-heavy"};
     static const double benchRef[9][5]={{74.2,54.1,56.3,18.2,67.5},{101.6,78.9,57.0,15.2,49.5},{32.2,31.2,36.6,6.7,33.3},{73.7,56.9,82.4,11.1,122.2},{22.8,86.0,106.0,14.0,2.9},{32.4,26.3,49.7,2.0,41.6},{59.0,56.2,66.6,6.9,65.9},{83.6,79.3,88.5,8.4,29.9},{43.0,30.1,50.4,4.0,35.2}};
     fputs("\033[38;2;235;128;60m  >_ TERMATICA // BENCHMARK RESULTS\033[0m\n\n",stdout);
-    fputs("\033[38;2;107;114;128m  MB/s, higher is better. Competitor values are the published reference (Apple M4).\033[0m\n\n",stdout);
+    fputs("\033[38;2;107;114;128m  MB/s, higher is better. Termatica values are the median of 5 passes on this machine.\033[0m\n",stdout);
+    fputs("\033[38;2;107;114;128m  Competitor values are the published reference (Apple M4, 2026-07-29).\033[0m\n\n",stdout);
     fputs("  \033[48;2;43;52;69m\033[38;2;238;241;245m Benchmark                        Termatica    Kitty   Ghostty Alacritty WezTerm      Rio \033[0m\n",stdout);
     for(NSUInteger i=0;i<9;i++)fprintf(stdout,"  %-28s \033[38;2;152;195;121m%7.1f\033[0m    %5.1f   %6.1f    %6.1f   %6.1f   %6.1f\n",benchLabels[i],measured[i],benchRef[i][0],benchRef[i][1],benchRef[i][2],benchRef[i][3],benchRef[i][4]);
-    fputs("\n\033[38;2;107;114;128m  Termatica values are live; competitor values are the published reference.\033[0m\n",stdout);
-    fputs("\n\033[38;2;216;222;233m  Press Enter to reopen Termatica...\033[0m",stdout);fflush(stdout);
+    fputs("\n\033[38;2;107;114;128m  Benchmark complete. Termatica values are recorded above.\033[0m\n",stdout);
+    fputs("\n\033[38;2;216;222;233m  Press Enter to return to your terminal...\033[0m",stdout);fflush(stdout);
     char wait[2]={0};if(fgets(wait,sizeof(wait),stdin)){(void)wait;}
-    NSString *appPath=[[[NSBundle mainBundle] bundlePath] stringByStandardizingPath];
-    if(appPath)[NSTask launchedTaskWithLaunchPath:@"/usr/bin/open" arguments:@[appPath]];
     return 0;
 }
 

@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.2.7
+
+- Reworked `termatica bench` (`t b`) to run as a background utility process (no Dock icon, no bouncing, no spawning a second app copy). It uses the running Termatica binary in-process.
+- The benchmark now runs one workload at a time with 1 warmup pass + 5 measured passes per workload, records the median, and prints progress for each pass (Parser → Render → Scrollback).
+- It no longer reopens a new app copy at the end; it just returns you to your terminal after showing the results table.
+
 ## 1.2.6
 
 - Fixed `termatica bench` (`t b`): it no longer quits the running app. The benchmark now runs in-process without closing terminal sessions, measures parser/render/scrollback throughput, shows the results table vs the six-terminal reference, and reopens the app on Enter.
