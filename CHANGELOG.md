@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.2.2
+
+- Lightened the app icon and GitHub repository logo from pure black to a grey background so it reads as grey and white. Rounded corners are retained.
+
 ## 1.2.1
 
 - Replaced the app icon and GitHub repository logo with a new rounded-corner Termatica wordmark. The Dock icon, `AppIcon.icns`, `AppIcon.png`, `AppIcon-1024.png`, `AppIcon-source.png`, and the embedded `AppIcon.svg` all use the new logo with rounded corners.
