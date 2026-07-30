@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="Resources/AppIcon.png" width="156" alt="Termatica white lightning bolt">
+  <img src="Resources/AppIcon.png" width="156" alt="Termatica">
 </p>
 
 <h1 align="center">Termatica</h1>
