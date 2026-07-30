@@ -10,7 +10,7 @@
   "appearance": {
     "backgroundOpacity": 0.94,
     "windowOpacity": 1,
-    "blur": false,
+    "blur": "off",
     "blurMaterial": "hud",
     "glow": 0.22,
     "scanlines": 0.12,

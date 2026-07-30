@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>The best overall-performing macOS terminal in our six-terminal benchmark—native, under 1 MiB, and shell-ready in 8.8 ms.</strong></p>
+<p align="center"><strong>The best overall-performing macOS terminal in our six-terminal benchmark—native, just over 1 MiB, and shell-ready in 8.8 ms.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -20,11 +20,11 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The CI-built universal app is **984.1 KiB**, uses **29.4 MiB** of memory at idle, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.817 ms median / 9.305 ms p95**.
+The current universal app is **1058.9 KiB**, uses **29.4 MiB** of memory at idle, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.817 ms median / 9.305 ms p95**.
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.2.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
@@ -45,7 +45,7 @@ Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same worklo
 | Scrollback CSI-heavy (MB/s) | **92.6** | 43.0 | 30.1 | 50.4 | 4.0 | 35.2 |
 | Shell-ready median / p95 (ms) | 8.817 / **9.305** | 8.729 / 10.720 | **8.324** / 11.937 | 9.880 / 13.973 | 9.286 / 14.923 | 9.264 / 14.045 |
 | Idle physical footprint (MiB) | **29.4** | 73.7 | 94.4 | 66.1 | 45.4 | 46.1 |
-| App allocation (KiB) | **984.1** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
+| App allocation (KiB) | **1058.9** | 160,080 | 63,484 | 14,328 | 275,100 | 41,992 |
 
 Termatica leads all 15 throughput workloads and has a 144.8 MB/s geometric mean across them, versus 72.7 MB/s for the next result. Ghostty retains the lowest startup median. See the [full methodology and limitations](docs/BENCHMARKS.md).
 
@@ -58,14 +58,14 @@ Termatica leads all 15 throughput workloads and has a 144.8 MB/s geometric mean 
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
 - Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Codex-compatible Kitty keyboard handling (flags 0-31 + REP), modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
 - Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, Codex inline-viewport routing, and a visible position indicator
-- One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus
-- Plain JSON settings that remain user- and AI-readable after installation
+- One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
+- Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Named configs that can be created, switched, renamed, and deleted without leaving the terminal
 - Native numbered tabs and optional Hyprland-style terminal tiling
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
 - Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, and bounded PTY backpressure
-- Safe workspace restoration for windows, layouts, active panes, and working directories without persisting terminal output or live processes
+- A guaranteed fresh start: every launch opens one new blank terminal and never restores terminal output, processes, tabs, layouts, paths, or window state
 - Automatic shell integration, OSC 133 prompt navigation, inherited working directories, permission-controlled OSC 52 clipboard access, unsafe-paste protection, and Secure Keyboard Entry for no-echo prompts
 - Built-in GitHub updater with launch-time update notification, bounded downloads, archive path/size validation, asset digest verification, code-signature validation, staged replacement, and rollback on installation failure
 - User-owned `0600` control sockets plus contained, owner-checked extension executables and bounded extension output
@@ -88,7 +88,7 @@ t u check
 t u
 ```
 
-`t` is the fast command. Common abbreviations are `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available.
+`t` is the fast command. Common abbreviations are `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
 
 | Command | Purpose |
 |---|---|
@@ -120,6 +120,8 @@ See the complete [CLI reference](docs/CLI.md).
 ## Configuration
 
 `termatica config` always opens on Config Files first. The initial screen shows the current config once, then lists only the other saved JSON configs, with New, Rename, and Delete actions. Enter opens the current config's settings; Enter on a saved config makes it current and then opens its settings. Creating a config also makes it current and moves directly into settings.
+
+Boolean settings are direct toggles. The terminal UI shows `ON` or `OFF`, and config files store the matching lowercase strings `"on"` or `"off"` instead of numeric or JSON boolean values.
 
 Settings are grouped into:
 
@@ -195,7 +197,7 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- CI-built universal app allocation: **984.1 KiB** (**1,007,758 bytes**) — under 1 MiB
+- CI-built universal app allocation: **1058.9 KiB** (**1,084,301 bytes**) — just over 1 MiB, reflecting the new rounded-corner icon
 - Clean one-tab physical footprint: **29.4 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**

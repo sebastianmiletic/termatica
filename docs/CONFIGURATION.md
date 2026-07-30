@@ -1,6 +1,8 @@
 # Termatica Configuration
 
-All settings live at `~/.config/termatica/config.json`. Named configs are stored in `~/.config/termatica/configs/*.json`. The config is plain JSON — user- and AI-readable. Changes can be made by a person, shell script, or coding agent. Run `t r` to reload, or just save the file — Termatica watches it for changes.
+All settings live at `~/.config/termatica/config.json`. Named configs are stored in `~/.config/termatica/configs/*.json`. The config is plain JSON and user- and AI-readable. Toggle values are always `"on"` or `"off"`, never `0`, `1`, `true`, or `false`. Changes can be made by a person, shell script, or coding agent. Run `t r` to reload, or just save the file. Termatica watches it for changes.
+
+Run `termatica config` for the interactive editor. Use Up/Down to select any setting and Left/Right (or Enter) to cycle through validated values. Press Escape or Q to go back from every Termatica menu. The settings editor never asks you to type a custom value; config-file names remain the only text-entry operation.
 
 ## Full config reference
 
@@ -14,66 +16,109 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
   "textColorMode": "ansi",
   "fontName": "Monaco",
   "fontSize": 11,
-  "padding": 8,
+  "padding": 12,
   "fontFeatures": ["calt", "liga"],
   "colors": {
+    "background": "#101216",
     "foreground": "#D8DEE9",
     "cursor": "#EEF1F5",
     "accent": "#7AA2F7",
     "panel": "#151820",
     "muted": "#6B7280",
     "selection": "#2B3445",
-    "palette": ["# hari", "# ..."16ANSIcolors"...]
+    "palette": ["# hari", "# ..."16ANSIcolors"...],
     "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]
   },
   "appearance": {
     "backgroundOpacity": 1.0,
     "windowOpacity": 1.0,
-    "blur": false,
+    "blur": "off",
+    "blurMaterial": "hud",
     "glow": 0,
     "scanlines": 0,
     "vignette": 0,
     "cursorStyle": "block",
     "renderer": "appkit"
   },
+  "window": {
+    "initialWidth": 580,
+    "initialHeight": 350,
+    "minimumWidth": 480,
+    "minimumHeight": 280,
+    "cornerRadius": 14,
+    "tileCornerRadius": 14,
+    "shadow": "off"
+  },
   "system": {
-    "restoreSession": true,
-    "pasteProtection": false,
-    "secureKeyboard": true,
-    "shellIntegration": true,
+    "pasteProtection": "off",
+    "secureKeyboard": "on",
+    "shellIntegration": "on",
     "clipboardRead": "ask",
     "clipboardWrite": "allow",
     "bellStyle": "sound"
   },
   "updates": {
-    "checkOnLaunch": true,
+    "checkOnLaunch": "on",
     "repository": "sebastianmiletic/termatica"
   },
   "plugins": {
-    "hello": false,
-    "pi-bridge": false,
-    "editor-deck": false,
-    "vim-control": false,
-    "neovim-control": false,
-    "emacs-control": false,
-    "nano-control": false,
-    "micro-control": false,
-    "helix-control": false,
-    "hidden-path": false,
-    "hyprland-layout": false,
-    "unicode-rendering": false,
-    "osc-integration": false,
-    "borderless-window": false
+    "hello": "off",
+    "pi-bridge": "off",
+    "editor-deck": "off",
+    "vim-control": "off",
+    "neovim-control": "off",
+    "emacs-control": "off",
+    "nano-control": "off",
+    "micro-control": "off",
+    "helix-control": "off",
+    "hidden-path": "off",
+    "hyprland-layout": "off",
+    "unicode-rendering": "off",
+    "osc-integration": "off",
+    "borderless-window": "off"
   },
   "tabs": {
     "railWidth": 34,
-    "animations": true,
+    "animations": "on",
     "animationSpeed": 1.35,
-    "autoHide": true,
+    "autoHide": "on",
     "hideDelay": 5,
     "tileGap": 10,
     "screenInset": 18,
-    "hyprlandBlur": false
+    "hyprlandBlur": "off",
+    "railMargin": 8,
+    "railCornerRadius": 11,
+    "buttonCornerRadius": 8,
+    "buttonFontSize": 11,
+    "buttonInset": 4,
+    "minimumHeight": 20,
+    "maximumHeight": 28,
+    "selectedOpacity": 0.22,
+    "hoverOpacity": 0.68,
+    "railOpacity": 0.96,
+    "railBlurOpacity": 0.26,
+    "edgeOpacity": 0.58,
+    "collapsedPeek": 7
+  },
+  "terminalUI": {
+    "cursorThickness": 2,
+    "cursorBlockOpacity": 0.42,
+    "cursorInactiveOpacity": 0.20,
+    "scrollbarWidth": 2.5,
+    "scrollbarMargin": 5,
+    "scrollbarMinimumThumb": 24,
+    "scrollbarOpacity": 0.42,
+    "scanlineSpacing": 4,
+    "scanlineThickness": 1,
+    "vignetteLayers": 6,
+    "searchWidth": 340,
+    "searchHeight": 28,
+    "searchCornerRadius": 6
+  },
+  "motion": {
+    "launchDuration": 0.30,
+    "terminalDuration": 0.18,
+    "layoutDuration": 0.12
   },
   "keybindings": {
     "openConfig": "cmd+,",
@@ -119,13 +164,14 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
 | `textColorMode` | string | `"ansi"` | `"ansi"` for standard colors, `"spectrum"` for per-token plain-text coloring |
 | `fontName` | string | `"Monaco"` | Font family name |
 | `fontSize` | integer | `11` | Font size in points (8–48) |
-| `padding` | integer | `8` | Terminal content padding in points (0–40) |
+| `padding` | integer | `12` | Terminal content padding in points (0–40) |
 | `fontFeatures` | array | `[]` | OpenType features: `"liga"`, `"calt"`, `"ss01"`, `"ss02"`, `"zero"` |
 
 ### Colors (nested under `"colors"`)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
+| `background` | hex | `#101216` | Terminal and window background |
 | `foreground` | hex | `#D8DEE9` | Default text color |
 | `cursor` | hex | `#EEF1F5` | Cursor color |
 | `accent` | hex | `#7AA2F7` | UI accent color (borders, highlights) |
@@ -141,21 +187,31 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
 |---|---|---|---|
 | `backgroundOpacity` | float | `1.0` | Terminal background opacity (0.0–1.0) |
 | `windowOpacity` | float | `1.0` | Window opacity (0.0–1.0) |
-| `blur` | boolean | `false` | Enable macOS vibrancy blur |
+| `blur` | toggle | `"off"` | Enable macOS vibrancy blur |
+| `blurMaterial` | string | `"hud"` | Vibrancy material: `hud`, `popover`, `sidebar`, `menu`, or `under-window` |
 | `glow` | float | `0` | Phosphor glow intensity (0.0–1.0) |
 | `scanlines` | float | `0` | CRT scanline intensity (0.0–1.0) |
 | `vignette` | float | `0` | Edge vignette intensity (0.0–1.0) |
 | `cursorStyle` | string | `"block"` | Cursor style: `"block"`, `"bar"`, or `"underline"` |
 | `renderer` | string | `"appkit"` | Rendering backend: `"appkit"` or opt-in `"metal"` |
 
+### Window & Surfaces (nested under `"window"`)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `initialWidth` / `initialHeight` | number | `580` / `350` | New-window dimensions |
+| `minimumWidth` / `minimumHeight` | number | `480` / `280` | Smallest allowed window dimensions |
+| `cornerRadius` | number | `14` | Main window corner radius |
+| `tileCornerRadius` | number | `14` | Split/tiled terminal corner radius |
+| `shadow` | toggle | `"off"` | Native window shadow |
+
 ### System (nested under `"system"`)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `restoreSession` | boolean | `true` | Restore window geometry, layout, and working directories on relaunch |
-| `pasteProtection` | boolean | `false` | Warn before pasting multiline content that may execute commands |
-| `secureKeyboard` | boolean | `true` | Enable macOS Secure Keyboard Entry when PTY echo is disabled (password prompts) |
-| `shellIntegration` | boolean | `true` | Install OSC 7/133 shell integration for prompt navigation and cwd tracking |
+| `pasteProtection` | toggle | `"off"` | Warn before pasting multiline content that may execute commands |
+| `secureKeyboard` | toggle | `"on"` | Enable macOS Secure Keyboard Entry when PTY echo is disabled (password prompts) |
+| `shellIntegration` | toggle | `"on"` | Install OSC 7/133 shell integration for prompt navigation and cwd tracking |
 | `clipboardRead` | string | `"ask"` | OSC 52 clipboard read policy: `"ask"`, `"allow"`, or `"deny"` |
 | `clipboardWrite` | string | `"allow"` | OSC 52 clipboard write policy: `"ask"`, `"allow"`, or `"deny"` |
 | `bellStyle` | string | `"sound"` | Bell behavior: `"sound"`, `"visual"`, `"both"`, or `"none"` |
@@ -164,42 +220,75 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `checkOnLaunch` | boolean | `true` | Check GitHub for new releases on app launch |
+| `checkOnLaunch` | toggle | `"on"` | Check GitHub for new releases on app launch |
 | `repository` | string | `"sebastianmiletic/termatica"` | GitHub repository for update checks |
 
 ### Plugins (nested under `"plugins"`)
 
-Built-in helper-free plugins. Each is a boolean toggle.
+Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 
 | Key | Default | Description |
 |---|---|---|
-| `hidden-path` | `false` | Replace the prompt with a short path indicator (`Coding/Project ;`) |
-| `hyprland-layout` | `false` | Enable Hyprland-style terminal tiling |
-| `unicode-rendering` | `false` | Full Unicode: wide glyphs, emoji, composed grapheme clusters |
-| `osc-integration` | `false` | OSC 7 cwd, OSC 8 hyperlinks, OSC 133 command marks |
-| `borderless-window` | `false` | Remove titlebar and traffic lights, keep rounded corners |
-| `hello` | `false` | Example plugin |
-| `pi-bridge` | `false` | Raspberry Pi bridge plugin |
-| `editor-deck` | `false` | Editor deck plugin |
-| `vim-control` | `false` | Vim control integration |
-| `neovim-control` | `false` | Neovim control integration |
-| `emacs-control` | `false` | Emacs control integration |
-| `nano-control` | `false` | Nano control integration |
-| `micro-control` | `false` | Micro control integration |
-| `helix-control` | `false` | Helix control integration |
+| `hidden-path` | `"off"` | Replace the prompt with a short path indicator (`Coding/Project ;`) |
+| `hyprland-layout` | `"off"` | Enable Hyprland-style terminal tiling |
+| `unicode-rendering` | `"off"` | Full Unicode: wide glyphs, emoji, composed grapheme clusters |
+| `osc-integration` | `"off"` | OSC 7 cwd, OSC 8 hyperlinks, OSC 133 command marks |
+| `borderless-window` | `"off"` | Remove titlebar and traffic lights, keep rounded corners |
+| `hello` | `"off"` | Example plugin |
+| `pi-bridge` | `"off"` | Raspberry Pi bridge plugin |
+| `editor-deck` | `"off"` | Editor deck plugin |
+| `vim-control` | `"off"` | Vim control integration |
+| `neovim-control` | `"off"` | Neovim control integration |
+| `emacs-control` | `"off"` | Emacs control integration |
+| `nano-control` | `"off"` | Nano control integration |
+| `micro-control` | `"off"` | Micro control integration |
+| `helix-control` | `"off"` | Helix control integration |
 
 ### Tabs (nested under `"tabs"`)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
 | `railWidth` | integer | `34` | Tab rail width in points |
-| `animations` | boolean | `true` | Enable tab and window animations |
+| `animations` | toggle | `"on"` | Enable tab and window animations |
 | `animationSpeed` | float | `1.35` | Animation speed multiplier |
-| `autoHide` | boolean | `true` | Auto-hide the tab rail when only one tab is open |
+| `autoHide` | toggle | `"on"` | Auto-hide the tab rail when only one tab is open |
 | `hideDelay` | integer | `5` | Seconds before auto-hiding the tab rail |
 | `tileGap` | integer | `10` | Gap between Hyprland tiles in points |
 | `screenInset` | integer | `18` | Edge inset for Hyprland tiles in points |
-| `hyprlandBlur` | boolean | `false` | Enable blur for Hyprland tiles |
+| `hyprlandBlur` | toggle | `"off"` | Enable blur for Hyprland tiles |
+| `railMargin` | number | `8` | Outer tab-rail margin |
+| `railCornerRadius` | number | `11` | Tab-rail corner radius |
+| `buttonCornerRadius` | number | `8` | Tab-button corner radius |
+| `buttonFontSize` | number | `11` | Tab-button font size |
+| `buttonInset` | number | `4` | Tab-button inner inset |
+| `minimumHeight` / `maximumHeight` | number | `20` / `28` | Tab-item height limits |
+| `selectedOpacity` | float | `0.22` | Selected-tab fill opacity |
+| `hoverOpacity` | float | `0.68` | Hover highlight opacity |
+| `railOpacity` / `railBlurOpacity` | float | `0.96` / `0.26` | Solid and blurred rail opacity |
+| `edgeOpacity` | float | `0.58` | Rail-edge separator opacity |
+| `collapsedPeek` | number | `7` | Visible rail width while collapsed |
+
+### Terminal UI (nested under `"terminalUI"`)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `cursorThickness` | number | `2` | Bar and underline cursor thickness |
+| `cursorBlockOpacity` / `cursorInactiveOpacity` | float | `0.42` / `0.20` | Active block and inactive cursor opacity |
+| `scrollbarWidth` / `scrollbarMargin` | number | `2.5` / `5` | Scrollback indicator geometry |
+| `scrollbarMinimumThumb` | number | `24` | Minimum scrollback-thumb height |
+| `scrollbarOpacity` | float | `0.42` | Scrollback indicator opacity |
+| `scanlineSpacing` / `scanlineThickness` | number | `4` / `1` | CRT scanline geometry |
+| `vignetteLayers` | integer | `6` | Number of vignette edge layers |
+| `searchWidth` / `searchHeight` | number | `340` / `28` | Search overlay dimensions |
+| `searchCornerRadius` | number | `6` | Search overlay corner radius |
+
+### Motion (nested under `"motion"`)
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `launchDuration` | seconds | `0.30` | Window launch animation |
+| `terminalDuration` | seconds | `0.18` | New-terminal reveal animation |
+| `layoutDuration` | seconds | `0.12` | Tab and tiling layout animation |
 
 ### Keybindings (nested under `"keybindings"`)
 
@@ -244,7 +333,7 @@ Themes are JSON files in `~/.config/termatica/themes/` or the bundled `Resources
   "appearance": {
     "backgroundOpacity": 0.28,
     "windowOpacity": 1,
-    "blur": false,
+    "blur": "off",
     "glow": 0,
     "scanlines": 0,
     "vignette": 0,

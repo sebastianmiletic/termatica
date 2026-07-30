@@ -30,9 +30,9 @@ The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, 
   "appearance": {
     "backgroundOpacity": 0.50,
     "windowOpacity": 1,
-    "blur": true,
+    "blur": "on",
     "blurMaterial": "under-window",
-    "hyprlandBlur": true,
+    "hyprlandBlur": "on",
     "glow": 0.08,
     "scanlines": 0.02,
     "vignette": 0.08,
@@ -51,15 +51,15 @@ Colors use `#RRGGBB` or `#RRGGBBAA`. `palette` contains the standard 8 ANSI colo
 
 `plainTextPalette` is only used when the user explicitly selects `textColorMode: "spectrum"` in `config.json`. The default `ansi` mode keeps ordinary text on the single `foreground` color and lets shells, CLI tools, and editors choose colors through the normal ANSI palette.
 
-User-level `colors.foreground`, `colors.cursor`, and `colors.palette` values in `config.json` override those three theme tokens without copying or editing the theme file. Use `"theme"` to inherit, a precise hex value for foreground/cursor, or a complete 16-entry array for the ANSI palette.
+User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.accent`, `colors.panel`, `colors.muted`, `colors.selection`, and `colors.palette` values in `config.json` override those theme tokens without copying or editing the theme file. Use `"theme"` to inherit, a precise hex value for a color, or a complete 16-entry array for the ANSI palette.
 
 `appearance.hyprlandBlur` lets a transparent theme request the shared masked blur surface when terminals are tiled. An explicit `tabs.hyprlandBlur` setting in `config.json` always wins.
 
 ## Transparency recipes
 
-- Solid and fastest: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: false`.
-- Dark glass: `backgroundOpacity: 0.55`, `windowOpacity: 1`, `blur: true`, `blurMaterial: "hud"`.
-- Ghost Glass: `backgroundOpacity: 0.28`, `windowOpacity: 1`, `blur: true`, `blurMaterial: "under-window"`.
+- Solid and fastest: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: "off"`.
+- Dark glass: `backgroundOpacity: 0.55`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "hud"`.
+- Ghost Glass: `backgroundOpacity: 0.28`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "under-window"`.
 - Stronger background separation: lower `backgroundOpacity`, keep `windowOpacity: 1`, and use `blurMaterial: "under-window"`.
 
 macOS accessibility settings can reduce transparency system-wide. A theme should remain readable when blur is unavailable. Set `scanlines`, `glow`, and `vignette` to `0` for a clean pixel-terminal look.

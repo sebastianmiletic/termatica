@@ -45,7 +45,8 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 - Ordinary clicks only focus or begin native text selection. Application mouse coordinates require an explicit Option-click so mouse-aware TUIs cannot unexpectedly reposition their own cursor.
 - Command-T creates a terminal; Command-Shift-T splits below the focused terminal.
 - Command-1 through Command-9 selects terminals.
-- `termatica config` is the only interactive settings surface. It uses arrows or J/K, Enter for action, and Q to return or close.
+- `termatica config` is the only interactive settings surface. It uses arrows or J/K, Enter for action, and Escape or Q to return or close.
+- Toggle rows always show `ON` or `OFF`; Enter and Left/Right toggle them directly. Their JSON values are the matching readable strings `"on"` and `"off"`.
 - Config Files is the entry screen. Config selection and lifecycle actions happen before the categorized settings screen.
 - `termatica config-file` opens the single JSON source of truth for users, scripts, and coding agents.
 - Themes, plugins, saved configs, system behavior, updates, and keybindings are categories inside the unified terminal UI rather than separate menus.
@@ -56,5 +57,5 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 - PTYs remain independent and responsive; rendering is layer-backed, cell-damage-driven, dirty-row/run-batched, and coalesced to an 8 ms active refresh window.
 - Each terminal parses and mutates its locked screen model on an independent serial core queue. Printable ASCII is batched, screen/history storage is circular and reused, and PTY drains use bounded 32 KiB slices with backpressure.
 - Performance claims must include a repeatable workload and raw output; asynchronous parser acknowledgment is never labeled as visual rendering latency.
-- Workspace restoration recreates window geometry, terminal layout, active pane, and working directories. It never serializes output, credentials, or live process state.
+- Every app launch starts one fresh blank terminal in a new default window. Terminal output, processes, tabs, layouts, paths, cursors, scrollback, and window state are never persisted.
 - The universal app bundle stays below the 1 MiB release gate.

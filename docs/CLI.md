@@ -60,7 +60,7 @@ The next screen contains Themes, Text & Colour, Appearance, Tabs & Motion, Plugi
 | N | Create and open a new config |
 | R | Rename the selected config |
 | D | Delete the selected config after confirmation |
-| Q | Return to Config Files, or quit from Config Files |
+| Escape or Q | Return to Config Files, or quit from Config Files |
 
 Changes are saved and sent to the running app immediately. Config names may contain letters, numbers, dots, dashes, and underscores.
 

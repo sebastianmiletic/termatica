@@ -1,6 +1,22 @@
 # Changelog
 
+## 1.2.1
+
+- Replaced the app icon and GitHub repository logo with a new rounded-corner Termatica wordmark. The Dock icon, `AppIcon.icns`, `AppIcon.png`, `AppIcon-1024.png`, `AppIcon-source.png`, and the embedded `AppIcon.svg` all use the new logo with rounded corners.
+
 ## Unreleased
+
+- The interactive config now changes every setting with Left/Right arrows or Enter instead of opening typed-value prompts. Fonts, font features, colours, palettes, shells, shell arguments, renderer, bell behavior, update source, and all keybindings use validated choices; previously omitted runtime settings are now included.
+- Added arrow-editable UI controls for window and tile corner radii, window dimensions and shadow, tab-rail and button geometry, UI opacities, cursor and scrollback-indicator geometry, scanline/vignette geometry, search-overlay sizing, and all launch/layout motion timings. The AppKit and Metal renderers consume the same terminal UI values.
+- Escape now goes back everywhere Q does in the config and module terminal interfaces, while CSI and SS3 arrow keys remain fully supported.
+- Completely removed terminal persistence and its helper integration. Every launch now creates one fresh blank terminal in a new default window, without restoring terminal output, processes, tabs, layouts, paths, cursors, or window state.
+- Legacy `session.json` and saved screen data are deleted automatically, and the obsolete workspace-restore setting is removed from active and named configs.
+- Config toggles now render as `ON`/`OFF` in `termatica config` and serialize as readable `"on"`/`"off"` strings instead of `0`, `1`, `true`, or `false`.
+- Fixed primary and secondary device-attribute responses, with regression coverage.
+- Added complete VT100 DEC G0/G1 special-graphics handling, including SI/SO selection, so line and symbol bytes render as the intended Unicode characters instead of literal letters or charset designators.
+- Enabled native Finder file and folder drops on every terminal pane. Dropped paths are safely shell-quoted, multiple paths are space-separated, and bracketed-paste framing prevents supporting shells and TUIs from executing the drop unexpectedly.
+- Paste confirmation remains disabled by default; existing installations can enable the optional unsafe-paste warning with `termatica config set system.pasteProtection on`.
+- Fixed Codex inline-mode wheel scrolling opening the Ctrl-T transcript pager, which hid the composer bar and could leave the working-directory/header row displaced. Termatica now captures top-anchored partial-scroll-region output into native history and scrolls it locally while keeping Codex's live composer/status viewport pinned; regression coverage rejects all application input injection during these wheel gestures.
 
 ## 0.6.0
 

@@ -10,9 +10,9 @@
   "appearance": {
     "backgroundOpacity": 0.28,
     "windowOpacity": 1,
-    "blur": true,
+    "blur": "on",
     "blurMaterial": "under-window",
-    "hyprlandBlur": true,
+    "hyprlandBlur": "on",
     "glow": 0.06,
     "scanlines": 0.03,
     "vignette": 0.08,

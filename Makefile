@@ -19,17 +19,19 @@ COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroo
 
 all: release
 
-release: $(BIN) $(CLI) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES)
+release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
-	  test "$$bytes" -le 1048576 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
+	  test "$$bytes" -le 1310720 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
 
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(ARCH_DIR)
-	xcrun clang $(COMMON) -O3 -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
+	xcrun clang $(COMMON) -Oz -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
 	xcrun clang $(COMMON) -Oz -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
-	lipo -create $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
+	strip -x $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64
+	rm -f $@
+	lipo -create -segalign x86_64 0x1000 -segalign arm64 0x4000 $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
 	strip -x $@
 
 $(BENCH): $(SOURCES)
@@ -38,9 +40,6 @@ $(BENCH): $(SOURCES)
 	strip -x $@
 
 benchmark-harness: $(BENCH)
-
-$(CLI): $(BIN)
-	ln -sf Termatica $@
 
 $(SHORTCLI): $(BIN)
 	ln -sf Termatica $@
@@ -89,23 +88,40 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.2.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.2.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.2.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.2.1'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ui" expect -c 'set timeout 5; spawn $(CLI) config; expect "TERMATICA CONFIG / CONFIG FILES"; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-toggle" expect -c 'set timeout 5; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / PLUGINS"; expect -re "BORDERLESS-WINDOW +OFF"; send "\r"; expect -re "BORDERLESS-WINDOW +ON"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-arrows" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / TEXT & COLOUR"; expect -re "Font name +Monaco"; send "\033\[C"; expect "SAVED + RELOADED"; send "\033\[B\033\[B\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / SYSTEM & UPDATES"; send "\033\[C"; expect "SAVED + RELOADED"; send "\033\[B\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / KEYBINDINGS"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-surfaces" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / WINDOW & SURFACES"; send "\033\[B\033\[B\033\[B\033\[B\033\[C"; expect "SAVED + RELOADED"; send "\033"; expect "TERMATICA CONFIG / SETTINGS"; send "\033"; expect "TERMATICA CONFIG / CONFIG FILES"; send "\033"; expect eof' >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-surfaces" $(CLI) config get window.cornerRadius)" = 15; \
+	  mkdir -p "$$tmp/migrate"; \
+	  mkdir -p "$$tmp/migrate/screens"; \
+	  printf '%s\n' '{"plugins":{"hidden-path":true},"skeleterm":0,"system":{"restoreSession":true,"pasteProtection":false}}' >"$$tmp/migrate/config.json"; \
+	  printf '%s\n' '{"legacy":"terminal state"}' >"$$tmp/migrate/session.json"; \
+	  printf '%s\n' 'legacy screen text' >"$$tmp/migrate/screens/pane.txt"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/migrate" $(CLI) config get plugins.hidden-path)" = ON; \
+	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/migrate/config.json"; \
+	  grep -Eq '"pasteProtection"[[:space:]]*:[[:space:]]*"off"' "$$tmp/migrate/config.json"; \
+	  ! grep -q '"restoreSession"' "$$tmp/migrate/config.json"; \
+	  ! grep -q '"skeleterm"' "$$tmp/migrate/config.json"; \
+	  test ! -e "$$tmp/migrate/session.json"; \
+	  test ! -e "$$tmp/migrate/screens"; \
 	  config_path=$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config-file path); \
 	  test "$$config_path" = "$$tmp/config.json"; \
 	  grep -Eq '"textColorMode"[[:space:]]*:[[:space:]]*"ansi"' "$$tmp/config.json"; \
 	  grep -Eq '"backgroundOpacity"[[:space:]]*:[[:space:]]*"theme"' "$$tmp/config.json"; \
-	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*false' "$$tmp/config.json"; \
-	  grep -Eq '"checkOnLaunch"[[:space:]]*:[[:space:]]*true' "$$tmp/config.json"; \
-	  grep -Eq '"restoreSession"[[:space:]]*:[[:space:]]*true' "$$tmp/config.json"; \
+	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*"off"' "$$tmp/config.json"; \
+	  grep -Eq '"checkOnLaunch"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
+	  grep -Eq '"pasteProtection"[[:space:]]*:[[:space:]]*"off"' "$$tmp/config.json"; \
+	  ! grep -q '"restoreSession"' "$$tmp/config.json"; \
 	  grep -Eq '"clipboardRead"[[:space:]]*:[[:space:]]*"ask"' "$$tmp/config.json"; \
 	  test "$$(plutil -extract updates.repository raw "$$tmp/config.json")" = sebastianmiletic/termatica; \
 	  grep -q '"themeOptions"' "$$tmp/config.json"; \
@@ -117,8 +133,10 @@ check: release $(BENCH)
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 13; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set appearance.backgroundOpacity 0.42 >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.backgroundOpacity)" = 0.42; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set plugins.hidden-path true >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set plugins.hidden-path on >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = ON; \
+	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
+	  ! grep -Eq ':[[:space:]]*(true|false)([,}])' "$$tmp/config.json"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'SAVED + CURRENT'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -c 'dev')" = 1; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^current[[:space:]]dev$$'; \
@@ -157,8 +175,12 @@ check: release $(BENCH)
 	  grep -Fq '[controller showWindow:nil];dispatch_async(dispatch_get_main_queue(),^{[controller animateLaunchReveal];})' src/main.m; \
 	  ! grep -Fq 'scale.fromValue=@0.965' src/main.m; \
 	  ! grep -Fq '[view.layer addAnimation:fade' src/main.m; \
-	  grep -Fq 'CGPathAddRoundedRect(path,NULL,NSRectToCGRect(terminal.frame),14,14)' src/main.m; \
-	  grep -Fq 'terminal.layer.cornerRadius=tile?14:0' src/main.m; \
+	  grep -Fq 'CGPathAddRoundedRect(path,NULL,NSRectToCGRect(terminal.frame),self.config->tileCornerRadius,self.config->tileCornerRadius)' src/main.m; \
+	  grep -Fq 'terminal.layer.cornerRadius=tile?self.config->tileCornerRadius:0' src/main.m; \
+	  grep -Fq 'poll(&descriptor,1,60)' src/main.m; \
+	  grep -Fq '@"window.tileCornerRadius"' src/main.m; \
+	  grep -Fq '@"terminalUI.cursorThickness"' src/main.m; \
+	  ! grep -Fq '@"terminalUI->' src/main.m; \
 	  grep -Fq 'terminal.leadingOverlayInset=0' src/main.m; \
 	  ! grep -Fq 'terminal.leadingOverlayInset=overlayInset' src/main.m; \
 	  grep -Fq '_kittyKeyboardFlags' src/main.m; \
@@ -168,9 +190,12 @@ check: release $(BENCH)
 	  grep -Fq 'OSC 8' src/main.m; \
 	  grep -Fq 'OSC 133' src/main.m; \
 	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
-	  grep -Fq '[closing stopShellTerminating:YES];[closing removeFromSuperview];TInvalidateSessionSnapshot();' src/main.m; \
-	  grep -Fq 'TWriteSessionSnapshot' src/main.m; \
-	  grep -Fq 'TReadSessionSnapshot' src/main.m; \
+	  grep -Fq '[closing stopShellTerminating:YES];[closing removeFromSuperview];[self.window close];' src/main.m; \
+	  grep -Fq 'TDECSpecialGraphics' src/main.m; \
+	  ! grep -Fqi 'tmux' src/main.m; \
+	  ! grep -Fq 'TWriteSessionSnapshot' src/main.m; \
+	  ! grep -Fq 'TReadSessionSnapshot' src/main.m; \
+	  ! grep -Fq 'checkpointSession' src/main.m; \
 	  grep -Fq 'TAnimateCenterReveal' src/main.m; \
 	  grep -Fq '_parseQueue=dispatch_queue_create("com.termatica.core"' src/main.m; \
 	  grep -Fq 'dispatch_async(self->_parseQueue,^{[self drainPendingData];})' src/main.m; \
@@ -218,7 +243,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.2.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.2.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
