@@ -740,7 +740,7 @@ static NSString *TCompletionScript(NSString *shell) {
 }
 #endif
 static NSString *TCompletionScript(NSString *shell) {
-    NSString *commands=@"config config-file update reload editor run bench completions help version c cf u r e x h v b",*configActions=@"list get set create use rename delete",*editors=@"vim nvim emacs nano micro hx";
+    NSString *commands=@"config config-file update reload editor run completions help version c cf u r e x h v",*configActions=@"list get set create use rename delete",*editors=@"vim nvim emacs nano micro hx";
     if([shell isEqual:@"zsh"])return [NSString stringWithFormat:@"#compdef termatica t\nlocal -a commands\ncommands=(%@)\nif (( CURRENT == 2 )); then compadd -- $commands; return; fi\ncase $words[2] in\n  config|c) (( CURRENT == 3 )) && _values 'action' %@ ;;\n  config-file|cf) (( CURRENT == 3 )) && _values 'action' path ;;\n  update|u) (( CURRENT == 3 )) && _values 'action' check ;;\n  editor|e) (( CURRENT == 3 )) && _values 'editor' %@ || _files ;;\n  completions) _values 'shell' zsh bash fish install path ;;\nesac\n",commands,configActions,editors];
     if([shell isEqual:@"bash"])return [NSString stringWithFormat:@"_termatica_complete() {\n  local cur=\"${COMP_WORDS[COMP_CWORD]}\" command=\"${COMP_WORDS[1]}\" words=\"%@\"\n  if (( COMP_CWORD == 1 )); then COMPREPLY=( $(compgen -W \"$words\" -- \"$cur\") ); return; fi\n  case \"$command\" in\n    config|c) words=\"%@\" ;;\n    config-file|cf) words=\"path\" ;;\n    update|u) words=\"check\" ;;\n    editor|e) words=\"%@\" ;;\n    completions) words=\"zsh bash fish install path\" ;;\n  esac\n  COMPREPLY=( $(compgen -W \"$words\" -- \"$cur\") )\n}\ncomplete -F _termatica_complete termatica t\n",commands,configActions,editors];
     if([shell isEqual:@"fish"])return [NSString stringWithFormat:@"for __termaticacmd in termatica t\ncomplete -c $__termaticacmd -f -n 'not __fish_seen_subcommand_from %@' -a '%@'\ncomplete -c $__termaticacmd -f -n '__fish_seen_subcommand_from config c' -a '%@'\ncomplete -c $__termaticacmd -f -n '__fish_seen_subcommand_from config-file cf' -a 'path'\ncomplete -c $__termaticacmd -f -n '__fish_seen_subcommand_from update u' -a 'check'\ncomplete -c $__termaticacmd -f -n '__fish_seen_subcommand_from editor e' -a '%@'\ncomplete -c $__termaticacmd -f -n '__fish_seen_subcommand_from completions' -a 'zsh bash fish install path'\nend\n",commands,commands,configActions,editors];
@@ -807,21 +807,18 @@ static int TRunUpdateCLI(int argc,const char *argv[],TConfig *config) {
     [fm removeItemAtPath:temporary error:nil];if(!ok){fprintf(stderr,"termatica update: install failed: %s\n",(error.localizedDescription?:@"could not replace the application").UTF8String);return 1;}fprintf(stdout,"Updated Termatica to %s at %s. Restart the app to use it.\n",tag.UTF8String,target.fileSystemRepresentation);return 0;
 }
 
-static int TRunBenchCLI(int argc,const char *argv[],TConfig *config);
-
 static int TRunCLI(int argc, const char *argv[]) {
     NSString *arg=argc>1?[NSString stringWithUTF8String:argv[1]]:@"--help";
-    NSDictionary *quick=@{@"c":@"config",@"cf":@"config-file",@"u":@"update",@"r":@"reload",@"e":@"editor",@"x":@"run",@"h":@"help",@"v":@"version",@"b":@"bench"};
+    NSDictionary *quick=@{@"c":@"config",@"cf":@"config-file",@"u":@"update",@"r":@"reload",@"e":@"editor",@"x":@"run",@"h":@"help",@"v":@"version"};
     arg=quick[arg]?:arg;
     if([arg isEqual:@"--help"]||[arg isEqual:@"-h"]||[arg isEqual:@"help"]){
-        fprintf(stdout,"Termatica %s\n\nUSAGE\n  t <command> [arguments]\n  termatica <command> [arguments]\n\nQUICK\n  t c                Open config files and settings\n  t cf               Open config.json\n  t u [check]        Update or check for an update\n  t r                Reload saved configuration\n  t e <name> ...     Run a terminal editor\n  t x <name> [text]  Run an enabled extension command\n  t b                Benchmark Termatica parser, render, and scrollback\n  t h / t v          Help / version\n\nCONFIGURATION\n  config             Open the complete categorized terminal config UI\n  config-file        Open the authoritative config.json\n  config-file path   Print the authoritative config path\n\nUPDATES\n  update             Download, verify, and install the latest GitHub release\n  update check       Check GitHub without installing\n\nTOOLS\n  reload             Reload saved configuration in the running app\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro, or Helix\n  run <name> [text]  Run an enabled extension command\n  bench              Benchmark Termatica\n  completions        Generate or install shell completions\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n",TCurrentVersion().UTF8String);return 0;
+        fprintf(stdout,"Termatica %s\n\nUSAGE\n  t <command> [arguments]\n  termatica <command> [arguments]\n\nQUICK\n  t c                Open config files and settings\n  t cf               Open config.json\n  t u [check]        Update or check for an update\n  t r                Reload saved configuration\n  t e <name> ...     Run a terminal editor\n  t x <name> [text]  Run an enabled extension command\n  t h / t v          Help / version\n\nCONFIGURATION\n  config             Open the complete categorized terminal config UI\n  config-file        Open the authoritative config.json\n  config-file path   Print the authoritative config path\n\nUPDATES\n  update             Download, verify, and install the latest GitHub release\n  update check       Check GitHub without installing\n\nTOOLS\n  reload             Reload saved configuration in the running app\n  editor <name> ...  Run Vim, Neovim, Emacs, Nano, Micro, or Helix\n  run <name> [text]  Run an enabled extension command\n  completions        Generate or install shell completions\n\nFLAGS\n  --help             Show this guide\n  --version          Print the version\n",TCurrentVersion().UTF8String);return 0;
     }
     if([arg isEqual:@"--version"]||[arg isEqual:@"version"]){fprintf(stdout,"Termatica %s\n",TCurrentVersion().UTF8String);return 0;}
     if([arg isEqual:@"editor"]||[arg isEqual:@"--editor"]||[arg isEqual:@"edit"]||[arg isEqual:@"--edit"])return TRunEditorCLI(argc,argv);
     if([arg isEqual:@"completions"]||[arg isEqual:@"--completions"])return TRunCompletionsCLI(argc,argv);
     if([arg isEqual:@"run"]||[arg isEqual:@"--run"]){if(argc<3){fputs("termatica: run requires an extension command name\n",stderr);return 2;}NSMutableArray *parts=[NSMutableArray array];for(int i=3;i<argc;i++)if(argv[i])[parts addObject:[NSString stringWithUTF8String:argv[i]]];BOOL sent=TPostCLIRequest(@{@"command":@"run",@"name":[NSString stringWithUTF8String:argv[2]],@"query":[parts componentsJoinedByString:@" "]});if(!sent){fputs("termatica: the Termatica app is not running\n",stderr);return 1;}return 0;}
     TConfig *config=[TConfig new];
-    if([arg isEqual:@"bench"])return TRunBenchCLI(argc,argv,config);
     if([arg isEqual:@"config"])return TRunUnifiedConfigCLI(argc,argv,config);
     if([arg isEqual:@"config-file"]){[config ensureEditableFile];if(argc>=3&&!strcmp(argv[2],"path"))fprintf(stdout,"%s\n",config.path.fileSystemRepresentation);else{TOpenPath(config.path);fprintf(stdout,"opened %s\n",config.path.fileSystemRepresentation);}return 0;}
     if([arg isEqual:@"update"])return TRunUpdateCLI(argc,argv,config);
@@ -2744,86 +2741,6 @@ static int TRunExperienceBenchmark(NSUInteger requestedFrames,double requestedSe
 }
 #endif
 
-static int TRunBenchCLI(int argc,const char *argv[],TConfig *config) {
-    (void)argc;(void)argv;(void)config;
-    if(!isatty(STDIN_FILENO)||!isatty(STDOUT_FILENO)){fputs("termatica bench: run this command inside the Termatica terminal.\n",stderr);return 2;}
-    NSString *supportDir=[[[NSFileManager.defaultManager URLsForDirectory:NSApplicationSupportDirectory inDomains:NSUserDomainMask].firstObject URLByAppendingPathComponent:@"Termatica"] path];
-    [NSFileManager.defaultManager createDirectoryAtPath:supportDir withIntermediateDirectories:YES attributes:nil error:nil];
-    NSString *helperPath=[supportDir stringByAppendingPathComponent:@"termyx-engine-bench"];
-    NSString *binaryPath=[NSBundle.mainBundle.executablePath copy];
-    BOOL helperExists=[[NSFileManager defaultManager] fileExistsAtPath:helperPath];
-    fputs("\033[2J\033[H\033[38;2;122;162;247m  >_ TERMATICA // BENCHMARK\033[0m\n\n",stdout);
-    if(!helperExists){
-        fputs("\033[38;2;235;128;60m  The first-run benchmark needs a small helper tool:\033[0m\n",stdout);
-        fputs("\033[38;2;235;128;60m  \342\200\234termyx engine bench\342\200\235 — a script that runs the full suite\033[0m\n",stdout);
-        fputs("\033[38;2;235;128;60m  in a separate Terminal window while Termatica closes.\033[0m\n\n",stdout);
-        fputs("\033[38;2;216;222;233m  Download and install the helper? [y/N] \033[0m",stdout);fflush(stdout);
-        char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)||!(answer[0]=='y'||answer[0]=='Y')){fputs("  cancelled.\n",stdout);return 130;}
-        NSString *script=[NSString stringWithFormat:@"#!/bin/zsh\n# termyx-engine-bench: full Termatica benchmark suite\n# Auto-generated by Termatica. Runs in a fresh Terminal window.\nBINARY=\"%@\"\nif [ ! -x \"$BINARY\" ]; then echo \"termyx-bench: Termatica binary not found at $BINARY\"; exit 1; fi\nclear\necho '\\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH\\033[0m'\necho '\\n\\033[38;2;107;114;128m  Running the full Termatica benchmark suite.\\033[0m'\necho '\\033[38;2;107;114;128m  This closes Termatica and benchmarks in this window.\\033[0m\\n'\n# Close the Termatica app so the benchmark is uncontended.\nosascript -e 'tell application \"Termatica\" to quit' 2>/dev/null\nsleep 1\necho '\\033[38;2;216;222;233m  Starting benchmark...\\033[0m\\n'\n\"$BINARY\" --termyx-bench\necho '\\n\\033[38;2;216;222;233m  Benchmark complete. Reopen Termatica? [Y/n]\\033[0m '\nread -k1 resp\necho\nif [[ \"$resp\" != \"n\" && \"$resp\" != \"N\" ]]; then open \"%@\"; fi\n",binaryPath,NSBundle.mainBundle.bundlePath];
-         NSError *err=nil;[script writeToFile:helperPath atomically:YES encoding:NSUTF8StringEncoding error:&err];chmod(helperPath.UTF8String,0700);
-        if(err){fprintf(stderr,"  install failed: %s\n",err.localizedDescription.UTF8String);return 1;}
-        fputs("\033[38;2;152;195;121m  Helper installed.\033[0m\n\n",stdout);fflush(stdout);
-    }
-    fputs("\033[38;2;107;114;128m  This closes Termatica and opens the benchmark in a new Terminal window.\033[0m\n\n",stdout);
-    fputs("\033[38;2;216;222;233m  Continue? [y/N] \033[0m",stdout);fflush(stdout);
-    char answer[8]={0};if(!fgets(answer,sizeof(answer),stdin)||!(answer[0]=='y'||answer[0]=='Y')){fputs("  cancelled.\n",stdout);return 130;}
-    NSString *osa=[NSString stringWithFormat:@"tell application \"Terminal\"\nactivate\ndo script \"%@\"\nend tell",helperPath];
-    NSTask *task=[[NSTask alloc]init];task.launchPath=@"/usr/bin/osascript";task.arguments=@[@"-e",osa];
-    @try{[task launch];TPostCLICommand(@"quit");}@catch(id e){fprintf(stderr,"  could not open Terminal window\n");return 1;}
-    return 0;
-}
-
-static int TRunTermyxBench(void) {
-    TApplication *app=[TApplication sharedApplication];[app setActivationPolicy:NSApplicationActivationPolicyProhibited];
-    NSString *binaryPath=[NSBundle.mainBundle.executablePath copy];
-    if(!binaryPath){fputs("termyx-bench: could not locate the Termatica binary\n",stderr);return 1;}
-    fputs("\033[2J\033[H\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH\033[0m\n\n",stdout);fflush(stdout);
-    fputs("\033[38;2;107;114;128m  Full Termatica benchmark suite. Each workload: 1 warmup + 5 measured passes (median).\033[0m\n\n",stdout);fflush(stdout);
-    TConfig *bc=[TConfig new];bc.scrollback=10000;bc.fontSize=11;bc.fontName=@"Monaco";bc.unicodeRendering=YES;
-    TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,1200,800) config:bc];
-    [terminal preparePresentation];
-    NSBitmapImageRep *bitmap=[terminal bitmapImageRepForCachingDisplayInRect:terminal.bounds];
-    double(^median)(double*,NSUInteger)=^double(double *v,NSUInteger n){for(NSUInteger i=0;i<n;i++)for(NSUInteger j=i+1;j<n;j++)if(v[j]<v[i]){double t=v[i];v[i]=v[j];v[j]=t;}return v[n/2];};
-    NSArray<NSDictionary *> *workloads=@[
-        @{@"name":@"Parser ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@74.2,@54.1,@56.3,@18.2,@67.5]},
-        @{@"name":@"Parser Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal decoding\r\n",@"ref":@[@101.6,@78.9,@57.0,@15.2,@49.5]},
-        @{@"name":@"Parser CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@32.2,@31.2,@36.6,@6.7,@33.3]},
-        @{@"name":@"Render ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@73.7,@56.9,@82.4,@11.1,@122.2]},
-        @{@"name":@"Render Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal rendering\r\n",@"ref":@[@22.8,@86.0,@106.0,@14.0,@2.9]},
-        @{@"name":@"Render CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@32.4,@26.3,@49.7,@2.0,@41.6]},
-        @{@"name":@"Scrollback ASCII",@"pattern":@"benchmark plain terminal text 0123456789 abcdefghijklmnopqrstuvwxyz\r\n",@"ref":@[@59.0,@56.2,@66.6,@6.9,@65.9]},
-        @{@"name":@"Scrollback Unicode",@"pattern":@"Unicode \u03bb\u6f22\u5b57\U0001f642 composed e\u0301 terminal scrollback\r\n",@"ref":@[@83.6,@79.3,@88.5,@8.4,@29.9]},
-        @{@"name":@"Scrollback CSI-heavy",@"pattern":@"\033[38;2;89;194;255mcyan\033[0m \033[1mbold\033[0m \033[2Kbenchmark\r\n",@"ref":@[@43.0,@30.1,@50.4,@4.0,@35.2]},
-    ];
-    NSUInteger n=workloads.count;double *results=calloc(n,sizeof(double));NSUInteger benchBytes=33554432;
-    for(NSUInteger i=0;i<n;i++){
-        NSString *name=workloads[i][@"name"];NSData *pattern=[workloads[i][@"pattern"] dataUsingEncoding:NSUTF8StringEncoding];
-        NSMutableData *chunk=[NSMutableData dataWithCapacity:32768];while(chunk.length+pattern.length<=32768)[chunk appendData:pattern];
-        BOOL isParser=[name hasPrefix:@"Parser"],isScrollback=[name hasPrefix:@"Scrollback"];
-        fprintf(stdout,"\033[K\033[38;2;216;222;233m  [%lu/%lu] %s\033[0m\r",(unsigned long)i+1,(unsigned long)n,[name UTF8String]);fflush(stdout);
-        if(isScrollback){NSMutableString *history=[NSMutableString string];for(NSUInteger k=0;k<5000;k++)if(pattern)[history appendFormat:@"%@",[[NSString alloc]initWithData:pattern encoding:NSUTF8StringEncoding]];[terminal consumeData:[history dataUsingEncoding:NSUTF8StringEncoding]];[terminal scrollByLines:5000];for(NSUInteger k=0;k<100;k++){[terminal scrollByLines:(k%2)?1:-1];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
-        else if(isParser){NSUInteger c=0;while(c<benchBytes){NSUInteger t=MIN(chunk.length,benchBytes-c);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;}}
-        else{for(NSUInteger f=0;f<120;f++){NSUInteger t=MIN(chunk.length,32768);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}}
-        double samples[5]={0};for(NSUInteger r=0;r<5;r++){CFAbsoluteTime s=CFAbsoluteTimeGetCurrent();
-            if(isScrollback){NSUInteger it=100;for(NSUInteger k=0;k<it;k++){[terminal scrollByLines:(k%2)?1:-1];if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];}samples[r]=(double)it/MAX(0.000001,CFAbsoluteTimeGetCurrent()-s)*pattern.length/1048576.0;}
-            else if(isParser){NSUInteger c=0;while(c<benchBytes){NSUInteger t=MIN(chunk.length,benchBytes-c);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;}samples[r]=(double)c/1048576.0/MAX(0.000001,CFAbsoluteTimeGetCurrent()-s);}
-            else{NSUInteger fr=120,c=0;double total=0;for(NSUInteger f=0;f<fr;f++){NSUInteger t=MIN(chunk.length,32768);[terminal consumeData:t==chunk.length?chunk:[chunk subdataWithRange:NSMakeRange(0,t)]];c+=t;CFAbsoluteTime st=CFAbsoluteTimeGetCurrent();if(bitmap)[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];total+=CFAbsoluteTimeGetCurrent()-st;}samples[r]=(double)c/1048576.0/MAX(0.000001,total);}}
-        results[i]=median(samples,5);
-        fprintf(stdout,"\033[K\033[38;2;152;195;121m  %-24s %7.1f MB/s\033[0m\n",[name UTF8String],results[i]);fflush(stdout);
-    }
-    double geoMean=1;for(NSUInteger i=0;i<n;i++)geoMean*=results[i]>0?results[i]:0.001;geoMean=pow(geoMean,1.0/(double)n);
-    fputs("\n\033[K\033[2J\033[H",stdout);
-    fputs("\033[38;2;122;162;247m  >_ TERMYX ENGINE BENCH // RESULTS\033[0m\n\n",stdout);
-    fputs("\033[38;2;107;114;128m  MB/s, higher is better. Termatica = median of 5 passes on this machine.\033[0m\n",stdout);
-    fputs("\033[38;2;107;114;128m  Competitor values are the published reference (Apple M4, 2026-07-29).\033[0m\n\n",stdout);
-    fputs("  \033[48;2;43;52;69m\033[38;2;238;241;245m Workload                   Termatica    Kitty   Ghostty Alacritty WezTerm      Rio \033[0m\n",stdout);
-    for(NSUInteger i=0;i<n;i++){NSArray *r=workloads[i][@"ref"];fprintf(stdout,"  %-24s \033[38;2;152;195;121m%7.1f\033[0m    %5.1f   %6.1f    %6.1f   %6.1f   %6.1f\n",[workloads[i][@"name"] UTF8String],results[i],[r[0] doubleValue],[r[1] doubleValue],[r[2] doubleValue],[r[3] doubleValue],[r[4] doubleValue]);}
-    fprintf(stdout,"\n\033[38;2;107;114;128m  Geometric mean across %lu throughput workloads: %.1f MB/s\033[0m\n",(unsigned long)n,geoMean);
-    fputs("\n\033[38;2;107;114;128m  Benchmark complete. Termatica values recorded above.\033[0m\n\n",stdout);fflush(stdout);
-    free(results);
-    return 0;
-}
-
 int main(int argc, const char *argv[]) {
     @autoreleasepool {
         TProcessStartedAt = CFAbsoluteTimeGetCurrent();
@@ -2837,7 +2754,6 @@ int main(int argc, const char *argv[]) {
         if(argc>1&&!strcmp(argv[1],"--benchmark-core"))return TRunCoreBenchmark(argc>2?(NSUInteger)strtoull(argv[2],NULL,10):33554432);
         if(argc>1&&!strcmp(argv[1],"--benchmark-experience"))return TRunExperienceBenchmark(argc>2?(NSUInteger)strtoull(argv[2],NULL,10):240,argc>3?strtod(argv[3],NULL):3.0);
 #endif
-        if(argc>1&&!strcmp(argv[1],"--termyx-bench"))return TRunTermyxBench();
         if(argc==1&&([invoked isEqual:@"termatica"]||[invoked isEqual:@"t"]))return TRunCLI(argc,argv);
         if(argc>1)return TRunCLI(argc,argv);
         TApplication *app=TApplication.sharedApplication;

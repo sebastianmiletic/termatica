@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.3.3
+
+- Removed all benchmarking code, the `bench` command, the `termyx engine bench` helper, and all related files. The app is back under 1 MiB.
+
 ## 1.3.2
 
 - Fixed `termatica bench` closing the app but not running the benchmark. The helper is now launched in a new macOS Terminal window via `osascript` (instead of `open` which failed to execute the script). Also added a "Continue?" confirmation after the first-run helper install.
