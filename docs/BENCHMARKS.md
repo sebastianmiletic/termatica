@@ -63,6 +63,22 @@ release compilation, an interactive-QoS serialized parser, coalesced ignored
 OSC 6 scanning, and a wider but still bounded PTY backlog window. Mutable
 terminal state remains owned by one serialized parser queue.
 
+### Chunk-boundary follow-up
+
+A later focused 10-repetition run tested long escapes alone. The baseline and
+optimized build used the same machine, command, and isolated configuration.
+
+| Workload | Baseline | Optimized | Change |
+|---|---:|---:|---:|
+| Parser long escapes | 221.6 | **228.9** | **+3.3%** |
+| Render long escapes | 223.5 | **244.3** | **+9.3%** |
+
+The follow-up adds a stateful discard mode for unsupported OSC 6 payloads split
+across PTY reads and raises the transient read batch from 256 KiB to 1 MiB.
+That buffer exists only while output is being read and therefore does not add a
+1 MiB idle allocation. The [result summary](benchmark-results/long-escapes-2026-08-01.json)
+also records every competitor from the optimized run.
+
 ## Complete end-to-end matrix
 
 All values are MB/s. This is a separate run containing all 15 workloads.
@@ -104,21 +120,26 @@ the complete matrix remains visible rather than selecting its fastest rows.
 
 ## Responsiveness and process energy
 
-The release benchmark configuration was also measured five times with 240
-input/paint samples followed by 10 seconds of sustained Unicode and ANSI
-output. Values below are the median result across the five runs.
+The release benchmark configuration was measured five times. The refreshed
+latency pass contains 1,000 input/paint samples per run; the energy pass uses
+240 samples followed by 10 seconds of sustained Unicode and ANSI output.
+Values below are the median result across the five runs.
 
 | Measurement | Result |
 |---|---:|
-| Software key-to-paint lower bound, p50 | **1.486 ms** |
-| Software key-to-paint lower bound, p95 | **1.675 ms** |
-| Software key-to-paint lower bound, p99 | **2.293 ms** |
+| Software key-to-paint lower bound, p50 | **1.544 ms** |
+| Software key-to-paint lower bound, p95 | **1.746 ms** |
+| Software key-to-paint lower bound, p99 | **2.146 ms** |
+| Event mapping, p50 | **0.028 ms** |
+| Immediate echo parsing, p50 | **0.00025 ms** |
+| Full AppKit paint, p50 | **1.520 ms** |
 | Process-attributed energy, 10 seconds | **14.455 J** |
 | Process-attributed average power | **1.445 W** |
 | Process-attributed energy per GiB | **11.064 J/GiB** |
 | Sustained throughput during energy sample | **133.479 MiB/s** |
 
-The five p50 samples were 1.486, 1.479, 1.555, 1.486, and 1.488 ms. The
+The five 1,000-sample p50 results were 1.399, 1.569, 1.544, 1.535, and
+1.544 ms. Stage timing uses `CLOCK_UPTIME_RAW` nanoseconds. The
 energy samples were 14.486, 14.421, 14.455, 14.234, and 14.606 J. The
 [checked-in sample summary](benchmark-results/responsiveness-energy-2026-08-01.json)
 preserves every published value; raw per-run JSON is stored locally at

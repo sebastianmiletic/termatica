@@ -1,6 +1,6 @@
 #import "TerminalCore.h"
 
-enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDecodeDCS, TDecodeDCSEscape };
+enum { TDecodeText, TDecodeEscape, TDecodeCSI, TDecodeOSC, TDecodeOSCEscape, TDecodeDCS, TDecodeDCSEscape, TDecodeIgnoredOSC, TDecodeIgnoredOSCEscape };
 enum { TDecoderStringLimit = 1398208 };
 
 @implementation TRenderSnapshot
@@ -180,6 +180,23 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
             size_t start=index;
             while(index+1<length&&bytes[index+1]>=32&&bytes[index+1]<127)index++;
             if(sink->ascii)sink->ascii(sink->context,bytes+start,index-start+1);
+            continue;
+        }
+        if(decoder->state==TDecodeOSC&&!decoder->stringLength&&!decoder->stringDiscarded&&byte=='6'){
+            decoder->state=TDecodeIgnoredOSC;
+            continue;
+        }
+        if(decoder->state==TDecodeIgnoredOSC){
+            size_t remaining=length-index;const uint8_t *stop=TDecoderFindStringStop(bytes+index,remaining);
+            if(!stop){index=length-1;continue;}
+            index=(size_t)(stop-bytes);byte=*stop;
+            if(byte==7){TDecoderFlushCodepoints(decoder,sink);decoder->state=TDecodeText;}
+            else decoder->state=TDecodeIgnoredOSCEscape;
+            continue;
+        }
+        if(decoder->state==TDecodeIgnoredOSCEscape){
+            if(byte=='\\'){TDecoderFlushCodepoints(decoder,sink);decoder->state=TDecodeText;}
+            else decoder->state=TDecodeIgnoredOSC;
             continue;
         }
         if(decoder->state==TDecodeOSC||decoder->state==TDecodeDCS){

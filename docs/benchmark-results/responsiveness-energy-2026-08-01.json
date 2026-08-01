@@ -1,30 +1,45 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
   "system": {
     "hardware": "Apple M4 Mac16,12",
     "os": "macOS 26.5.2 (25F84)",
     "renderer": "appkit",
     "runs": 5,
-    "frames_per_run": 240,
+    "energy_frames_per_run": 240,
+    "latency_frames_per_run": 1000,
     "sustained_seconds_per_run": 10
   },
   "methodology": {
     "key_to_paint": "Synthetic NSEvent through Termatica input mapping, immediate PTY loopback, parse, and warmed full-surface AppKit bitmap paint. This is a software lower bound, not physical key-to-photon.",
     "energy": "macOS process-attributed rusage_info_v6.ri_energy_nj during sustained Unicode and ANSI parsing. This excludes display and unassigned whole-system energy."
   },
+  "latency_stage_samples": {
+    "event_mapping_p50_ms": [0.033625, 0.032750, 0.028125, 0.028000, 0.027916],
+    "echo_parse_p50_ms": [0.000458, 0.000375, 0.000250, 0.000250, 0.000250],
+    "appkit_paint_p50_ms": [1.362208, 1.540833, 1.521916, 1.511542, 1.520125],
+    "key_to_paint_p50_ms": [1.399375, 1.569333, 1.543584, 1.535167, 1.544125],
+    "key_to_paint_p95_ms": [1.961084, 2.447542, 1.674459, 1.671542, 1.745917],
+    "key_to_paint_p99_ms": [3.120458, 3.181125, 1.818334, 1.787083, 2.146333]
+  },
+  "latency_stage_median": {
+    "event_mapping_ms": {"p50": 0.028125, "p95": 0.049167, "p99": 0.093042},
+    "echo_parse_ms": {"p50": 0.000250, "p95": 0.000583, "p99": 0.001292},
+    "appkit_paint_ms": {"p50": 1.520125, "p95": 1.699333, "p99": 2.094792},
+    "key_to_paint_ms": {"p50": 1.543584, "p95": 1.745917, "p99": 2.146333}
+  },
   "samples": {
-    "key_to_paint_p50_ms": [1.486063, 1.479030, 1.555085, 1.485944, 1.488090],
-    "key_to_paint_p95_ms": [1.675010, 2.295017, 1.713037, 1.572013, 1.538992],
-    "key_to_paint_p99_ms": [2.627015, 2.985001, 2.293110, 1.742959, 1.600027],
+    "key_to_paint_p50_ms": [1.399375, 1.569333, 1.543584, 1.535167, 1.544125],
+    "key_to_paint_p95_ms": [1.961084, 2.447542, 1.674459, 1.671542, 1.745917],
+    "key_to_paint_p99_ms": [3.120458, 3.181125, 1.818334, 1.787083, 2.146333],
     "process_energy_joules": [14.486004, 14.420762, 14.455270, 14.234431, 14.605692],
     "process_average_watts": [1.448561, 1.442050, 1.445480, 1.423419, 1.460523],
     "process_joules_per_gib": [11.034789, 11.064257, 11.089177, 11.090490, 10.982576],
     "sustained_mib_per_second": [134.422754, 133.462127, 133.478917, 131.426236, 136.177111]
   },
   "median": {
-    "key_to_paint_p50_ms": 1.486063,
-    "key_to_paint_p95_ms": 1.675010,
-    "key_to_paint_p99_ms": 2.293110,
+    "key_to_paint_p50_ms": 1.543584,
+    "key_to_paint_p95_ms": 1.745917,
+    "key_to_paint_p99_ms": 2.146333,
     "process_energy_joules": 14.455270,
     "process_average_watts": 1.445480,
     "process_joules_per_gib": 11.064257,

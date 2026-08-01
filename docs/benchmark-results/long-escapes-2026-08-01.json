@@ -1,0 +1,30 @@
+{
+  "schema_version": 1,
+  "methodology": "kitten __benchmark__, 10 repetitions, long_escape_codes only, fresh terminal process per mode",
+  "baseline": {
+    "termatica_parser_mib_per_second": 221.6,
+    "termatica_render_mib_per_second": 223.5
+  },
+  "optimized": {
+    "termatica_parser_mib_per_second": 228.9,
+    "termatica_render_mib_per_second": 244.3,
+    "kitty_parser_mib_per_second": 258.7,
+    "kitty_render_mib_per_second": 259.3,
+    "ghostty_parser_mib_per_second": 57.7,
+    "ghostty_render_mib_per_second": 58.6,
+    "alacritty_parser_mib_per_second": 144.2,
+    "alacritty_render_mib_per_second": 108.0,
+    "wezterm_parser_mib_per_second": 150.4,
+    "wezterm_render_mib_per_second": 157.1,
+    "rio_parser_mib_per_second": 84.7,
+    "rio_render_mib_per_second": 93.2
+  },
+  "termatica_change_percent": {
+    "parser": 3.3,
+    "render": 9.3
+  },
+  "raw_output": {
+    "baseline": "/tmp/termatica-long-escape-baseline-2026-08-01",
+    "optimized": "/tmp/termatica-long-escape-1m-read-2026-08-01"
+  }
+}
