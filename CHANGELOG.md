@@ -2,9 +2,13 @@
 
 ## Unreleased
 
+## 1.4.2
+
 - Start every newly created named config from the release benchmark defaults instead of cloning the active profile.
 - Add reliable legacy Option-Left, Option-Right, and Option-Delete word editing while preserving enhanced keyboard protocols.
-- Add repeatable software input-to-paint and macOS process-attributed energy measurements.
+- Add repeatable, nanosecond-resolution software input-to-paint stage measurements and macOS process-attributed energy measurements.
+- Keep unsupported OSC 6 payloads on a stateful discard path across fragmented PTY reads and increase transient read batches to improve long-escape throughput without increasing idle allocation.
+- Publish refreshed six-terminal long-escape results, input-latency percentiles, stage timing, energy results, and memory methodology.
 
 ## 1.4.1
 

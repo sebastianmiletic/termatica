@@ -1,7 +1,7 @@
 # Terminal benchmarks
 
 This is the reproducible six-terminal macOS performance snapshot for Termatica
-1.4.1. It includes a back-to-back acceptance run for the four optimized paths
+1.4.1, with a focused 1.4.2 long-escape and latency follow-up. It includes a back-to-back acceptance run for the four optimized paths
 and a separate complete 15-workload matrix. Keeping both visible prevents a
 focused improvement from being confused with whole-system benchmark variance.
 
