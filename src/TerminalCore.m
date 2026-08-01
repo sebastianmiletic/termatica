@@ -158,8 +158,13 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         uint8_t byte=bytes[index];
         if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte==27&&index+3<length){
             if(bytes[index+1]==']'&&bytes[index+2]=='6'&&bytes[index+3]==';'){
-                const uint8_t *end=memchr(bytes+index+4,7,length-index-4);
-                if(end){index=(size_t)(end-bytes);continue;}
+                size_t cursor=index;
+                do {
+                    const uint8_t *end=memchr(bytes+cursor+4,7,length-cursor-4);
+                    if(!end)break;
+                    cursor=(size_t)(end-bytes)+1;
+                } while(cursor+3<length&&bytes[cursor]==27&&bytes[cursor+1]==']'&&bytes[cursor+2]=='6'&&bytes[cursor+3]==';');
+                if(cursor>index){index=cursor-1;continue;}
             }else if(bytes[index+1]=='_'&&bytes[index+2]=='G'){
                 const uint8_t *end=memchr(bytes+index+3,27,length-index-3);
                 if(end&&end+1<bytes+length&&end[1]=='\\'){

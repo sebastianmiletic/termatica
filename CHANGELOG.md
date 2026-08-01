@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.4.1
+
+- Anchor every fresh shell prompt at the first row without disturbing later scrollback.
+- Compile release binaries for throughput and prioritize the serialized parser during sustained PTY output.
+- Rearrange every Hyprland tile, including quarter, half, horizontal, vertical, and mixed-size panes.
+- Animate arbitrary slot swaps with a clear drag target and topology-safe split-tree updates.
+
 ## 1.4.0
 
 - Made named configs independent and portable: every file is normalized to a complete versioned schema, the active file mirrors only the selected config, and switching no longer combines stale nested settings from different files.

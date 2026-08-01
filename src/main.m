@@ -917,6 +917,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     BOOL _refreshEnqueued;
     BOOL _readPaused;
     BOOL _backpressureReported;
+    BOOL _freshLaunchAwaitingPrompt;
     NSInteger _historyOffset;
     NSUInteger _historyGeneration;
     CGFloat _scrollAccumulator;
@@ -1011,7 +1012,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
 }
 - (instancetype)initWithFrame:(NSRect)frame config:(TConfig *)config deferPresentation:(BOOL)deferPresentation {
     if ((self = [super initWithFrame:frame])) {
-        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_ioLock=[NSObject new];_parseQueue=dispatch_queue_create("com.termatica.core",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);
+        _config = config; _master = -1; _pid = -1; _hiddenPathApplied=-1; _history = [NSMutableArray array];_ioLock=[NSObject new];_parseQueue=dispatch_queue_create("com.termatica.core",dispatch_queue_attr_make_with_qos_class(DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL,QOS_CLASS_USER_INTERACTIVE,0));
         TDecoderInit(&_decoder);_cursorVisible = YES;_autoWrap=YES;
         _currentFG = _currentBG = TDefaultColor;
         [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
@@ -1221,6 +1222,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
 - (void)setFrameSize:(NSSize)newSize { [super setFrameSize:newSize]; if(_presentationReady&&newSize.width>100&&newSize.height>80){[self resizeGrid];[self configureRenderBackend];} }
 - (BOOL)startShell {
     if (_pid > 0) return YES;
+    _freshLaunchAwaitingPrompt=self.config.shellIntegration;
     TLog(@"PTY preparation started");
     NSString *launchDirectory=self.launchDirectory;
     NSString *completionRoot=[TConfigDirectoryPath() stringByAppendingPathComponent:@"completions"];
@@ -1284,7 +1286,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
             }
             if (length > 0) {
                 NSData *chunk=[NSData dataWithBytesNoCopy:buffer length:length freeWhenDone:YES];buffer=NULL;
-                BOOL schedule=NO;@synchronized(self->_ioLock){if(self->_readSource!=source)return;[self->_pendingChunks addObject:chunk];self->_pendingBytes+=length;if(self->_pendingBytes>=524288&&!self->_readPaused){self->_readPaused=YES;dispatch_suspend(source);if(!self->_backpressureReported){self->_backpressureReported=YES;TLog(@"PTY backpressure active at %lu queued bytes",(unsigned long)self->_pendingBytes);}}if(!self->_drainScheduled){self->_drainScheduled=YES;schedule=YES;}}
+                BOOL schedule=NO;@synchronized(self->_ioLock){if(self->_readSource!=source)return;[self->_pendingChunks addObject:chunk];self->_pendingBytes+=length;if(self->_pendingBytes>=4194304&&!self->_readPaused){self->_readPaused=YES;dispatch_suspend(source);if(!self->_backpressureReported){self->_backpressureReported=YES;TLog(@"PTY backpressure active at %lu queued bytes",(unsigned long)self->_pendingBytes);}}if(!self->_drainScheduled){self->_drainScheduled=YES;schedule=YES;}}
                 if(schedule)dispatch_async(self->_parseQueue,^{[self drainPendingData];});
                 if(reachedEOF||readError){if(readError)TLog(@"pty read failed after buffered output: %s",strerror(readError));[self stopShellTerminating:NO];}
             } else if(reachedEOF){TLog(@"shell pty reached EOF");[self stopShellTerminating:NO];}
@@ -1303,7 +1305,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
         NSData *chunk=nil;dispatch_source_t resumeSource=nil;
         @synchronized(_ioLock){
             if(_pendingChunks.count){chunk=_pendingChunks.firstObject;[_pendingChunks removeObjectAtIndex:0];_pendingBytes-=MIN(_pendingBytes,chunk.length);}
-            if(_readPaused&&_pendingBytes<=131072&&_readSource){_readPaused=NO;resumeSource=_readSource;}
+            if(_readPaused&&_pendingBytes<=1048576&&_readSource){_readPaused=NO;resumeSource=_readSource;}
             if(!chunk)_drainScheduled=NO;
         }
         if(resumeSource)dispatch_resume(resumeSource);
@@ -1669,8 +1671,13 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
         if(url.path.length&&self.cwdChanged){void(^changed)(NSString *)=[self.cwdChanged copy];NSString *path=url.path;dispatch_async(dispatch_get_main_queue(),^{changed(path);});}
     } else if(self.config.oscIntegration&&[osc hasPrefix:@"8;"]){
         NSRange first=[osc rangeOfString:@";"],second=first.location==NSNotFound?NSMakeRange(NSNotFound,0):[osc rangeOfString:@";" options:0 range:NSMakeRange(NSMaxRange(first),osc.length-NSMaxRange(first))];NSString *url=second.location==NSNotFound?@"":[osc substringFromIndex:NSMaxRange(second)];_currentLink=url.length?url:nil;
-    } else if(self.config.oscIntegration&&[osc hasPrefix:@"133;"]){
-        NSString *mark=parts.count>1?parts[1]:@"";NSMutableDictionary *entry=[@{@"mark":mark,@"row":@(_historyCount+_cursorY)} mutableCopy];if([mark isEqual:@"D"]&&parts.count>2)entry[@"status"]=parts[2];[_commandMarks addObject:entry];if(_commandMarks.count>2048)[_commandMarks removeObjectsInRange:NSMakeRange(0,_commandMarks.count-2048)];
+    } else if([osc hasPrefix:@"133;"]){
+        NSString *mark=parts.count>1?parts[1]:@"";
+        // A new PTY is deliberately a fresh terminal. Anchor its first real shell
+        // prompt after startup hooks have finished so no prior/startup cursor row can
+        // make a reopened window begin partway down the viewport.
+        if(_freshLaunchAwaitingPrompt&&[mark isEqual:@"A"]){_freshLaunchAwaitingPrompt=NO;[self eraseDisplay:2];[self clearHistory];_cursorX=_cursorY=0;_rowOffset=0;_historyOffset=0;_inlineViewportMode=NO;_inlineViewportTop=0;[_commandMarks removeAllObjects];[_linksByCell removeAllObjects];[_inlineImages removeAllObjects];[self markAllDamage];TLog(@"Fresh shell prompt anchored at row zero");}
+        if(self.config.oscIntegration){NSMutableDictionary *entry=[@{@"mark":mark,@"row":@(_historyCount+_cursorY)} mutableCopy];if([mark isEqual:@"D"]&&parts.count>2)entry[@"status"]=parts[2];[_commandMarks addObject:entry];if(_commandMarks.count>2048)[_commandMarks removeObjectsInRange:NSMakeRange(0,_commandMarks.count-2048)];}
     } else if(parts.count>1&&([parts[0] isEqual:@"10"]||[parts[0] isEqual:@"11"]||[parts[0] isEqual:@"12"])&&[parts[1] isEqual:@"?"]){
         NSColor *color=[parts[0] isEqual:@"10"]?self.config.foreground:([parts[0] isEqual:@"11"]?self.config.background:self.config.cursor);[self sendString:[NSString stringWithFormat:@"\033]%@;%@\033\\",parts[0],TOSCColor(color)]];
     } else if(parts.count>2&&[parts[0] isEqual:@"52"]){
@@ -1927,7 +1934,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     }
     return self.launchDirectory.length?self.launchDirectory:NSFileManager.defaultManager.currentDirectoryPath;
 }
-- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"inlineViewportTop":@(_inlineViewportTop),@"synchronizedUpdates":@(_synchronizedUpdates),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),@"renderer":_renderBackend.name?:@"none",@"renderGeneration":@(_renderBackend.lastPresentedGeneration),@"metalFailed":@(_metalFailed),@"metalFrameChecksum":@(_metalBackend.lastFrameChecksum),@"metalFrameVaried":@(_metalBackend.lastFrameVariedPixels),@"snapshotBuildMs":@(_lastSnapshotBuildMilliseconds),@"metalCPUEncodeMs":@(_metalBackend.lastCPUEncodeMilliseconds),@"metalGPUExecutionMs":@(_metalBackend.lastGPUExecutionMilliseconds)};}}
+- (NSDictionary *)diagnosticState {@synchronized(self){return @{@"history":@(_historyCount),@"offset":@(_historyOffset),@"cursorX":@(_cursorX),@"cursorY":@(_cursorY),@"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"inlineViewportTop":@(_inlineViewportTop),@"synchronizedUpdates":@(_synchronizedUpdates),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),@"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),@"renderer":_renderBackend.name?:@"none",@"renderGeneration":@(_renderBackend.lastPresentedGeneration),@"metalFailed":@(_metalFailed),@"metalFrameChecksum":@(_metalBackend.lastFrameChecksum),@"metalFrameVaried":@(_metalBackend.lastFrameVariedPixels),@"snapshotBuildMs":@(_lastSnapshotBuildMilliseconds),@"metalCPUEncodeMs":@(_metalBackend.lastCPUEncodeMilliseconds),@"metalGPUExecutionMs":@(_metalBackend.lastGPUExecutionMilliseconds)};}}
 - (void)renderImage:(CGImageRef)image atRow:(NSUInteger)row col:(NSUInteger)col width:(NSUInteger)w height:(NSUInteger)h scale:(BOOL)doScale {
     if(!image)return;
     CGImageRef stored=CGImageRetain(image);NSUInteger srcW=CGImageGetWidth(stored),srcH=CGImageGetHeight(stored);
@@ -2256,9 +2263,12 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
 - (BOOL)executeExtensionNamed:(NSString *)name query:(NSString *)query;
 - (TTerminalView *)newTerminal;
 - (TTerminalView *)newTerminalDeferred:(BOOL)deferred;
+- (NSArray<NSValue *> *)hyprlandFrames;
+- (void)layoutTabs;
+- (void)swapLayoutPositionOfTerminal:(TTerminalView *)first withTerminal:(TTerminalView *)second;
 @end
 
-@implementation TWindowController { NSString *_cwd; NSView *_root; NSVisualEffectView *_effect; TTabRailView *_tabRail; TTabEdgeView *_tabEdge; NSMutableArray<TTabButton *> *_tabButtons; BOOL _animateTabLayout; BOOL _hyprlandApplied; NSRect _preHyprlandFrame; TTerminalView *_draggingTerminal; NSPoint _dragOffset; TTerminalView *_enteringTerminal; NSTimer *_tabHideTimer; NSTrackingArea *_tabHoverArea; NSRect _tabRailTargetFrame; BOOL _tabRailVisible; BOOL _mouseInTabArea; BOOL _revealRailAfterLayout; }
+@implementation TWindowController { NSString *_cwd; NSView *_root; NSVisualEffectView *_effect; TTabRailView *_tabRail; TTabEdgeView *_tabEdge; NSMutableArray<TTabButton *> *_tabButtons; BOOL _animateTabLayout; BOOL _hyprlandApplied; NSRect _preHyprlandFrame; TTerminalView *_draggingTerminal; TTerminalView *_dragSwapTarget; NSPoint _dragOffset; TTerminalView *_enteringTerminal; NSTimer *_tabHideTimer; NSTrackingArea *_tabHoverArea; NSRect _tabRailTargetFrame; BOOL _tabRailVisible; BOOL _mouseInTabArea; BOOL _revealRailAfterLayout; }
 - (instancetype)initWithConfig:(TConfig *)config extensions:(TExtensionHost *)extensions {
     if((self=[super initWithWindow:nil])){_config=config;_extensions=extensions;_terminals=[NSMutableArray array];_tabButtons=[NSMutableArray array];
         TTerminalView *terminal=[self newTerminalDeferred:YES];[_terminals addObject:terminal];[terminal startShell];self.terminal=terminal;self.extensions.activeTerminal=terminal;
@@ -2313,6 +2323,23 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
     for(NSUInteger i=0;i<roots.count;i++){NSUInteger row=i/columns,column=i%columns,countInRow=MIN(columns,roots.count-row*columns);CGFloat cellWidth=(w-gap*(countInRow-1))/countInRow,cellHeight=(h-gap*(rows-1))/rows;NSRect frame=NSMakeRect(column*(cellWidth+gap),h-(row+1)*cellHeight-row*gap,cellWidth,cellHeight);[self assignFrame:frame toTerminal:roots[i] frames:frames];}
     return frames;
 }
+- (void)swapLayoutPositionOfTerminal:(TTerminalView *)first withTerminal:(TTerminalView *)second {
+    if(!first||!second||first==second)return;
+    NSUInteger firstIndex=[_terminals indexOfObject:first],secondIndex=[_terminals indexOfObject:second];
+    if(firstIndex==NSNotFound||secondIndex==NSNotFound)return;
+    TTerminalView *firstParent=[_terminals containsObject:first.splitAnchor]?first.splitAnchor:nil;
+    TTerminalView *secondParent=[_terminals containsObject:second.splitAnchor]?second.splitAnchor:nil;
+    for(TTerminalView *item in _terminals){
+        if(item==first||item==second)continue;
+        if(item.splitAnchor==first)item.splitAnchor=second;
+        else if(item.splitAnchor==second)item.splitAnchor=first;
+    }
+    first.splitAnchor=secondParent==first?second:secondParent;
+    second.splitAnchor=firstParent==second?first:firstParent;
+    if(first.splitAnchor==first)first.splitAnchor=nil;
+    if(second.splitAnchor==second)second.splitAnchor=nil;
+    [_terminals exchangeObjectAtIndex:firstIndex withObjectAtIndex:secondIndex];
+}
 - (void)updateEffectMask {
     if(!_effect)return;
     if(![self usesTiledLayout]){_effect.layer.mask=nil;return;}
@@ -2323,31 +2350,30 @@ static void TAnimateCenterReveal(NSView *view,CFTimeInterval duration,CGFloat ra
 }
 - (void)beginDraggingTerminal:(TTerminalView *)terminal event:(NSEvent *)event {
     if(![self usesTiledLayout]||![_terminals containsObject:terminal])return;
-    [self focusTerminal:terminal];_draggingTerminal=terminal;
+    [self focusTerminal:terminal];_draggingTerminal=terminal;_dragSwapTarget=nil;
     NSPoint point=[_root convertPoint:event.locationInWindow fromView:nil];_dragOffset=NSMakePoint(point.x-NSMinX(terminal.frame),point.y-NSMinY(terminal.frame));
-    terminal.autoresizingMask=NSViewNotSizable;terminal.wantsLayer=YES;[_root addSubview:terminal positioned:NSWindowAbove relativeTo:nil];
+    terminal.autoresizingMask=NSViewNotSizable;terminal.wantsLayer=YES;[terminal.layer removeAllAnimations];terminal.layer.zPosition=20;terminal.layer.borderWidth=1.5;terminal.layer.borderColor=[self.config.accent colorWithAlphaComponent:0.82].CGColor;[_root addSubview:terminal positioned:NSWindowAbove relativeTo:nil];
 }
 - (void)dragTerminal:(TTerminalView *)terminal event:(NSEvent *)event {
     if(terminal!=_draggingTerminal)return;
     NSPoint point=[_root convertPoint:event.locationInWindow fromView:nil];NSRect frame=terminal.frame;
-    frame.origin.x=MAX(0,MIN(_root.bounds.size.width-frame.size.width,point.x-_dragOffset.x));frame.origin.y=MAX(0,MIN(_root.bounds.size.height-frame.size.height,point.y-_dragOffset.y));terminal.frame=frame;
+    frame.origin.x=MAX(0,MIN(_root.bounds.size.width-frame.size.width,point.x-_dragOffset.x));frame.origin.y=MAX(0,MIN(_root.bounds.size.height-frame.size.height,point.y-_dragOffset.y));[terminal setFrameOrigin:frame.origin];
     NSArray<NSValue *> *slots=[self hyprlandFrames];
-    NSMutableArray<TTerminalView *> *roots=[NSMutableArray array];
-    for(TTerminalView *t in _terminals)if(!t.splitAnchor||![_terminals containsObject:t.splitAnchor])[roots addObject:t];
-    NSUInteger nearestRoot=NSNotFound;CGFloat best=CGFLOAT_MAX;
-    CGFloat tileMidX=NSMidX(frame),tileMidY=NSMidY(frame);
-    for(TTerminalView *root in roots){NSUInteger idx=[_terminals indexOfObject:root];if(idx>=slots.count)continue;NSRect slot=slots[idx].rectValue;if(NSEqualRects(slot,NSZeroRect))continue;CGFloat dx=tileMidX-NSMidX(slot),dy=tileMidY-NSMidY(slot),distance=dx*dx+dy*dy;if(distance<best){best=distance;nearestRoot=idx;}}
-    NSUInteger current=[_terminals indexOfObject:terminal];
-    if(nearestRoot!=NSNotFound&&nearestRoot!=current){
-        BOOL isTerminalRoot=!terminal.splitAnchor||![_terminals containsObject:terminal.splitAnchor];
-        if(isTerminalRoot){
-            [_terminals removeObjectAtIndex:current];[_terminals insertObject:terminal atIndex:nearestRoot];_animateTabLayout=YES;[self layoutTabs];
-        }
+    TTerminalView *target=nil;CGFloat bestOverlap=0;
+    for(NSUInteger index=0;index<_terminals.count&&index<slots.count;index++){
+        TTerminalView *candidate=_terminals[index];if(candidate==terminal)continue;NSRect slot=slots[index].rectValue;if(NSIsEmptyRect(slot))continue;
+        if(NSPointInRect(point,slot)){target=candidate;break;}
+        NSRect overlap=NSIntersectionRect(frame,slot);CGFloat area=NSIsEmptyRect(overlap)?0:NSWidth(overlap)*NSHeight(overlap);if(area>bestOverlap){bestOverlap=area;target=candidate;}
+    }
+    if(target&&target!=_dragSwapTarget){
+        _dragSwapTarget=target;[self swapLayoutPositionOfTerminal:terminal withTerminal:target];_animateTabLayout=YES;[self layoutTabs];
+    }else if(!target){
+        _dragSwapTarget=nil;
     }
     [self updateEffectMask];
 }
 - (void)endDraggingTerminal:(TTerminalView *)terminal event:(NSEvent *)event {
-    if(terminal!=_draggingTerminal)return;terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;_draggingTerminal=nil;_animateTabLayout=YES;[self layoutTabs];[self focusTerminal:terminal];
+    if(terminal!=_draggingTerminal)return;terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;terminal.layer.zPosition=0;terminal.layer.borderWidth=0;terminal.layer.borderColor=nil;_draggingTerminal=nil;_dragSwapTarget=nil;_animateTabLayout=YES;[self layoutTabs];[self focusTerminal:terminal];
 }
 - (TTerminalView *)newTerminal {
     return [self newTerminalDeferred:NO];
@@ -2509,6 +2535,11 @@ static void TApplyMenuShortcut(NSMenuItem *item,NSString *spec) {if(!spec.length
 static double TPercentile(double *values,NSUInteger count,double percentile);
 static int TRunTerminalSelfTest(void) {
     [TApplication sharedApplication];
+    TConfig *freshConfig=[TConfig new];freshConfig.oscIntegration=NO;TTerminalView *fresh=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:freshConfig];
+    [fresh consumeData:[@"stale-row-a\r\nstale-row-b\r\n" dataUsingEncoding:NSUTF8StringEncoding]];[fresh setValue:@YES forKey:@"freshLaunchAwaitingPrompt"];
+    [fresh consumeData:[@"\033]133;A\aCoding/Termatica ; " dataUsingEncoding:NSUTF8StringEncoding]];NSDictionary *freshState=fresh.diagnosticState;
+    if([freshState[@"cursorY"] unsignedIntegerValue]!=0||[freshState[@"history"] unsignedIntegerValue]!=0||![[fresh visibleText] isEqual:@"Coding/Termatica ;"])return 50;
+    [fresh consumeData:[@"\r\nsecond-prompt\033]133;A\a" dataUsingEncoding:NSUTF8StringEncoding]];if(![[fresh visibleText] containsString:@"Coding/Termatica ;\nsecond-prompt"])return 51;
     TConfig *config=[TConfig new];config.scrollback=1000;config.unicodeRendering=YES;config.clipboardRead=@"deny";config.clipboardWrite=@"deny";
     TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:config];
     NSMutableString *lines=[NSMutableString string];for(NSUInteger i=0;i<240;i++)[lines appendFormat:@"scroll-line-%03lu\r\n",(unsigned long)i];
@@ -2593,8 +2624,15 @@ static int TRunTerminalSelfTest(void) {
     TWindowController *tiles=[[TWindowController alloc]initWithConfig:tiledConfig extensions:nil];[tiles addTab];
     if(tiles.terminals.count!=2)return 18;
     for(TTerminalView *tile in tiles.terminals)if([tiles terminalAtRootPoint:NSMakePoint(NSMidX(tile.frame),NSMidY(tile.frame))]!=tile)return 19;
+    TTerminalView *leftRoot=tiles.terminals[0],*rightRoot=tiles.terminals[1];tiles.terminal=leftRoot;[tiles addVerticalTab];[tiles layoutTabs];TTerminalView *quarter=tiles.terminal;
+    if(tiles.terminals.count!=3||NSHeight(quarter.frame)>=NSHeight(rightRoot.frame))return 52;
+    tiledConfig.tabAnimations=YES;NSRect quarterSlot=quarter.frame,halfSlot=rightRoot.frame;NSEvent *dragDown=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(NSMidX(quarterSlot),NSMidY(quarterSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:1 windowNumber:tiles.window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1];NSEvent *dragMove=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:2 windowNumber:tiles.window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1];NSEvent *dragUp=[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:3 windowNumber:tiles.window.windowNumber context:nil eventNumber:3 clickCount:1 pressure:0];[quarter mouseDown:dragDown];[quarter mouseDragged:dragMove];[quarter mouseUp:dragUp];
+    if(!NSEqualRects(quarter.frame,halfSlot)||!NSEqualRects(rightRoot.frame,quarterSlot))return 53;
+    if(![quarter.layer animationForKey:@"termatica.hypr.snap"]||![rightRoot.layer animationForKey:@"termatica.hypr.snap"])return 56;
+    for(TTerminalView *tile in tiles.terminals){TTerminalView *cursor=tile;NSUInteger depth=0;while(cursor.splitAnchor&&[tiles.terminals containsObject:cursor.splitAnchor]){cursor=cursor.splitAnchor;if(++depth>tiles.terminals.count)return 54;}}
+    for(TTerminalView *tile in tiles.terminals)if([tiles terminalAtRootPoint:NSMakePoint(NSMidX(tile.frame),NSMidY(tile.frame))]!=tile)return 55;
     for(TTerminalView *tile in tiles.terminals)[tile stopShellTerminating:YES];[tiles.window close];
-    fprintf(stdout,"terminal-self-test ok history=%lu rows=%lu columns=%lu keyboard=kitty+legacy mouse=native-click+tui-wheel wheel=normal+hyprland\n",(unsigned long)[initial[@"history"] unsignedIntegerValue],(unsigned long)[initial[@"rows"] unsignedIntegerValue],(unsigned long)[initial[@"columns"] unsignedIntegerValue]);
+    fprintf(stdout,"terminal-self-test ok history=%lu rows=%lu columns=%lu keyboard=kitty+legacy mouse=native-click+tui-wheel wheel=normal+hyprland layout=arbitrary-slot-swap\n",(unsigned long)[initial[@"history"] unsignedIntegerValue],(unsigned long)[initial[@"rows"] unsignedIntegerValue],(unsigned long)[initial[@"columns"] unsignedIntegerValue]);
     return 0;
 }
 

@@ -247,6 +247,8 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
+When Hyprland tiling is enabled, Command-drag any terminal or drag it from its top padding to exchange it with another slot. This works across quarter, half, horizontal, vertical, and mixed-size layouts; the terminal adopts its destination geometry and every affected tile settles with the configured animation speed.
+
 ### Tabs (nested under `"tabs"`)
 
 | Key | Type | Default | Description |

@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>The highest overall throughput in our six-terminal benchmark—native, under 1 MiB, and shell-ready in 8.8 ms.</strong></p>
+<p align="center"><strong>The highest overall throughput in our six-terminal benchmark—native, about 1.1 MiB, and shell-ready in 7.8 ms.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -20,35 +20,35 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current universal app is **1013.2 KiB**, used **30.3 MiB** of physical memory in the current idle snapshot, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **8.782 ms median / 11.144 ms maximum across five launches**.
+The current universal app allocation is **1144 KiB**, used **30.2 MiB** of physical memory in the current idle snapshot, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **7.786 ms median / 9.075 ms maximum across five launches**.
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.4.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.4.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
 
 | Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
-| Parser ASCII (MB/s) | **146.3** | 77.7 | 57.5 | 71.1 | 19.3 | 68.9 |
-| Parser Unicode (MB/s) | 100.8 | 102.3 | 78.2 | **103.5** | 29.7 | 54.1 |
-| Parser unique graphemes (MB/s) | **56.4** | 27.7 | 36.7 | 44.8 | 41.2 | 41.5 |
-| Parser CSI-heavy (MB/s) | **68.6** | 33.3 | 30.4 | 52.3 | 12.9 | 36.9 |
-| Parser long escapes (MB/s) | **289.5** | 269.0 | 59.0 | 128.2 | 166.4 | 78.2 |
-| Parser images (MB/s) | **280.2** | 247.7 | 44.6 | 230.8 | 130.0 | 102.6 |
-| Render ASCII (MB/s) | **144.2** | 77.7 | 57.1 | 86.1 | 18.8 | 128.7 |
-| Render Unicode (MB/s) | 99.3 | 70.4 | 66.7 | **115.6** | 24.3 | 9.6 |
-| Render unique graphemes (MB/s) | **54.2** | 17.1 | 33.9 | 48.0 | 29.5 | **54.2** |
-| Render CSI-heavy (MB/s) | **68.2** | 33.5 | 21.0 | 55.2 | 12.9 | 46.1 |
-| Render long escapes (MB/s) | 254.0 | **266.6** | 56.6 | 143.0 | 168.0 | 103.3 |
-| Render images (MB/s) | 243.3 | **248.9** | 43.7 | 243.4 | 129.6 | 137.9 |
-| Scrollback ASCII (MB/s) | **108.2** | 61.2 | 57.5 | 70.6 | 18.9 | 68.5 |
-| Scrollback Unicode (MB/s) | 94.2 | 84.5 | 80.6 | **97.0** | 29.1 | 52.9 |
-| Scrollback CSI-heavy (MB/s) | **68.6** | 43.5 | 30.7 | 52.2 | 13.1 | 37.8 |
-| 15-workload geometric mean (MB/s) | **117.0** | 77.7 | 47.1 | 88.8 | 35.5 | 57.9 |
-| Shell-ready median / max, 5 launches (ms) | 8.782 / 11.144 | 9.494 / 13.228 | **8.055** / 9.350 | 11.094 / 12.400 | 9.048 / 9.999 | 9.502 / 9.588 |
-| Idle physical footprint, one sample (MiB) | **30.3** | 120.5 | 89.1 | 65.5 | 50.9 | 48.4 |
-| App allocation (KiB) | **1013.2** | 160,080 | 63,484 | 14,328 | 259,840 | 41,992 |
+| Parser ASCII (MB/s) | **177.5** | 77.4 | 51.7 | 69.9 | 19.3 | 69.5 |
+| Parser Unicode (MB/s) | **119.9** | 102.1 | 86.0 | 103.0 | 29.8 | 53.2 |
+| Parser unique graphemes (MB/s) | **94.0** | 28.4 | 37.9 | 45.6 | 40.4 | 40.6 |
+| Parser CSI-heavy (MB/s) | **88.9** | 43.5 | 30.7 | 52.0 | 13.2 | 36.5 |
+| Parser long escapes (MB/s) | 255.5 | **270.2** | 62.8 | 140.2 | 167.6 | 78.6 |
+| Parser images (MB/s) | **300.3** | 248.0 | 44.3 | 230.7 | 130.6 | 101.7 |
+| Render ASCII (MB/s) | **172.0** | 77.5 | 58.0 | 86.1 | 18.9 | 129.8 |
+| Render Unicode (MB/s) | **117.6** | 71.7 | 84.2 | 115.7 | 25.3 | 9.7 |
+| Render unique graphemes (MB/s) | **87.5** | 14.9 | 38.7 | 48.7 | 30.3 | 55.6 |
+| Render CSI-heavy (MB/s) | **87.8** | 43.8 | 31.7 | 52.0 | 12.9 | 41.2 |
+| Render long escapes (MB/s) | 229.5 | **268.8** | 53.7 | 137.6 | 165.4 | 97.3 |
+| Render images (MB/s) | 226.8 | **251.1** | 39.9 | 242.8 | 132.7 | 137.6 |
+| Scrollback ASCII (MB/s) | **121.0** | 61.4 | 56.5 | 71.5 | 18.7 | 66.7 |
+| Scrollback Unicode (MB/s) | **106.2** | 84.5 | 79.8 | 97.2 | 29.1 | 52.0 |
+| Scrollback CSI-heavy (MB/s) | **81.1** | 43.4 | 31.1 | 51.0 | 13.1 | 36.3 |
+| 15-workload geometric mean (MB/s) | **137.2** | 80.1 | 49.5 | 88.7 | 35.7 | 56.9 |
+| Shell-ready median / max, 5 launches (ms) | **7.786 / 9.075** | 10.309 / 12.489 | 8.416 / 8.892 | 11.583 / 12.385 | 9.356 / 9.911 | 9.014 / 9.691 |
+| Idle physical footprint, one sample (MiB) | **30.2** | 120.7 | 86.5 | 65.4 | 46.7 | 42.6 |
+| App allocation (KiB) | **1144** | 160,080 | 63,484 | 14,328 | 259,840 | 41,992 |
 
-Termatica leads or ties 10 of the 15 throughput workloads and has a 117.0 MB/s geometric mean across them, versus 88.8 MB/s for the next result. Ghostty has the lowest startup median in this run. See the [full methodology, before/after comparison, and limitations](docs/BENCHMARKS.md).
+Termatica leads 12 of the 15 throughput workloads and has a 137.2 MB/s geometric mean across them, versus 88.7 MB/s for the next result. It also has the lowest shell-ready median in this run. A focused back-to-back acceptance run improved the four requested paths over the pre-change build: parser Unicode 103.1→115.7 MB/s, scrollback Unicode 93.7→109.8 MB/s, rendered long escapes 259.7→277.0 MB/s, and rendered images 251.8→264.1 MB/s. See the [full methodology, focused comparison, complete matrix, and limitations](docs/BENCHMARKS.md).
 
 ## What makes it different
 
@@ -62,10 +62,10 @@ Termatica leads or ties 10 of the 15 throughput workloads and has a 117.0 MB/s g
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
-- Native numbered tabs and optional Hyprland-style terminal tiling
+- Native numbered tabs and optional Hyprland-style terminal tiling, with animated movement between arbitrary quarter, half, horizontal, vertical, and mixed-size slots
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
-- Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, and bounded PTY backpressure
+- Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, interactive parser scheduling, and bounded PTY backpressure
 - A guaranteed fresh start: every launch opens one new blank terminal and never restores terminal output, processes, tabs, layouts, paths, or window state
 - Automatic shell integration, OSC 133 prompt navigation, inherited working directories, permission-controlled OSC 52 clipboard access, unsafe-paste protection, and Secure Keyboard Entry for no-echo prompts
 - Built-in GitHub updater with launch-time update notification, bounded downloads, archive path/size validation, asset digest verification, code-signature validation, staged replacement, and rollback on installation failure
@@ -165,6 +165,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | New window | Command-N |
 | New terminal | Command-T |
 | Split focused terminal downward | Command-Shift-T |
+| Move any tiled terminal | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |
 | Select terminal | Command-1 through Command-9 |
 | Open config UI | Command-, |
@@ -194,19 +195,19 @@ make benchmark
 make package
 ```
 
-`make check` builds both architectures, validates commands and completions, exercises scrollback and alternate-screen state, checks terminal performance invariants, and performs a complete updater install against a locally signed mock GitHub release. `make benchmark` runs the reproducible Termatica/Kitty/Ghostty comparison when all three apps are present. `make package` produces the DMG, ZIP, and `SHA256SUMS` published by the release workflow.
+`make check` builds both architectures, validates commands and completions, exercises scrollback and alternate-screen state, checks terminal performance invariants, and performs a complete updater install against a locally signed mock GitHub release. `make benchmark` runs the reproducible Termatica, Kitty, Ghostty, Alacritty, WezTerm, and Rio comparison when those apps are present. `make package` produces the DMG, ZIP, and `SHA256SUMS` published by the release workflow.
 
 See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, commands, limitations, and measured results.
 
 ## Size and memory
 
-- Local universal app file bytes: **1013.2 KiB** (**1037518 bytes**) — under 1 MiB
-- Clean one-tab physical footprint in the current snapshot: **30.3 MiB**
+- Local universal app allocation: **1,144 KiB**
+- Clean one-tab physical footprint in the current snapshot: **30.2 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
 
-The same benchmark snapshot measured Kitty at 120.5 MiB and Ghostty at 89.1 MiB idle physical footprint.
+The same benchmark snapshot measured Kitty at 120.7 MiB, Ghostty at 86.5 MiB, Alacritty at 65.4 MiB, WezTerm at 46.7 MiB, and Rio at 42.6 MiB idle physical footprint.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 

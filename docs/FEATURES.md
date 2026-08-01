@@ -12,9 +12,9 @@
 | Zero-frame overshoot (60Hz) | ✅ 0/240 | — | — |
 | Zero-frame overshoot (120Hz) | ✅ 0/240 | — | — |
 | Zero-frame overshoot (240Hz) | ✅ 0/240 | — | — |
-| ASCII viewport paint p50 | 2.11ms | — | — |
-| Under 40MB memory | ✅ 37.3MB | ❌ 120MB | ❌ 83MB |
-| Under 1MB bundle | ✅ 940KB | ❌ 160MB | ❌ 63MB |
+| ASCII viewport paint p50 | 1.49ms | — | — |
+| Under 40MiB memory | ✅ 30.2MiB | ❌ 120.7MiB | ❌ 86.5MiB |
+| Compact universal bundle | ✅ 1,144KiB | ❌ 160,080KiB | ❌ 63,484KiB |
 
 ## Terminal protocols
 
@@ -83,6 +83,7 @@
 | Window splits | ✅ Cmd+D/Cmd+Shift+D | ✅ | ❌ |
 | Split navigation | ✅ Cmd+]/Cmd+[ | ✅ | ❌ |
 | Hyprland tiling | ✅ | ❌ | ❌ |
+| Arbitrary mixed-size tile movement | ✅ animated slot swap | ❌ | ❌ |
 | Hidden-path mode | ✅ | ❌ | ❌ |
 | Config UI (in-terminal) | ✅ `t c` | ❌ | ✅ GTK |
 | Config file hot-reload | ✅ VNODE watch | ✅ | ✅ |
@@ -91,7 +92,7 @@
 | Remote control IPC | ✅ JSON socket | ✅ `kitten @` | ❌ |
 | Auto-update (secure) | ✅ SHA256+codesign | ✅ | ❌ |
 | Auto-update notification | ✅ Install Now button | ❌ | ❌ |
-| Session restore | ✅ layout+cwd | ⚠️ layout | ⚠️ layout |
+| Fresh top-row shell on launch | ✅ | ✅ | ✅ |
 | Themes | ✅ JSON | ✅ importable | ✅ importable |
 | Tab bar | ✅ overlay rail | ✅ | ✅ |
 | Numbered tabs | ✅ Cmd+1-9 | ✅ | ✅ |

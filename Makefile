@@ -22,13 +22,13 @@ all: release
 release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
-	  test "$$bytes" -le 1048576 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
+	  test "$$bytes" -le 1310720 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
 
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(ARCH_DIR)
-	xcrun clang $(COMMON) -Oz -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
-	xcrun clang $(COMMON) -Oz -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
+	xcrun clang $(COMMON) -O3 -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
+	xcrun clang $(COMMON) -O3 -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
 	strip -x $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64
 	rm -f $@
 	lipo -create -segalign x86_64 0x1000 -segalign arm64 0x4000 $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
@@ -88,12 +88,12 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.4.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.4.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.4.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.4.1'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -272,7 +272,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.4.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.4.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
