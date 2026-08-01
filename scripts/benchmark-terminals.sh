@@ -22,7 +22,13 @@ term="$term_app/Contents/MacOS/Termatica"
 term_cli="$term_app/Contents/MacOS/termatica"
 term_bench=${TERM_BENCHMARK:-"$root/build/TermaticaBenchmark"}
 probe="$root/scripts/benchmark_probe.py"
-config=/tmp/termatica-benchmark-config
+if [[ -n "${BENCHMARK_CONFIG_DIR:-}" ]]; then
+  config=$BENCHMARK_CONFIG_DIR
+  temporary_config=0
+else
+  config=$(mktemp -d /tmp/termatica-benchmark-config.XXXXXX)
+  temporary_config=1
+fi
 
 for required in "$term" "$term_cli" "$term_bench" "$ghostty" "$kitty" "$kitten" "$probe"; do
   if [[ ! -x "$required" ]]; then
@@ -44,6 +50,9 @@ cleanup() {
   for pid in $pids; do
     kill "$pid" 2>/dev/null || true
   done
+  if (( temporary_config )); then
+    rm -rf -- "$config"
+  fi
 }
 trap cleanup EXIT INT TERM
 

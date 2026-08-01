@@ -1,0 +1,33 @@
+{
+  "schema_version": 1,
+  "system": {
+    "hardware": "Apple M4 Mac16,12",
+    "os": "macOS 26.5.2 (25F84)",
+    "renderer": "appkit",
+    "runs": 5,
+    "frames_per_run": 240,
+    "sustained_seconds_per_run": 10
+  },
+  "methodology": {
+    "key_to_paint": "Synthetic NSEvent through Termatica input mapping, immediate PTY loopback, parse, and warmed full-surface AppKit bitmap paint. This is a software lower bound, not physical key-to-photon.",
+    "energy": "macOS process-attributed rusage_info_v6.ri_energy_nj during sustained Unicode and ANSI parsing. This excludes display and unassigned whole-system energy."
+  },
+  "samples": {
+    "key_to_paint_p50_ms": [1.486063, 1.479030, 1.555085, 1.485944, 1.488090],
+    "key_to_paint_p95_ms": [1.675010, 2.295017, 1.713037, 1.572013, 1.538992],
+    "key_to_paint_p99_ms": [2.627015, 2.985001, 2.293110, 1.742959, 1.600027],
+    "process_energy_joules": [14.486004, 14.420762, 14.455270, 14.234431, 14.605692],
+    "process_average_watts": [1.448561, 1.442050, 1.445480, 1.423419, 1.460523],
+    "process_joules_per_gib": [11.034789, 11.064257, 11.089177, 11.090490, 10.982576],
+    "sustained_mib_per_second": [134.422754, 133.462127, 133.478917, 131.426236, 136.177111]
+  },
+  "median": {
+    "key_to_paint_p50_ms": 1.486063,
+    "key_to_paint_p95_ms": 1.675010,
+    "key_to_paint_p99_ms": 2.293110,
+    "process_energy_joules": 14.455270,
+    "process_average_watts": 1.445480,
+    "process_joules_per_gib": 11.064257,
+    "sustained_mib_per_second": 133.478917
+  }
+}

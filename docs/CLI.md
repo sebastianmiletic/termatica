@@ -26,7 +26,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica config list` | Print the current config and every other saved config |
 | `termatica config get <path>` | Print a dot-separated setting |
 | `termatica config set <path> <value>` | Set a JSON value or string and reload |
-| `termatica config create <name>` | Save current settings as a named config and make it current |
+| `termatica config create <name>` | Create a benchmark-tuned default config and make it current |
 | `termatica config use <name>` | Activate a named config |
 | `termatica config rename <old> <new>` | Rename a saved config |
 | `termatica config delete <name>` | Delete a saved config |

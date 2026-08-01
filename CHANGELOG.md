@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Start every newly created named config from the release benchmark defaults instead of cloning the active profile.
+- Add reliable legacy Option-Left, Option-Right, and Option-Delete word editing while preserving enhanced keyboard protocols.
+- Add repeatable software input-to-paint and macOS process-attributed energy measurements.
+
 ## 1.4.1
 
 - Anchor every fresh shell prompt at the first row without disturbing later scrollback.

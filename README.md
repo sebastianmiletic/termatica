@@ -50,6 +50,12 @@ Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same worklo
 
 Termatica leads 12 of the 15 throughput workloads and has a 137.2 MB/s geometric mean across them, versus 88.7 MB/s for the next result. It also has the lowest shell-ready median in this run. A focused back-to-back acceptance run improved the four requested paths over the pre-change build: parser Unicode 103.1→115.7 MB/s, scrollback Unicode 93.7→109.8 MB/s, rendered long escapes 259.7→277.0 MB/s, and rendered images 251.8→264.1 MB/s. See the [full methodology, focused comparison, complete matrix, and limitations](docs/BENCHMARKS.md).
 
+### Responsiveness and energy
+
+Five repeated 10-second AppKit runs on the same Apple M4 measured a **1.486 ms p50 / 1.675 ms p95 / 2.293 ms p99 software key-to-paint lower bound**. The path begins with a synthetic `NSEvent`, passes through Termatica's input mapping and immediate PTY loopback, parses the echo, and paints a full terminal surface. It is not literal physical key-to-photon latency because it excludes keyboard hardware, shell scheduling, WindowServer/vsync, and display scanout.
+
+The same runs used macOS's process-attributed energy counter and measured a median **14.455 J over 10 seconds**, **1.445 W average**, and **11.064 J/GiB** while sustaining Unicode and ANSI output. This is Termatica process energy, not total Mac or display-wall power. Run `make benchmark-experience` to reproduce it; [all five samples](docs/benchmark-results/responsiveness-energy-2026-08-01.json) and the [methodology and limitations](docs/BENCHMARKS.md) are checked in.
+
 ## What makes it different
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
@@ -102,7 +108,7 @@ t u
 | `termatica config list` | List the current config and other saved configs |
 | `termatica config get <path>` | Read one setting |
 | `termatica config set <path> <value>` | Change one setting and reload the app |
-| `termatica config create <name>` | Create a named config from current settings |
+| `termatica config create <name>` | Create a benchmark-tuned default config and make it current |
 | `termatica config use <name>` | Activate a named config |
 | `termatica config rename <old> <new>` | Rename a config |
 | `termatica config delete <name>` | Delete a saved config |
@@ -162,6 +168,8 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Copy / paste | Command-C / Command-V |
 | Focus or begin text selection | Click / drag |
 | Forward a click to mouse-aware terminal software | Option-click |
+| Move one word backward / forward | Option-Left / Option-Right |
+| Delete the previous word | Option-Delete |
 | New window | Command-N |
 | New terminal | Command-T |
 | Split focused terminal downward | Command-Shift-T |

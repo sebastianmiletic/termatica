@@ -74,7 +74,7 @@ benchmark-core: $(BENCH)
 	TERMATICA_CONFIG_DIR=/tmp/termatica-core-benchmark $(BENCH) --benchmark-core 33554432
 
 benchmark-experience: $(BENCH)
-	TERMATICA_CONFIG_DIR=/tmp/termatica-experience-benchmark $(BENCH) --benchmark-experience 240 3
+	TERMATICA_CONFIG_DIR=/tmp/termatica-experience-benchmark $(BENCH) --benchmark-experience 240 10
 
 benchmark-metal: $(BENCH)
 	TERMATICA_CONFIG_DIR=/tmp/termatica-metal-benchmark $(BENCH) --benchmark-metal 240
@@ -138,6 +138,11 @@ check: release $(BENCH)
 	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
 	  ! grep -Eq ':[[:space:]]*(true|false)([,}])' "$$tmp/config.json"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'SAVED + CURRENT'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 11; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.renderer)" = appkit; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get theme)" = terminal-default; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = OFF; \
+	  test "$$(plutil -extract fontSize raw "$$tmp/configs/dev.json")" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -c 'dev')" = 1; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^current[[:space:]]dev$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" expect -c 'set timeout 5; spawn $(CLI) config; expect "CURRENT"; expect "dev"; send "q"; expect eof' >"$$tmp/current-ui.out"; \
@@ -217,7 +222,7 @@ check: release $(BENCH)
 	  grep -Fq 'OSC 7' src/main.m; \
 	  grep -Fq 'OSC 8' src/main.m; \
 	  grep -Fq 'OSC 133' src/main.m; \
-	  grep -Fq 'if(k==36||k==76)s=@"\r"' src/main.m; \
+	  grep -Fq 'if(!s&&(k==36||k==76))s=@"\r"' src/main.m; \
 	  grep -Fq '[closing stopShellTerminating:YES];[closing removeFromSuperview];[self.window close];' src/main.m; \
 	  grep -Fq 'TDECSpecialGraphics' src/main.m; \
 	  ! grep -Fqi 'tmux' src/main.m; \

@@ -102,6 +102,41 @@ benchmark ordering, asynchronous presentation, and system scheduling. The
 focused back-to-back run is the acceptance evidence for the requested changes;
 the complete matrix remains visible rather than selecting its fastest rows.
 
+## Responsiveness and process energy
+
+The release benchmark configuration was also measured five times with 240
+input/paint samples followed by 10 seconds of sustained Unicode and ANSI
+output. Values below are the median result across the five runs.
+
+| Measurement | Result |
+|---|---:|
+| Software key-to-paint lower bound, p50 | **1.486 ms** |
+| Software key-to-paint lower bound, p95 | **1.675 ms** |
+| Software key-to-paint lower bound, p99 | **2.293 ms** |
+| Process-attributed energy, 10 seconds | **14.455 J** |
+| Process-attributed average power | **1.445 W** |
+| Process-attributed energy per GiB | **11.064 J/GiB** |
+| Sustained throughput during energy sample | **133.479 MiB/s** |
+
+The five p50 samples were 1.486, 1.479, 1.555, 1.486, and 1.488 ms. The
+energy samples were 14.486, 14.421, 14.455, 14.234, and 14.606 J. The
+[checked-in sample summary](benchmark-results/responsiveness-energy-2026-08-01.json)
+preserves every published value; raw per-run JSON is stored locally at
+`/tmp/termatica-responsiveness-energy-2026-08-01`.
+
+The input measurement starts at a synthetic `NSEvent`, passes through
+Termatica's key mapping, loops the resulting bytes back as an immediate PTY
+echo, parses them, and performs a warmed full-surface AppKit paint. It is a
+software pipeline lower bound, not literal key-to-photon: physical keyboard
+latency, a real shell's scheduling, PTY scheduling, WindowServer, vsync, panel
+scanout, and pixel response are excluded. Literal key-to-photon requires an
+external actuator plus a photodiode or high-speed camera.
+
+Energy comes from macOS `rusage_info_v6.ri_energy_nj` for the Termatica
+benchmark process. It includes process-attributed work but excludes the display
+and unassigned whole-system energy, so it must not be compared with wall-power
+measurements. Reproduce both measurements with `make benchmark-experience`.
+
 ## Startup, memory, and size
 
 Startup measures process launch until the child shell writes and fsyncs a probe

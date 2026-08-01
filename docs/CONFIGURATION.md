@@ -4,6 +4,8 @@ All settings live at `~/.config/termatica/config.json`. Named configs are stored
 
 Every named config is a complete, self-contained schema rather than a partial overlay. `config.json` is the active working copy; when it names a saved config, edits are synchronized only to that config. Switching replaces the active copy from the selected file after filling missing defaults, so settings from two configs are never merged together. Existing partial configs are upgraded atomically to schema version 1 with user-only `0600` permissions. A named file's `configName` is always repaired to match its filename, which makes the files portable between Macs and safe to copy independently.
 
+Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. The newly created complete profile becomes current and can then be customized independently.
+
 Run `termatica config` for the interactive editor. Use Up/Down to select any setting and Left/Right (or Enter) to cycle through validated values. Press Escape or Q to go back from every Termatica menu. The settings editor never asks you to type a custom value; config-file names remain the only text-entry operation.
 
 ## Full config reference
