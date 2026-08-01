@@ -2,12 +2,15 @@
 
 All settings live at `~/.config/termatica/config.json`. Named configs are stored in `~/.config/termatica/configs/*.json`. The config is plain JSON and user- and AI-readable. Toggle values are always `"on"` or `"off"`, never `0`, `1`, `true`, or `false`. Changes can be made by a person, shell script, or coding agent. Run `t r` to reload, or just save the file. Termatica watches it for changes.
 
+Every named config is a complete, self-contained schema rather than a partial overlay. `config.json` is the active working copy; when it names a saved config, edits are synchronized only to that config. Switching replaces the active copy from the selected file after filling missing defaults, so settings from two configs are never merged together. Existing partial configs are upgraded atomically to schema version 1 with user-only `0600` permissions. A named file's `configName` is always repaired to match its filename, which makes the files portable between Macs and safe to copy independently.
+
 Run `termatica config` for the interactive editor. Use Up/Down to select any setting and Left/Right (or Enter) to cycle through validated values. Press Escape or Q to go back from every Termatica menu. The settings editor never asks you to type a custom value; config-file names remain the only text-entry operation.
 
 ## Full config reference
 
 ```json
 {
+  "schemaVersion": 1,
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
   "scrollback": 2000,
@@ -26,7 +29,7 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
     "panel": "#151820",
     "muted": "#6B7280",
     "selection": "#2B3445",
-    "palette": ["# hari", "# ..."16ANSIcolors"...],
+    "palette": ["#1B1D23", "#E06C75", "#98C379", "#E5C07B", "#61AFEF", "#C678DD", "#56B6C2", "#D7DAE0", "#5C6370", "#F07178", "#AAD94C", "#FFB454", "#59C2FF", "#D2A6FF", "#95E6CB", "#EEF1F5"],
     "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]
   },
   "appearance": {

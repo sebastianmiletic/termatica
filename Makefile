@@ -88,12 +88,12 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.3.3$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.4.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.3.3'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.4.0'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -145,9 +145,37 @@ check: release $(BENCH)
 	  ! grep -q 'ACTIVE.*dev' "$$tmp/current-ui.out"; \
 	  test "$$(stat -f '%Lp' "$$tmp/configs/dev.json")" = 600; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config rename dev work | grep -q 'RENAMED'; \
+	  test ! -e "$$tmp/configs/dev.json"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use work | grep -q 'CURRENT'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config delete work | grep -q 'DELETED'; \
 	  test ! -e "$$tmp/configs/work.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create alpha >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set fontSize 20 >/dev/null; \
+	  test "$$(plutil -extract fontSize raw "$$tmp/configs/alpha.json")" = 20; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create beta >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config set fontSize 30 >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use alpha >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 20; \
+	  plutil -replace fontSize -integer 21 "$$tmp/config.json"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 21; \
+	  test "$$(plutil -extract fontSize raw "$$tmp/configs/alpha.json")" = 21; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use beta >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 30; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use alpha >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 21; \
+	  printf '%s\n' '{"fontSize":17,"tabs":{"tileGap":3}}' >"$$tmp/configs/partial.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use partial >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 17; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get tabs.tileGap)" = 3; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get tabs.railWidth)" = 34; \
+	  test "$$(plutil -extract configName raw "$$tmp/configs/partial.json")" = partial; \
+	  test "$$(plutil -extract schemaVersion raw "$$tmp/configs/partial.json")" = 1; \
+	  test "$$(stat -f '%Lp' "$$tmp/config.json")" = 600; \
+	  test "$$(stat -f '%Lp' "$$tmp/configs/partial.json")" = 600; \
+	  mkdir -p "$$tmp/orphan"; \
+	  printf '%s\n' '{"configName":"portable","fontSize":19}' >"$$tmp/orphan/config.json"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/orphan" $(CLI) config get fontSize)" = 19; \
+	  test "$$(plutil -extract configName raw "$$tmp/orphan/configs/portable.json")" = portable; \
 	  for removed in code configs plugins themes install skeleterm marketplace profiles catalog config-dir plugins-dir themes-dir; do \
 	    ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) "$$removed" >/dev/null 2>&1; \
 	  done; \
@@ -221,6 +249,7 @@ check: release $(BENCH)
 	  grep -Fq '"plainTextPalette"' Resources/Themes/ghost-glass.json; \
 	  grep -Fq '_colorScratch' src/main.m; \
 	  ! grep -Fq 'THyprlandCanvasView' src/main.m; \
+	  ! grep -Fq '#if 0' src/main.m; \
 	  zsh -n scripts/benchmark-terminals.sh; \
 	  python3 -B -c 'compile(open("scripts/benchmark_probe.py").read(), "scripts/benchmark_probe.py", "exec")'; \
 	  python3 -B -c 'compile(open("scripts/tui_mouse_probe.py").read(), "scripts/tui_mouse_probe.py", "exec")'; \
@@ -243,7 +272,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.3.3 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.4.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

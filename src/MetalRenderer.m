@@ -3,7 +3,7 @@
 #import <CoreText/CoreText.h>
 #import <simd/simd.h>
 
-enum { TMetalAtlasSize = 768 };
+enum { TMetalAtlasSize = 2048 };
 enum { TMetalBold=1, TMetalItalic=2, TMetalUnderline=4, TMetalInverse=8, TMetalWide=16, TMetalContinuation=32, TMetalCluster=64 };
 static const uint32_t TMetalDefaultColor=0xFFFFFFFFu;
 
@@ -70,6 +70,8 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     BOOL _atlasResetDuringBuild;
     BOOL _validatePixels;
     NSValue *_asciiGlyphs[3][128];
+    uint32_t _bmpGlyphKeys[3][256];
+    NSValue *_bmpGlyphs[3][256];
     id<MTLCommandBuffer> _lastCommandBuffer;
 }
 
@@ -131,7 +133,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 
 - (void)resetAtlas {
     [self waitForAtlasSafety];
-    [_glyphs removeAllObjects];memset(_asciiGlyphs,0,sizeof(_asciiGlyphs));memset(_atlasBytes,0,TMetalAtlasSize*TMetalAtlasSize);
+    [_glyphs removeAllObjects];memset(_asciiGlyphs,0,sizeof(_asciiGlyphs));memset(_bmpGlyphKeys,0,sizeof(_bmpGlyphKeys));memset(_bmpGlyphs,0,sizeof(_bmpGlyphs));memset(_atlasBytes,0,TMetalAtlasSize*TMetalAtlasSize);
     _atlasX=1;_atlasY=1;_atlasRowHeight=0;
     MTLRegion region=MTLRegionMake2D(0,0,TMetalAtlasSize,TMetalAtlasSize);
     [_atlasTexture replaceRegion:region mipmapLevel:0 withBytes:_atlasBytes bytesPerRow:TMetalAtlasSize];
@@ -144,7 +146,9 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 
 - (BOOL)configureWithMetrics:(TRenderMetrics)metrics error:(NSError **)error {
     if(metrics.rows==0||metrics.columns==0||metrics.viewportWidth<=0||metrics.viewportHeight<=0){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:5 userInfo:@{NSLocalizedDescriptionKey:@"invalid render metrics"}];return NO;}
+    BOOL glyphMetricsChanged=_metrics.cellWidth>0&&(_metrics.cellWidth!=metrics.cellWidth||_metrics.cellHeight!=metrics.cellHeight||_metrics.scale!=metrics.scale);
     _metrics=metrics;
+    if(glyphMetricsChanged)dispatch_async(_renderQueue,^{[self resetAtlas];});
     dispatch_async(dispatch_get_main_queue(),^{[self setPresentationFrame:CGRectMake(0,0,metrics.viewportWidth,metrics.viewportHeight) scale:metrics.scale];});
     return YES;
 }
@@ -162,7 +166,9 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 - (NSValue *)glyphForText:(NSString *)text font:(NSFont *)font width:(NSUInteger)width height:(NSUInteger)height scale:(CGFloat)scale slot:(NSUInteger)slot {
     NSUInteger pixelWidth=MAX((NSUInteger)1,MIN((NSUInteger)TMetalAtlasSize-2,(NSUInteger)ceil(width*scale)));
     NSUInteger pixelHeight=MAX((NSUInteger)1,MIN((NSUInteger)TMetalAtlasSize-2,(NSUInteger)ceil(height*scale)));
-    unichar asciiCharacter=text.length==1?[text characterAtIndex:0]:128;BOOL ascii=asciiCharacter<128&&slot<3;NSValue *cached=ascii?_asciiGlyphs[slot][asciiCharacter]:nil;NSString *key=nil;if(!ascii){key=[NSString stringWithFormat:@"%@|%.3f|%lu|%lu|%@",font.fontName,font.pointSize,(unsigned long)pixelWidth,(unsigned long)pixelHeight,text];cached=_glyphs[key];}if(cached)return cached;
+    unichar firstChar=text.length>0?[text characterAtIndex:0]:128;BOOL ascii=firstChar<128&&text.length==1&&slot<3;NSValue *cached=ascii?_asciiGlyphs[slot][firstChar]:nil;
+    if(!cached&&text.length==1&&slot<3){NSUInteger bucket=firstChar&0xFF;if(_bmpGlyphKeys[slot][bucket]==firstChar)cached=_bmpGlyphs[slot][bucket];}
+    NSString *key=nil;if(!cached){key=[NSString stringWithFormat:@"%@|%.3f|%lu|%lu|%@",font.fontName,font.pointSize,(unsigned long)pixelWidth,(unsigned long)pixelHeight,text];cached=_glyphs[key];}if(cached)return cached;
     if(_atlasX+pixelWidth+1>TMetalAtlasSize){_atlasX=1;_atlasY+=_atlasRowHeight+1;_atlasRowHeight=0;}
     if(_atlasY+pixelHeight+1>TMetalAtlasSize){[self resetAtlas];_atlasResetDuringBuild=YES;}
     if(_atlasX+pixelWidth+1>TMetalAtlasSize||_atlasY+pixelHeight+1>TMetalAtlasSize)return nil;
@@ -180,7 +186,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     MTLRegion region=MTLRegionMake2D(_atlasX,_atlasY,pixelWidth,pixelHeight);
     [_atlasTexture replaceRegion:region mipmapLevel:0 withBytes:glyph bytesPerRow:pixelWidth];free(glyph);
     CGRect rect=CGRectMake((CGFloat)_atlasX/TMetalAtlasSize,(CGFloat)_atlasY/TMetalAtlasSize,(CGFloat)pixelWidth/TMetalAtlasSize,(CGFloat)pixelHeight/TMetalAtlasSize);
-    cached=[NSValue valueWithRect:NSRectFromCGRect(rect)];if(ascii)_asciiGlyphs[slot][asciiCharacter]=cached;else _glyphs[key]=cached;_atlasX+=pixelWidth+1;_atlasRowHeight=MAX(_atlasRowHeight,pixelHeight);
+    cached=[NSValue valueWithRect:NSRectFromCGRect(rect)];if(ascii)_asciiGlyphs[slot][firstChar]=cached;else if(text.length==1&&slot<3){NSUInteger bucket=firstChar&0xFF;_bmpGlyphKeys[slot][bucket]=firstChar;_bmpGlyphs[slot][bucket]=cached;_glyphs[key]=cached;}else _glyphs[key]=cached;_atlasX+=pixelWidth+1;_atlasRowHeight=MAX(_atlasRowHeight,pixelHeight);
     return cached;
 }
 

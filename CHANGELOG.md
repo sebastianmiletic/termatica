@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.4.0
+
+- Made named configs independent and portable: every file is normalized to a complete versioned schema, the active file mirrors only the selected config, and switching no longer combines stale nested settings from different files.
+- Fixed direct edits to `config.json` failing to persist back to the active named config, filename/name mismatches, incomplete default migration, and inconsistent file permissions.
+- Fixed Metal glyph-cache collisions and resize-time atlas invalidation that could stall renderer fallback checks, increased atlas capacity, and retained explicit AppKit fallback coverage.
+- Replaced mutable shared render masks with immutable cached data and removed unused snapshot storage and disabled legacy code.
+- Hardened Core Graphics image allocation and animation-timer failure paths, and fixed undefined behavior when a pre-layout view produced negative grid space; the Clang static analyzer reports no source warnings and ASan/UBSan pass.
+- Added config-isolation, partial-schema migration, permissions, complex-grapheme, and renderer-resize regression coverage.
+- Made tag releases idempotent so rerunning a release uploads and replaces assets instead of failing when the GitHub release already exists.
+
 ## 1.3.3
 
 - Removed all benchmarking code, the `bench` command, the `termyx engine bench` helper, and all related files. The app is back under 1 MiB.

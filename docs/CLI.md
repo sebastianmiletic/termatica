@@ -64,6 +64,8 @@ The next screen contains Themes, Text & Colour, Appearance, Tabs & Motion, Plugi
 
 Changes are saved and sent to the running app immediately. Config names may contain letters, numbers, dots, dashes, and underscores.
 
+Named configs are independent, complete files. The active `config.json` mirrors only the currently selected file, and switching never shallow-merges one config into another. Older partial configs are normalized to the universal schema on first use without discarding their explicit values.
+
 ## Scriptable config
 
 ```sh
