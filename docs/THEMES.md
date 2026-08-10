@@ -57,7 +57,7 @@ User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.ac
 
 ## Transparency recipes
 
-- Solid and fastest: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: "off"`.
+- Solid with the least compositor work: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: "off"`.
 - Dark glass: `backgroundOpacity: 0.55`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "hud"`.
 - Ghost Glass: `backgroundOpacity: 0.28`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "under-window"`.
 - Stronger background separation: lower `backgroundOpacity`, keep `windowOpacity: 1`, and use `blurMaterial: "under-window"`.

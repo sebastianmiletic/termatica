@@ -1,6 +1,14 @@
 # Changelog
 
-## Unreleased
+## 1.5.0
+
+- Add `termatica benchmark` / `t b`, which measures an isolated offscreen terminal inside the running app with the active visual config and reports version, memory, parser/model throughput, and text/image paint FPS without closing existing sessions.
+- Add CJK input-method composition, CSI intermediates, DECSCUSR cursor shapes, DECRQM mode reports, window-size queries, colon-form true color, OSC 4/104 palette handling, and stricter invalid UTF-8 replacement.
+- Clear stale hyperlink metadata during destructive cell operations and reset underline style completely on SGR reset.
+- Reuse AppKit style attributes and Metal image textures, retain animation frames without per-frame copies, and render transparent Kitty streams as real cached images.
+- Consume pending wrap on explicit newline, clamp presented cursor coordinates to the grid, and ignore native selection clicks below the last visible terminal content while preserving application mouse reporting.
+- Apply each named config's `fontName` to terminal text, IME composition, search controls, and native tab labels.
+- Refresh the feature inventory and six-terminal measurements with explicit competitor wins and benchmark limitations.
 
 ## 1.4.2
 

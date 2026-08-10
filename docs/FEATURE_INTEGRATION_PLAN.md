@@ -1,6 +1,12 @@
 # Feature Integration Plan
 
-This document covers every feature that Kitty and Ghostty have that Termatica currently lacks (marked ❌ or ⚠️ in the comparison table), with implementation approach, estimated effort, and priority for each.
+> Historical planning snapshot. Many items below were subsequently implemented,
+> so its `Current` statements and estimates must not be used as the present
+> feature inventory. See [FEATURES.md](FEATURES.md) for the current factual
+> comparison and [BENCHMARKS.md](BENCHMARKS.md) for current measurements.
+
+This document preserves the original implementation plan for engineering
+history. It is not a current parity claim.
 
 ## Priority tiers
 

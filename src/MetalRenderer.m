@@ -63,6 +63,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     BOOL _stopped;
     TRenderMetrics _metrics;
     NSMutableDictionary<NSString *,NSValue *> *_glyphs;
+    NSMutableDictionary<NSValue *,NSDictionary *> *_imageTextures;
     uint8_t *_atlasBytes;
     NSUInteger _atlasX;
     NSUInteger _atlasY;
@@ -80,7 +81,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error {
     if(!(self=[super init]))return nil;
-    _hostView=view;_stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];
+    _hostView=view;_stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];
     if(getenv("TERMATICA_METAL_FORCE_FAILURE")){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:1 userInfo:@{NSLocalizedDescriptionKey:@"forced Metal initialization failure"}];
         return nil;
@@ -154,7 +155,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 }
 
 - (void)invalidateCaches {
-    dispatch_async(_renderQueue,^{[self resetAtlas];});
+    dispatch_async(_renderQueue,^{[self resetAtlas];[self->_imageTextures removeAllObjects];});
 }
 
 - (void)fail:(NSString *)message code:(NSInteger)code {
@@ -236,6 +237,8 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 }
 
 - (id<MTLTexture>)textureForImage:(CGImageRef)image error:(NSError **)error {
+    NSValue *cacheKey=[NSValue valueWithPointer:(const void *)image];NSDictionary *cached=_imageTextures[cacheKey];
+    if(cached&&(__bridge CGImageRef)cached[@"image"]==image)return cached[@"texture"];
     NSUInteger width=CGImageGetWidth(image),height=CGImageGetHeight(image);
     if(!width||!height||width>16384||height>16384){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:10 userInfo:@{NSLocalizedDescriptionKey:@"invalid image dimensions"}];
@@ -252,6 +255,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     if(texture)[texture replaceRegion:MTLRegionMake2D(0,0,width,height) mipmapLevel:0 withBytes:pixels bytesPerRow:bytesPerRow];
     free(pixels);
     if(!texture&&error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:10 userInfo:@{NSLocalizedDescriptionKey:@"Metal image texture allocation failed"}];
+    if(texture){if(_imageTextures.count>=128)[_imageTextures removeAllObjects];id retainedImage=CFBridgingRelease(CGImageRetain(image));_imageTextures[cacheKey]=@{@"image":retainedImage,@"texture":texture};}
     return texture;
 }
 

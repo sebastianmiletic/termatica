@@ -8,6 +8,7 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 
 | Quick command | Full command |
 |---|---|
+| `t b` | `termatica benchmark` |
 | `t c` | `termatica config` |
 | `t cf` | `termatica config-file` |
 | `t u [check]` | `termatica update [check]` |
@@ -35,6 +36,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica update` | Download, verify, and install the latest GitHub release |
 | `termatica update check` | Check GitHub without installing |
 | `termatica reload` | Reload configuration in the running app |
+| `termatica benchmark` | Benchmark an isolated offscreen terminal inside the running app using the active visual config |
 | `termatica editor <name> [file ...]` | Run a supported editor in the current terminal |
 | `termatica editor list` | List editor adapters |
 | `termatica run <name> [text]` | Invoke a configured extension command |
@@ -107,6 +109,14 @@ If an executable is unavailable, Termatica exits with status 127 and reports it.
 Set `TERMATICA_CONFIG_DIR=/some/folder` to redirect configuration and completion files for portable setups or automation.
 
 ## Benchmarks
+
+`termatica benchmark` (or `t b`) sends a request to the already-running app.
+It reports the running version/build, active config, configured renderer, font,
+display refresh, process memory, ASCII/Unicode/CSI parser-model throughput, and
+warmed offscreen AppKit text/image paint FPS. It creates no PTY and does not
+close or replace a terminal, tab, process, scrollback buffer, or window. The
+paint FPS excludes Metal submission, WindowServer, vsync, and physical display
+latency.
 
 `make benchmark-decoder` measures the incremental C decoder without PTY, screen-model, or presentation overhead. `make benchmark-core` measures the decoder and screen model together. `make benchmark-experience` measures offscreen scroll-paint duration, parse-to-paint duration, sustained-output stability, and process CPU time. These internal benchmarks run through the native-architecture `build/TermaticaBenchmark` harness, which is not included in the app bundle.
 

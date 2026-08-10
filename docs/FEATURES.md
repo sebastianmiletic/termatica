@@ -1,115 +1,67 @@
-# Termatica Features
+# Termatica feature and gap inventory
 
-## Performance
+This inventory separates implemented Termatica behavior from capabilities that
+other terminals provide. Performance results are reported separately in
+[Terminal benchmarks](BENCHMARKS.md).
 
-| Feature | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| Metal GPU rendering | Phase 10 | ✅ OpenGL | ✅ Metal |
-| Immutable render snapshot | ✅ | ✅ | ✅ |
-| AppKit fallback renderer | ✅ | — | — |
-| GPU image compositing | Phase 10 | ✅ | ✅ |
-| GPU cursor rendering | Phase 10 | ✅ | ✅ |
-| Zero-frame overshoot (60Hz) | ✅ 0/240 | — | — |
-| Zero-frame overshoot (120Hz) | ✅ 0/240 | — | — |
-| Zero-frame overshoot (240Hz) | ✅ 0/240 | — | — |
-| ASCII viewport paint p50 | 1.49ms | — | — |
-| Under 40MiB memory | ✅ 30.2MiB | ❌ 120.7MiB | ❌ 86.5MiB |
-| Compact universal bundle | ✅ 1,144KiB | ❌ 160,080KiB | ❌ 63,484KiB |
+## Implemented in Termatica
 
-## Terminal protocols
+- Native macOS PTY terminal with AppKit rendering and an optional Metal backend
+  that falls back to AppKit on renderer failure.
+- ANSI 16/256/true color, colon-form true color, Unicode wide cells and
+  grapheme clusters, CJK input-method composition, DEC special graphics,
+  alternate screen, scrolling regions, cursor styles, and palette queries.
+- Bracketed paste, focus reporting, synchronized output, Kitty keyboard,
+  modifyOtherKeys, application cursor keys, and legacy/UTF-8/SGR/urxvt/pixel
+  mouse encodings.
+- OSC 7 working directory, OSC 8 hyperlinks, OSC 10/11/12 color queries,
+  permission-controlled OSC 52 clipboard access, OSC 133 shell marks, and
+  DECRQM/window-size query responses used by modern TUIs.
+- Sixel, Kitty graphics, and iTerm2 inline-image input, including tested Kitty
+  transmit/query/delete and placement behavior.
+- Scrollback, search, prompt navigation, numbered terminals, native splits,
+  optional Hyprland-style tiling, JSON themes/configuration, named configs,
+  shell integration, and a local control socket.
+- A non-destructive `t benchmark` command that measures the running app with
+  its active visual config and reports version, memory, throughput, and
+  offscreen paint FPS.
 
-| Protocol | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| ANSI 16/256/truecolor | ✅ | ✅ | ✅ |
-| UTF-8 + Unicode | ✅ | ✅ | ✅ |
-| Wide characters (CJK) | ✅ | ✅ | ✅ |
-| Grapheme clusters (emoji ZWJ) | ✅ | ✅ | ✅ |
-| Bracketed paste | ✅ | ✅ | ✅ |
-| Synchronized output (DECSET 2026) | ✅ | ✅ | ✅ |
-| BSU/ESU (DCS flush) | ✅ | ✅ | ✅ |
-| DCS dispatch (ESC P/X/^/_) | ✅ | ✅ | ✅ |
-| Alternate screen (1049/47/1047) | ✅ | ✅ | ✅ |
-| Auto-wrap (DECAWM) | ✅ | ✅ | ✅ |
-| Focus events (1004) | ✅ | ✅ | ✅ |
-| Cursor visibility (25) | ✅ | ✅ | ✅ |
-| Application cursor keys (1) | ✅ | ✅ | ✅ |
-| ModifyOtherKeys | ✅ | ✅ | ✅ |
-| Kitty keyboard protocol (flags 0-31) | ✅ | ✅ | ✅ |
-| REP (CSI Pn b) | ✅ | ✅ | ✅ |
-| Mouse: legacy/UTF-8/SGR/urxvt/pixel | ✅ | ✅ | ✅ |
+## Capabilities other terminals have that Termatica does not
 
-## Image protocols
+| Product | Capability absent or materially narrower in Termatica | Evidence |
+|---|---|---|
+| Kitty | Seven managed layouts, session files, event-driven Python watchers, encrypted remote control over a network, arbitrary copy/paste buffers, per-Unicode-range font selection, and mature kitten extensions | [Kitty overview](https://sw.kovidgoyal.net/kitty/overview/) |
+| Ghostty | Native tabs/splits, Quick Terminal, AppleScript control of windows/tabs/splits/input, Quick Look, proxy icons, automatic system light/dark theme switching, and native window-state recovery | [Ghostty features](https://ghostty.org/docs/features/), [AppleScript](https://ghostty.org/docs/features/applescript) |
+| WezTerm | Local/SSH/TLS multiplexer domains, reconnectable remote sessions, remote panes/tabs, Lua automation, pane introspection, SSH-config discovery, and predictive local echo for high-latency multiplexed sessions | [WezTerm multiplexing](https://wezterm.org/multiplexing.html), [Pane API](https://wezterm.org/config/lua/pane/index.html) |
+| macOS Terminal | Window groups, profile import/export, marks and named bookmarks, AppleScript automation, configurable legacy character encodings, East Asian ambiguous-width policy, and system-native profile management | [Apple profiles](https://support.apple.com/guide/terminal/profiles-change-terminal-windows-trml107/mac), [marks and bookmarks](https://support.apple.com/guide/terminal/trml135fbc26/mac), [advanced settings](https://support.apple.com/guide/terminal/change-profiles-advanced-settings-trmladvn/mac) |
+| Alacritty | Cross-platform macOS/Linux/BSD/Windows availability and a deliberately smaller feature surface maintained as a mature standalone project | [Alacritty project](https://github.com/alacritty/alacritty) |
+| Rio | Cross-platform macOS/Linux/Windows/WebAssembly availability and its own native navigation model | [Rio project](https://github.com/raphamorim/rio) |
 
-| Feature | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| Sixel images | ✅ RGB+HLS | ✅ | ✅ |
-| Sixel scaling | ✅ | ✅ | ✅ |
-| Sixel alpha compositing | ✅ | ✅ | ✅ |
-| Sixel repeat (!n) | ✅ | ✅ | ✅ |
-| Sixel color registers (1024) | ✅ | ✅ | ✅ |
-| Kitty graphics protocol | ✅ | ✅ | ✅ |
-| Image query (a=q) | ✅ | ✅ | ✅ |
-| Image delete (a=d) | ✅ | ✅ | ✅ |
-| Placement offset (x=, y=) | ✅ | ✅ | ✅ |
-| Cell placement (c=, r=) | ✅ | ✅ | ✅ |
-| Destination size (w=, h=) | ✅ | ✅ | ✅ |
-| Image ID (i=) | ✅ | ✅ | ✅ |
-| GIF animation | ✅ per-frame | ✅ per-frame | ✅ per-frame |
-| Virtual placements (U=1) | ✅ | ✅ | ❌ |
-| Transmission type (t=) | ✅ f/d | ✅ | ✅ |
-| iTerm2 inline images | ✅ OSC 1337 | ✅ | ✅ |
+## Current Termatica boundaries
 
-## Shell integration
+- macOS 13 or later only; no Linux, Windows, BSD, or web build.
+- Public builds are ad-hoc signed, not Apple-notarized.
+- No SSH/TLS multiplexer, reconnectable remote domain, serial terminal, or
+  predictive local echo.
+- No Kitty-style session files/watchers/network remote control or WezTerm-style
+  Lua object model.
+- No Ghostty Quick Terminal, AppleScript dictionary, Quick Look integration,
+  proxy icon, or native window restoration.
+- No macOS Terminal window groups, named output bookmarks, or non-UTF-8 encoding
+  selection.
+- Font fallback is delegated to CoreText; there is no user mapping from Unicode
+  ranges to specific fallback fonts.
+- Bidirectional and right-to-left terminal layout is not claimed.
+- VT compatibility is covered by implemented sequence tests, not by a claim of
+  complete xterm or every-application conformance. Programs can emit private or
+  future protocols that are outside the tested set.
 
-| Feature | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| Zsh integration | ✅ | ✅ | ✅ |
-| Bash integration | ✅ | ✅ | ✅ |
-| Fish integration | ✅ | ✅ | ✅ |
-| OSC 7 (cwd reporting) | ✅ | ✅ | ✅ |
-| OSC 8 (hyperlinks) | ✅ | ✅ | ✅ |
-| OSC 10/11/12 (color query) | ✅ | ✅ | ✅ |
-| OSC 52 (clipboard) | ✅ | ✅ | ✅ |
-| OSC 133 (prompt marks) | ✅ | ✅ | ✅ |
-| Prompt navigation | ✅ | ✅ | ✅ |
-| Inherited working directories | ✅ | ✅ | ✅ |
+## Compatibility evidence
 
-## User features
-
-| Feature | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| Scrollback search | ✅ regex+counter | ✅ | ✅ |
-| Case-sensitive search toggle | ✅ | ✅ | ✅ |
-| Window splits | ✅ Cmd+D/Cmd+Shift+D | ✅ | ❌ |
-| Split navigation | ✅ Cmd+]/Cmd+[ | ✅ | ❌ |
-| Hyprland tiling | ✅ | ❌ | ❌ |
-| Arbitrary mixed-size tile movement | ✅ animated slot swap | ❌ | ❌ |
-| Hidden-path mode | ✅ | ❌ | ❌ |
-| Config UI (in-terminal) | ✅ `t c` | ❌ | ✅ GTK |
-| Config file hot-reload | ✅ VNODE watch | ✅ | ✅ |
-| Font feature settings | ✅ liga/calt/ss01/ss02/zero | ✅ | ✅ |
-| Visual bell | ✅ sound/visual/both/none | ✅ | ✅ |
-| Remote control IPC | ✅ JSON socket | ✅ `kitten @` | ❌ |
-| Auto-update (secure) | ✅ SHA256+codesign | ✅ | ❌ |
-| Auto-update notification | ✅ Install Now button | ❌ | ❌ |
-| Fresh top-row shell on launch | ✅ | ✅ | ✅ |
-| Themes | ✅ JSON | ✅ importable | ✅ importable |
-| Tab bar | ✅ overlay rail | ✅ | ✅ |
-| Numbered tabs | ✅ Cmd+1-9 | ✅ | ✅ |
-| Borderless window | ✅ plugin | ✅ | ✅ |
-| CLI tool | ✅ `termatica`/`t` | ✅ `kitten` | ❌ |
-| Shell completions | ✅ zsh/bash/fish | ✅ | ❌ |
-| Secure Keyboard Entry | ✅ | ❌ | ❌ |
-| Unsafe-paste protection | ✅ (off by default) | ❌ | ❌ |
-
-## Platform
-
-| Feature | Termatica | Kitty | Ghostty |
-|---|:---:|:---:|:---:|
-| macOS Apple Silicon | ✅ | ✅ | ✅ |
-| macOS Intel | ✅ | ✅ | ✅ |
-| Linux | ❌ (planned) | ✅ | ✅ |
-| Windows | ❌ | ❌ | ❌ |
-| Notarized builds | ❌ (planned) | ✅ | ✅ |
-| Homebrew | ✅ tap | ✅ | ✅ |
-| Universal binary | ✅ | ✅ | ✅ |
+`make check` exercises incremental/chunked decoding, invalid UTF-8 replacement,
+Unicode graphemes, DEC line drawing, colon true color, cursor styles, DECRQM,
+window-size queries, OSC palettes, CJK IME commit, synchronized output,
+Codex-style inline scrolling, Kitty and legacy keyboard input, mouse modes,
+Sixel/iTerm2/Kitty images, real Metal pixel variation, resize behavior, and
+automatic AppKit fallback. Passing these checks supports the listed behaviors;
+it is not a guarantee that every current or future CLI is defect-free.

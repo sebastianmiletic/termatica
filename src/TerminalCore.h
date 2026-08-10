@@ -79,7 +79,9 @@ typedef struct {
     int parameters[20];
     NSUInteger parameterIndex;
     uint8_t prefix;
+    uint8_t intermediate;
     uint32_t utf8Code;
+    uint32_t utf8Min;
     int utf8Needed;
     uint8_t *stringBytes;
     size_t stringLength;
@@ -96,7 +98,7 @@ typedef struct {
     void (*codepoints)(void *context,const uint32_t *codepoints,size_t count);
     void (*control)(void *context,uint8_t control);
     void (*escape)(void *context,uint8_t finalByte);
-    void (*csi)(void *context,uint8_t finalByte,uint8_t prefix,const int *parameters,size_t count);
+    void (*csi)(void *context,uint8_t finalByte,uint8_t prefix,uint8_t intermediate,const int *parameters,size_t count);
     void (*string)(void *context,const uint8_t *bytes,size_t length);
 } TDecoderSink;
 

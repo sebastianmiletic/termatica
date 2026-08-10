@@ -88,12 +88,14 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.4.2$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.5.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark.*Non-destructive'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.4.2'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.5.0'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -185,6 +187,7 @@ check: release $(BENCH)
 	    ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) "$$removed" >/dev/null 2>&1; \
 	  done; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'config-file'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q '#compdef termatica t'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions bash | grep -q 'update'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions bash | grep -q 'termatica t'; \
@@ -277,7 +280,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.4.2 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.5.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

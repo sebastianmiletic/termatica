@@ -67,7 +67,9 @@ void TDecoderReset(TDecoderState *decoder) {
     decoder->state=TDecodeText;
     decoder->parameterIndex=0;
     decoder->prefix=0;
+    decoder->intermediate=0;
     decoder->utf8Code=0;
+    decoder->utf8Min=0;
     decoder->utf8Needed=0;
     decoder->stringLength=0;
     decoder->stringDiscarded=false;
@@ -86,7 +88,7 @@ static inline void TDecoderAppendStringBytes(TDecoderState *decoder,const uint8_
     if(!decoder->stringLength){
         uint8_t first=bytes[0];
         BOOL osc=decoder->state==TDecodeOSC;
-        BOOL accepted=osc?(first=='0'||first=='1'||first=='2'||first=='5'||first=='7'||first=='8'||first=='9'||first=='b'||first=='e'):(first=='G'||first=='q');
+        BOOL accepted=osc?(first=='0'||first=='1'||first=='2'||first=='4'||first=='5'||first=='7'||first=='8'||first=='9'||first=='b'||first=='e'):(first=='G'||first=='q');
         if(!accepted){decoder->stringDiscarded=true;return;}
     }
     size_t available=TDecoderStringLimit-decoder->stringLength,take=MIN(available,length);
@@ -140,15 +142,15 @@ retry:
             goto retry;
         }
         decoder->utf8Code=(decoder->utf8Code<<6)|(byte&0x3F);
-        if(--decoder->utf8Needed==0)TDecoderEmitCodepoint(decoder,sink,decoder->utf8Code);
+        if(--decoder->utf8Needed==0){uint32_t codepoint=decoder->utf8Code;TDecoderEmitCodepoint(decoder,sink,(codepoint<decoder->utf8Min||codepoint>0x10FFFF||(codepoint>=0xD800&&codepoint<=0xDFFF))?0xFFFD:codepoint);}
     } else if(byte<0x80) {
         TDecoderEmitCodepoint(decoder,sink,byte);
-    } else if((byte&0xE0)==0xC0) {
-        decoder->utf8Code=byte&0x1F;decoder->utf8Needed=1;
-    } else if((byte&0xF0)==0xE0) {
-        decoder->utf8Code=byte&0x0F;decoder->utf8Needed=2;
-    } else if((byte&0xF8)==0xF0) {
-        decoder->utf8Code=byte&0x07;decoder->utf8Needed=3;
+    } else if(byte>=0xC2&&byte<=0xDF) {
+        decoder->utf8Code=byte&0x1F;decoder->utf8Min=0x80;decoder->utf8Needed=1;
+    } else if(byte>=0xE0&&byte<=0xEF) {
+        decoder->utf8Code=byte&0x0F;decoder->utf8Min=0x800;decoder->utf8Needed=2;
+    } else if(byte>=0xF0&&byte<=0xF4) {
+        decoder->utf8Code=byte&0x07;decoder->utf8Min=0x10000;decoder->utf8Needed=3;
     } else TDecoderEmitCodepoint(decoder,sink,0xFFFD);
 }
 
@@ -228,7 +230,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         }
         if(decoder->state==TDecodeEscape){
             decoder->state=TDecodeText;
-            if(byte=='['){decoder->state=TDecodeCSI;memset(decoder->parameters,0,sizeof(decoder->parameters));decoder->parameterIndex=0;decoder->prefix=0;}
+            if(byte=='['){decoder->state=TDecodeCSI;memset(decoder->parameters,0,sizeof(decoder->parameters));decoder->parameterIndex=0;decoder->prefix=0;decoder->intermediate=0;}
             else if(byte==']'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeOSC;}
             else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeDCS;}
             else{TDecoderFlushCodepoints(decoder,sink);if(sink->escape)sink->escape(sink->context,byte);}
@@ -236,10 +238,11 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         }
         if(decoder->state==TDecodeCSI){
             if(byte=='?'||byte=='>'||byte=='<'||byte=='='){decoder->prefix=byte;continue;}
+            if(byte>=0x20&&byte<=0x2F){decoder->intermediate=byte;continue;}
             if(byte>='0'&&byte<='9'){decoder->parameters[decoder->parameterIndex]=decoder->parameters[decoder->parameterIndex]*10+byte-'0';continue;}
             if(byte==';'||byte==':'){if(decoder->parameterIndex<19)decoder->parameterIndex++;continue;}
             if(byte>=0x40&&byte<=0x7E){
-                TDecoderFlushCodepoints(decoder,sink);if(sink->csi)sink->csi(sink->context,byte,decoder->prefix,decoder->parameters,decoder->parameterIndex+1);
+                TDecoderFlushCodepoints(decoder,sink);if(sink->csi)sink->csi(sink->context,byte,decoder->prefix,decoder->intermediate,decoder->parameters,decoder->parameterIndex+1);
                 decoder->state=TDecodeText;
             }
             continue;

@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>The highest overall throughput in our six-terminal benchmark—native, about 1.1 MiB, and shell-ready in 7.8 ms.</strong></p>
+<p align="center"><strong>A native PTY terminal for macOS with AppKit and optional Metal rendering.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -20,43 +20,43 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current universal app allocation is **1144 KiB**, used **30.2 MiB** of physical memory in the current idle snapshot, and runs natively on Apple Silicon and Intel Macs. Its measured shell-ready time is **7.786 ms median / 9.075 ms maximum across five launches**.
+The current local universal build is **1,192 KiB**, used **30.3 MiB** of
+physical memory in one fresh idle snapshot, and runs natively on Apple Silicon
+and Intel Macs. These are measurements from one machine, not fixed resource
+requirements.
 
 ## Measured performance
 
-Fresh `kitten __benchmark__` measurements on an Apple M4 compare the same workloads across Termatica 1.4.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm 20240203, and Rio 0.5.2. Higher throughput is better; lower startup, memory, and size are better.
+The 2026-08-10 Apple M4 comparison used the same Kitty benchmark protocol for
+Termatica 1.5.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
+20240203, and Rio 0.5.2. Higher throughput is better; lower startup and memory
+are better.
 
-| Benchmark | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
-|---|---:|---:|---:|---:|---:|---:|
-| Parser ASCII (MB/s) | **177.5** | 77.4 | 51.7 | 69.9 | 19.3 | 69.5 |
-| Parser Unicode (MB/s) | **119.9** | 102.1 | 86.0 | 103.0 | 29.8 | 53.2 |
-| Parser unique graphemes (MB/s) | **94.0** | 28.4 | 37.9 | 45.6 | 40.4 | 40.6 |
-| Parser CSI-heavy (MB/s) | **88.9** | 43.5 | 30.7 | 52.0 | 13.2 | 36.5 |
-| Parser long escapes (MB/s) | 255.5 | **270.2** | 62.8 | 140.2 | 167.6 | 78.6 |
-| Parser images (MB/s) | **300.3** | 248.0 | 44.3 | 230.7 | 130.6 | 101.7 |
-| Render ASCII (MB/s) | **172.0** | 77.5 | 58.0 | 86.1 | 18.9 | 129.8 |
-| Render Unicode (MB/s) | **117.6** | 71.7 | 84.2 | 115.7 | 25.3 | 9.7 |
-| Render unique graphemes (MB/s) | **87.5** | 14.9 | 38.7 | 48.7 | 30.3 | 55.6 |
-| Render CSI-heavy (MB/s) | **87.8** | 43.8 | 31.7 | 52.0 | 12.9 | 41.2 |
-| Render long escapes (MB/s) | 229.5 | **268.8** | 53.7 | 137.6 | 165.4 | 97.3 |
-| Render images (MB/s) | 226.8 | **251.1** | 39.9 | 242.8 | 132.7 | 137.6 |
-| Scrollback ASCII (MB/s) | **121.0** | 61.4 | 56.5 | 71.5 | 18.7 | 66.7 |
-| Scrollback Unicode (MB/s) | **106.2** | 84.5 | 79.8 | 97.2 | 29.1 | 52.0 |
-| Scrollback CSI-heavy (MB/s) | **81.1** | 43.4 | 31.1 | 51.0 | 13.1 | 36.3 |
-| 15-workload geometric mean (MB/s) | **137.2** | 80.1 | 49.5 | 88.7 | 35.7 | 56.9 |
-| Shell-ready median / max, 5 launches (ms) | **7.786 / 9.075** | 10.309 / 12.489 | 8.416 / 8.892 | 11.583 / 12.385 | 9.356 / 9.911 | 9.014 / 9.691 |
-| Idle physical footprint, one sample (MiB) | **30.2** | 120.7 | 86.5 | 65.4 | 46.7 | 42.6 |
-| App allocation (KiB) | **1144** | 160,080 | 63,484 | 14,328 | 259,840 | 41,992 |
+| Measurement | Termatica | Best other result |
+|---|---:|---:|
+| 15-workload geometric mean | **184.1 MB/s** | Alacritty 154.2 MB/s |
+| Fresh shell-ready median, 5 launches | 4.307 ms | **Rio 3.513 ms** |
+| Idle physical footprint, one sample | **30.3 MiB** | Rio 42.3 MiB |
+| Render Unicode | 160.3 MB/s | **Alacritty 203.7 MB/s** |
+| Render image stream | 332.0 MB/s | **Alacritty 447.4 MB/s** |
 
-Termatica leads 12 of the 15 throughput workloads and has a 137.2 MB/s geometric mean across them, versus 88.7 MB/s for the next result. It also has the lowest shell-ready median in this run. A focused back-to-back acceptance run improved the four requested paths over the pre-change build: parser Unicode 103.1→115.7 MB/s, scrollback Unicode 93.7→109.8 MB/s, rendered long escapes 259.7→277.0 MB/s, and rendered images 251.8→264.1 MB/s. See the [full methodology, focused comparison, complete matrix, and limitations](docs/BENCHMARKS.md).
+Termatica led 9 of 15 throughput rows in this run. Competitors led six rows,
+and Rio had the lowest startup median. The
+image-stream row does not prove equivalent image display because unsupported
+graphics controls may be rejected faster than they are decoded and stored.
+See the [complete matrix, method, raw-output location, and limitations](docs/BENCHMARKS.md).
 
-The subsequent chunk-boundary hardening run improved long-escape parser throughput from 221.6→228.9 MiB/s (+3.3%) and rendered long escapes from 223.5→244.3 MiB/s (+9.3%) in a fresh 10-repetition comparison. The parser now keeps unsupported OSC 6 payloads on a stateful discard path even when a sequence crosses PTY reads, while 1 MiB transient read batches reduce scheduling overhead without increasing idle allocation. [Raw-result summary](docs/benchmark-results/long-escapes-2026-08-01.json).
+To measure the currently running Termatica build with its active visual config:
 
-### Responsiveness and energy
+```sh
+t benchmark
+# or: t b
+```
 
-Five repeated 1,000-sample AppKit runs on the same Apple M4 measured a **1.544 ms p50 / 1.746 ms p95 / 2.146 ms p99 software key-to-paint lower bound**. At p50, event mapping took **0.028 ms**, immediate-echo parsing took **0.00025 ms**, and the full AppKit paint took **1.520 ms**. The path begins with a synthetic `NSEvent`, passes through Termatica's input mapping and immediate PTY loopback, parses the echo, and paints a full terminal surface. It is not literal physical key-to-photon latency because it excludes keyboard hardware, shell scheduling, WindowServer/vsync, and display scanout.
-
-The same runs used macOS's process-attributed energy counter and measured a median **14.455 J over 10 seconds**, **1.445 W average**, and **11.064 J/GiB** while sustaining Unicode and ANSI output. This is Termatica process energy, not total Mac or display-wall power. Run `make benchmark-experience` to reproduce it; [all five samples](docs/benchmark-results/responsiveness-energy-2026-08-01.json) and the [methodology and limitations](docs/BENCHMARKS.md) are checked in.
+This in-app benchmark reports version/build, config, renderer, font, display
+refresh, process memory, ASCII/Unicode/CSI throughput, and offscreen text/image
+paint FPS. It uses an isolated offscreen terminal and does not close or replace
+existing PTYs, tabs, processes, scrollback, or windows.
 
 ## What makes it different
 
@@ -102,6 +102,7 @@ t u
 | Command | Purpose |
 |---|---|
 | `t c` | Open the interactive categorized config UI |
+| `t b` | Benchmark this running app with its active visual config |
 | `t cf` | Open `config.json` |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |
@@ -211,13 +212,14 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Local universal app allocation: **1,144 KiB**
-- Clean one-tab physical footprint in the current snapshot: **30.2 MiB**
+- Local universal app allocation: **1,192 KiB**
+- Clean one-tab physical footprint in the final 2026-08-10 snapshot: **30.3 MiB**
 - Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
 - Built-in capability plugins: **zero persistent helper processes**
 - Terminal history cells: **12 bytes each**
 
-The same benchmark snapshot measured Kitty at 120.7 MiB, Ghostty at 86.5 MiB, Alacritty at 65.4 MiB, WezTerm at 46.7 MiB, and Rio at 42.6 MiB idle physical footprint.
+The same snapshot measured Kitty at 72.1 MiB, Ghostty at 79.3 MiB,
+Alacritty at 142.5 MiB, WezTerm at 44.7 MiB, and Rio at 88.5 MiB.
 
 Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
 
