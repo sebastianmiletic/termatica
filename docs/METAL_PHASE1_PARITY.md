@@ -38,9 +38,10 @@ that an empty or missing-glyph frame cannot satisfy the parity gate.
 Capture-coordinate orientation must remain consistent across all fixtures at
 each backing scale.
 
-If a CI runner has no Metal device, the exact semantic corpus and malformed
-snapshot rejection gates still run. A real Metal-capable machine is required
-for the visual gate.
+On headless CI, the exact semantic corpus, malformed snapshot rejection, and
+forced AppKit fallback gates run without requesting a virtual-display drawable.
+A real Metal-capable host remains required for pixel capture, RMS comparison,
+cache pressure, and GPU recovery validation.
 
 The command is part of `make check`; any semantic, timeout, orientation,
 configuration, visual, or negative-control failure is a release blocker.
