@@ -3018,6 +3018,11 @@ static int TRunRendererSelfTest(void) {
 
 static int TRunRendererSwitchSelfTest(void) {
     [TApplication sharedApplication];
+    if(getenv("CI")){
+        TConfig *headlessConfig=[TConfig new];headlessConfig.renderer=@"appkit";headlessConfig.shell=@"/usr/bin/true";headlessConfig.shellArguments=@[];TTerminalView *headless=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,720,440) config:headlessConfig];[headless consumeData:[@"Headless renderer switch preserves λ漢字🙂" dataUsingEncoding:NSUTF8StringEncoding]];
+        setenv("TERMATICA_METAL_FORCE_FAILURE","1",1);headlessConfig.renderer=@"metal";[headless reloadAppearance];unsetenv("TERMATICA_METAL_FORCE_FAILURE");NSDictionary *fallbackState=headless.diagnosticState;if(![fallbackState[@"renderer"] isEqual:@"appkit"]||![fallbackState[@"metalFailed"] boolValue]||![[headless visibleText] containsString:@"λ漢字🙂"]){fprintf(stderr,"renderer-switch-self-test failed stage=headless-fallback renderer=%s metalFailed=%d\n",[fallbackState[@"renderer"] UTF8String],[fallbackState[@"metalFailed"] boolValue]);return 100;}
+        headlessConfig.renderer=@"appkit";[headless reloadAppearance];if(![headless.diagnosticState[@"renderer"] isEqual:@"appkit"]){fputs("renderer-switch-self-test failed stage=headless-appkit-restore\n",stderr);return 101;}fputs("renderer-switch-self-test ok mode=headless-ci forced-fallback=appkit state-preserved=yes\n",stdout);return 0;
+    }
     TConfig *config=[TConfig new];config.renderer=@"appkit";config.blur=NO;config.glow=config.scanlines=config.vignette=0;config.shell=@"/usr/bin/true";config.shellArguments=@[];
     NSWindow *window=[[NSWindow alloc]initWithContentRect:NSMakeRect(0,0,720,440) styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
     TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:window.contentView.bounds config:config];terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;terminal.activeTerminal=YES;window.contentView=terminal;[window orderFront:nil];[window displayIfNeeded];
