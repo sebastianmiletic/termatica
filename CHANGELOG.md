@@ -1,5 +1,22 @@
 # Changelog
 
+## 1.9.0
+
+- Quarantine a failed Metal renderer for the current session so display,
+  backing-scale, visibility, and wake recovery cannot repeatedly retry Metal or
+  replace the working AppKit fallback.
+- Require an explicit AppKit-to-Metal reselection to retry after fallback while
+  preserving terminal state and the selected configuration.
+- Clear stale Metal layer content and restore AppKit layer policy during
+  automatic fallback.
+- Extend `t rr` to schema 2 with requested/actual renderer, quarantine, retry,
+  failure-stage, failure-age, and bounded-recovery diagnostics.
+- Add a Phase 7 release blocker covering initialization failure, runtime
+  command failure, 96 quarantined lifecycle recoveries, explicit retry,
+  preserved Unicode state, and rollout-policy reporting.
+- Refresh the factual six-terminal benchmark table and retain Rio's measured
+  startup win.
+
 ## 1.8.0
 
 - Add `termatica renderer-report` / `t rr`, a privacy-safe JSON report for

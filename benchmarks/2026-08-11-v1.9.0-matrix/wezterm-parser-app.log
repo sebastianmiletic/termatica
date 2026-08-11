@@ -1,0 +1,3 @@
+21:02:56.578  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding
+21:02:56.602  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding
+21:02:56.625  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding

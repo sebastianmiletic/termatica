@@ -29,8 +29,12 @@ other terminals provide. Performance results are reported separately in
   its active visual config and reports version, memory, throughput, and
   offscreen paint FPS.
 - A privacy-safe `t renderer-report` command that reports display geometry,
-  renderer selection, recovery counts, generations, and Metal failure counts
-  without terminal text, paths, commands, environment, or shell details.
+  requested and actual renderer, recovery counts, generations, Metal failure
+  stage/age, quarantine state, and explicit retry policy without terminal text,
+  paths, commands, environment, or shell details.
+- Session-local Metal failure quarantine: automatic AppKit fallback remains
+  stable across lifecycle recovery, and Metal is retried only after an explicit
+  AppKit-to-Metal reselection.
 
 ## Capabilities other terminals have that Termatica does not
 

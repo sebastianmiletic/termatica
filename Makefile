@@ -94,7 +94,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.8.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.9.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
@@ -102,7 +102,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.8.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.9.0'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
@@ -293,6 +293,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-scheduler-test" $(BENCH) --renderer-scheduler-self-test | grep -q '^renderer-scheduler-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-reliability-test" $(BENCH) --renderer-reliability-self-test | grep -q '^renderer-reliability-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase6-field-test" $(BENCH) --phase6-field-self-test | grep -q '^phase6-field-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/phase7-production-test" $(BENCH) --phase7-production-self-test | grep -q '^phase7-production-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-comparison" $(BENCH) --benchmark-experience 30 0.5 >"$$tmp/renderer-comparison.json"; \
 	  test "$$(stat -f '%z' "$$tmp/renderer-comparison.json")" -gt 4096; \
 	  python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data["schema_version"]==5; assert set(data["renderer_comparison"])=={"methodology","appkit","metal"}' "$$tmp/renderer-comparison.json"; \
@@ -314,7 +315,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.8.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.9.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

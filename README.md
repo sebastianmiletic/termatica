@@ -30,18 +30,18 @@ footprint instead of presenting one host snapshot as a fixed requirement.
 ## Measured performance
 
 The fresh 2026-08-11 Apple M4 comparison used the same Kitty benchmark protocol for
-Termatica 1.8.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
+Termatica 1.9.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
 20240203, and Rio 0.5.2. Higher throughput is better; lower startup and memory
 are better. Bold values are the measured winner in each column.
 
 | Terminal | 15-workload geo mean | Shell-ready median | Physical footprint | App allocation |
 |---|---:|---:|---:|---:|
-| Termatica 1.8.0 | **234.9 MB/s** | 5.532 ms | **29.9 MiB** | **1,360 KiB** |
-| Kitty 0.48.1 | 101.5 MB/s | 8.365 ms | 72.0 MiB | 160,080 KiB |
-| Ghostty 1.3.1 | 86.0 MB/s | 5.695 ms | 90.2 MiB | 63,484 KiB |
-| Alacritty 0.17.0 | 152.8 MB/s | 5.859 ms | 63.5 MiB | 14,328 KiB |
-| WezTerm 20240203 | 63.0 MB/s | 5.409 ms | 44.3 MiB | 259,840 KiB |
-| Rio 0.5.2 | 92.2 MB/s | **5.216 ms** | 88.5 MiB | 41,992 KiB |
+| Termatica 1.9.0 | **232.2 MB/s** | 5.696 ms | **26.0 MiB** | **1,360 KiB** |
+| Kitty 0.48.1 | 108.7 MB/s | 6.225 ms | 118.1 MiB | 160,080 KiB |
+| Ghostty 1.3.1 | 87.3 MB/s | 6.536 ms | 79.4 MiB | 63,484 KiB |
+| Alacritty 0.17.0 | 161.7 MB/s | 5.800 ms | 66.5 MiB | 14,328 KiB |
+| WezTerm 20240203 | 63.3 MB/s | 5.910 ms | 42.4 MiB | 259,840 KiB |
+| Rio 0.5.2 | 93.9 MB/s | **4.874 ms** | 38.0 MiB | 41,992 KiB |
 
 The geometric mean covers six parser, six render-enabled, and three scrollback
 workloads. Render-enabled throughput measures accepted input, not confirmed
@@ -49,7 +49,7 @@ display completion; image rows do not prove equivalent protocol support or
 visual output. Startup is process launch until a child shell writes a ready
 marker, not first visible frame. Memory is one post-settle sample. See the
 [complete method and limitations](docs/BENCHMARKS.md) and the
-[fresh raw artifacts](benchmarks/2026-08-11-v1.8.0-matrix).
+[fresh raw artifacts](benchmarks/2026-08-11-v1.9.0-matrix).
 
 To measure the currently running Termatica build with its active visual config:
 

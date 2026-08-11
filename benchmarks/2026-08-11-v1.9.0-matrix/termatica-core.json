@@ -1,0 +1,24 @@
+{
+  "bytes_per_case" : 33554432,
+  "engine" : "Termatica Core\/AppKit",
+  "results" : [
+    {
+      "bytes" : 33554432,
+      "case" : "ascii",
+      "mib_per_second" : 263.94573897995105,
+      "seconds" : 0.12123703956604004
+    },
+    {
+      "bytes" : 33554432,
+      "case" : "unicode",
+      "mib_per_second" : 176.88459080084397,
+      "seconds" : 0.1809089183807373
+    },
+    {
+      "bytes" : 33554432,
+      "case" : "csi",
+      "mib_per_second" : 126.78987024175692,
+      "seconds" : 0.25238609313964844
+    }
+  ]
+}

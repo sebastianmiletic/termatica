@@ -38,7 +38,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica update check` | Check GitHub without installing |
 | `termatica reload` | Reload configuration in the running app |
 | `termatica benchmark` | Benchmark an isolated offscreen terminal inside the running app using the active visual config |
-| `termatica renderer-report` | Print privacy-safe display, renderer, recovery, and failure diagnostics as JSON |
+| `termatica renderer-report` | Print privacy-safe display, requested/actual renderer, quarantine, retry, recovery, and failure diagnostics as JSON |
 | `termatica editor <name> [file ...]` | Run a supported editor in the current terminal |
 | `termatica editor list` | List editor adapters |
 | `termatica run <name> [text]` | Invoke a configured extension command |
