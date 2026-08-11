@@ -20,7 +20,7 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current local universal build is **1,192 KiB**, used **30.3 MiB** of
+The current local universal build is **1,194 KiB**, used **30.3 MiB** of
 physical memory in one fresh idle snapshot, and runs natively on Apple Silicon
 and Intel Macs. These are measurements from one machine, not fixed resource
 requirements.
@@ -91,11 +91,42 @@ are not closed or replaced.
 - Built-in GitHub updater with launch-time update notification, bounded downloads, archive path/size validation, asset digest verification, code-signature validation, staged replacement, and rollback on installation failure
 - User-owned `0600` control sockets plus contained, owner-checked extension executables and bounded extension output
 
-## Install
+## Download and install
 
-Download the latest [DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg) or [ZIP](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip), then place `Termatica.app` in `/Applications`.
+Termatica requires macOS 13 or later. Each release is a universal build that
+runs natively on Apple Silicon and Intel Macs.
 
-Public builds are currently ad-hoc signed rather than notarized. The first launch may require Control-clicking the app, choosing **Open**, and confirming once.
+### DMG (recommended)
+
+1. Download the latest
+   [Termatica DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg).
+2. Open `Termatica-macOS-universal.dmg`.
+3. Drag `Termatica.app` onto the `Applications` shortcut in the DMG window.
+4. Eject the Termatica disk image, then open Termatica from `/Applications`.
+
+### ZIP
+
+1. Download the latest
+   [Termatica ZIP](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip).
+2. Double-click the ZIP to extract `Termatica.app`.
+3. Move `Termatica.app` into `/Applications`, then open it there.
+
+Public builds are ad-hoc signed and are not currently Apple-notarized. On the
+first launch, macOS may require you to Control-click `Termatica.app`, choose
+**Open**, and confirm. This is a one-time Gatekeeper confirmation for that
+installed build.
+
+To verify downloads, place
+[`SHA256SUMS`](https://github.com/sebastianmiletic/termatica/releases/latest/download/SHA256SUMS)
+beside the downloaded files, then run the matching command:
+
+```sh
+grep 'Termatica-macOS-universal.dmg$' SHA256SUMS | shasum -a 256 -c -
+grep 'Termatica-macOS-universal.zip$' SHA256SUMS | shasum -a 256 -c -
+```
+
+After launch, run `t v` in Termatica to print the installed version. Existing
+users can check for a newer release with `t u check` and install it with `t u`.
 
 ## Commands
 

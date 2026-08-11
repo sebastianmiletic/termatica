@@ -1,5 +1,21 @@
 # Changelog
 
+## 1.6.0
+
+- Metal presentation is paced by the active macOS display refresh signal while
+  retaining immediate first-frame and resize/recovery redraws.
+- The scheduler keeps one pending snapshot, coalesces stale generations, rejects
+  non-monotonic generations, and bounds submitted GPU work to two frames.
+- Metal diagnostics now separate snapshot wait, CPU encoding, GPU execution,
+  GPU completion, and presentation interval measurements.
+- The renderer stress gate covers a 1,000-snapshot burst, queue bounds,
+  generation ordering, display-link delivery, and immediate resize recovery.
+- `--benchmark-experience` now reports AppKit and Metal with matching viewport
+  content, damage, warmup, and frame counts. Large JSON output is written with
+  a complete-write loop so benchmark artifacts cannot be truncated at 4 KiB.
+- The README now contains complete DMG, ZIP, Gatekeeper, checksum, version, and
+  update instructions.
+
 ## 1.5.0
 
 - Add `termatica benchmark` / `t b`, which measures an isolated offscreen terminal inside the running app with the active visual config and reports version, memory, parser/model throughput, and text/image paint FPS without closing existing sessions.

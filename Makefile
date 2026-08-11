@@ -14,7 +14,7 @@ BENCHMARK_RESOURCES := $(APP)/Contents/Resources/Benchmarks/benchmark-live-matri
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
-COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon -framework Metal -framework CoreText
+COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon -framework Metal -framework CoreText -framework CoreVideo
 
 .PHONY: all release run clean size install check package benchmark-harness benchmark-decoder benchmark-core benchmark-experience benchmark-metal benchmark
 
@@ -94,7 +94,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.5.4$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.6.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
@@ -102,7 +102,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.5.4'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.6.0'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -289,6 +289,10 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-switch-test" $(BENCH) --renderer-switch-self-test | grep -q '^renderer-switch-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-parity-test" $(BENCH) --renderer-parity-self-test | grep -q '^renderer-parity-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-cache-test" $(BENCH) --renderer-cache-self-test | grep -q '^renderer-cache-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/renderer-scheduler-test" $(BENCH) --renderer-scheduler-self-test | grep -q '^renderer-scheduler-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/renderer-comparison" $(BENCH) --benchmark-experience 30 0.5 >"$$tmp/renderer-comparison.json"; \
+	  test "$$(stat -f '%z' "$$tmp/renderer-comparison.json")" -gt 4096; \
+	  python3 -c 'import json,sys; data=json.load(open(sys.argv[1])); assert data["schema_version"]==5; assert set(data["renderer_comparison"])=={"methodology","appkit","metal"}' "$$tmp/renderer-comparison.json"; \
 	  $(BENCH) --benchmark-results-self-test | grep -q '^benchmark-results-self-test ok'; \
 	  $(BENCH) --decoder-self-test | grep -q '^decoder-self-test ok'; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
@@ -307,7 +311,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.5.4 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.6.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
