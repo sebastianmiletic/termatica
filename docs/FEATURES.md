@@ -7,7 +7,8 @@ other terminals provide. Performance results are reported separately in
 ## Implemented in Termatica
 
 - Native macOS PTY terminal with AppKit rendering and an optional Metal backend
-  that falls back to AppKit on renderer failure.
+  that falls back to AppKit on renderer failure and redraws state after display,
+  backing-scale, occlusion, and wake transitions.
 - ANSI 16/256/true color, colon-form true color, Unicode wide cells and
   grapheme clusters, CJK input-method composition, DEC special graphics,
   alternate screen, scrolling regions, cursor styles, and palette queries.
@@ -22,6 +23,8 @@ other terminals provide. Performance results are reported separately in
 - Scrollback, search, prompt navigation, numbered terminals, native splits,
   optional Hyprland-style tiling, JSON themes/configuration, named configs,
   shell integration, and a local control socket.
+- Single cursor ownership across tabs and visible splits, including immediate
+  invalidation of the previously focused pane after Command-T or focus changes.
 - A non-destructive `t benchmark` command that measures the running app with
   its active visual config and reports version, memory, throughput, and
   offscreen paint FPS.
@@ -62,6 +65,10 @@ other terminals provide. Performance results are reported separately in
 Unicode graphemes, DEC line drawing, colon true color, cursor styles, DECRQM,
 window-size queries, OSC palettes, CJK IME commit, synchronized output,
 Codex-style inline scrolling, Kitty and legacy keyboard input, mouse modes,
-Sixel/iTerm2/Kitty images, real Metal pixel variation, resize behavior, and
-automatic AppKit fallback. Passing these checks supports the listed behaviors;
-it is not a guarantee that every current or future CLI is defect-free.
+Sixel/iTerm2/Kitty images, real Metal pixel variation, resize behavior, cursor
+ownership across three panes, lifecycle recovery, scheduler/cache bounds, and
+automatic AppKit fallback. A separate real-PTY gate exercises installed shells,
+editors, pagers, monitors, tmux, SSH tooling, Codex, and OpenCode and reports
+missing applications instead of treating them as passed. Passing these checks
+supports the listed behaviors; it is not a guarantee that every current or
+future CLI is defect-free.

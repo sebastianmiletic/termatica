@@ -15,6 +15,7 @@
 @property(nonatomic,readonly) double lastPresentIntervalMilliseconds;
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error;
 - (void)setPresentationFrame:(CGRect)frame scale:(CGFloat)scale;
+- (void)requestImmediatePresentation;
 #if TERMATICA_BENCHMARKS
 - (NSDictionary *)validationFrameCapture;
 - (NSDictionary *)cacheDiagnostics;

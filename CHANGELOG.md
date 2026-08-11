@@ -1,5 +1,23 @@
 # Changelog
 
+## 1.7.0
+
+- Give exactly one terminal pane cursor ownership and invalidate both sides of
+  every focus transition, fixing stale cursors left in other panes after
+  Command-T, tab selection, or split focus changes.
+- Reconfigure and redraw the selected renderer after display, backing-scale,
+  occlusion, screen-wake, and system-wake transitions without resetting the
+  PTY, terminal grid, scrollback, working directory, or active config.
+- Add a renderer reliability gate covering AppKit and Metal, three visible
+  panes, 240 rapid focus switches, 72 lifecycle recoveries, repeated resizes,
+  font reloads, scheduler bounds, and preserved pane contents.
+- Add real-PTY compatibility coverage for installed shells, editors, pagers,
+  monitors, multiplexers, SSH tooling, Codex, and OpenCode, with unavailable
+  programs reported as skipped rather than passed.
+- Add a bounded Metal Unicode/image soak with a 256 MiB process-memory ceiling,
+  32 MiB image-cache ceiling, monotonic generations, one pending snapshot, and
+  at most two in-flight GPU frames.
+
 ## 1.6.0
 
 - Metal presentation is paced by the active macOS display refresh signal while

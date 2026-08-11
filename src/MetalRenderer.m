@@ -258,6 +258,8 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
     [CATransaction begin];[CATransaction setDisableActions:YES];_metalLayer.frame=frame;_metalLayer.contentsScale=MAX(1,scale);_metalLayer.drawableSize=CGSizeMake(MAX(1,frame.size.width*scale),MAX(1,frame.size.height*scale));[CATransaction commit];
 }
 
+- (void)requestImmediatePresentation {@synchronized(_stateLock){_forceImmediatePresentation=YES;}}
+
 - (BOOL)configureWithMetrics:(TRenderMetrics)metrics error:(NSError **)error {
     if(metrics.rows==0||metrics.columns==0||metrics.viewportWidth<=0||metrics.viewportHeight<=0){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:5 userInfo:@{NSLocalizedDescriptionKey:@"invalid render metrics"}];return NO;}
     BOOL glyphMetricsChanged=_metrics.cellWidth>0&&(_metrics.cellWidth!=metrics.cellWidth||_metrics.cellHeight!=metrics.cellHeight||_metrics.scale!=metrics.scale);

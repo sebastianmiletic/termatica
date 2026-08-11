@@ -20,10 +20,10 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current local universal build is **1,194 KiB**, used **30.3 MiB** of
-physical memory in one fresh idle snapshot, and runs natively on Apple Silicon
-and Intel Macs. These are measurements from one machine, not fixed resource
-requirements.
+The current local universal bundle is **1,305.6 KiB** and runs natively on
+Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
+scrollback, images, and workload; `t b` reports the running app's current
+footprint instead of presenting one host snapshot as a fixed requirement.
 
 ## Measured performance
 
@@ -73,7 +73,7 @@ are not closed or replaced.
 ## What makes it different
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
-- Immutable render snapshots, an opt-in Metal backend, and a complete automatic AppKit fallback
+- Immutable render snapshots, an opt-in Metal backend, automatic AppKit fallback, and state-preserving recovery after display, scale, occlusion, and wake changes
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
@@ -83,6 +83,7 @@ are not closed or replaced.
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
 - Native numbered tabs and optional Hyprland-style terminal tiling, with animated movement between arbitrary quarter, half, horizontal, vertical, and mixed-size slots
+- Exact cursor ownership across tabs and splits: focus changes redraw the old and new cursor cells so Command-T cannot leave cursor ghosts in other terminals
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
 - Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, interactive parser scheduling, and bounded PTY backpressure
