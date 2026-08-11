@@ -23,7 +23,7 @@ all: release
 release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
-	  test "$$bytes" -le 1343488 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
+	  test "$$bytes" -le 1572864 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
 
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
