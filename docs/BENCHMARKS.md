@@ -12,37 +12,144 @@ Run this from a shell inside the Termatica instance to be measured:
 t benchmark
 # short form
 t b
+# fresh six-terminal matrix
+t b a
 ```
 
-The CLI asks the already-running app to benchmark an isolated offscreen
-terminal using the active visual configuration. It does not replace or close a
-PTY, tab, process, scrollback buffer, or window. The report includes:
+`t b` launches one isolated Termatica process and measures it now. The other
+columns come from each competitor's latest successful, timestamped `t b a`
+run. `t b a` launches isolated fresh processes for Termatica, Kitty, Ghostty,
+Alacritty, WezTerm, and Rio, runs the same Kitty benchmark protocol in each,
+captures the output, and refreshes the saved results for every successful
+terminal. It closes only the processes it launched. Termatica receives a temporary copy of the active config;
+the user's config file, PTYs, tabs, scrollback, processes, and windows are not
+modified or closed. The common active font and size are applied to competitors
+where their command-line configuration supports it.
+All isolated benchmark processes start in a private temporary working
+directory. Running `t b` from Desktop, Documents, Downloads, or another
+protected folder therefore does not make the benchmark request access to that
+folder.
+
+No comparison values are compiled into either command. The status table labels
+every column `FRESH`, `SAVED`, or `NONE` and prints its UTC measurement time.
+A missing executable, failed workload, or timeout in `t b a` is printed as
+`N/A` with a nonzero command status; it does not overwrite that terminal's last
+successful cache. Raw parser and render output, a manifest, and the exact
+matrix TSV are written to the per-run directory printed at the end. Results
+open in a compact native AppKit window with separate Comparison, Current App,
+and Run Status tabs. Comparison shows all 12 parser/render workloads and the
+aggregate result in adaptive-width monospaced tables, with every tied winner
+bold. Rows do not wrap; horizontal and vertical scrolling preserve alignment
+when a value is longer. The window does not use a deferred or recycled table
+data source.
+
+The interactive default is one fresh repetition per workload so the six-app
+matrix completes promptly. Set `TERMATICA_BENCHMARK_REPETITIONS=3` for a longer
+confirmation run; failures and timeouts still remain `N/A`.
+
+The running app then benchmarks an isolated model and offscreen paint surface
+using the active visual configuration. It does not replace or close a PTY, tab,
+process, scrollback buffer, or window. The report includes:
 
 - Termatica version and build
 - active config, renderer, font, and display refresh rate
 - process physical footprint before and after the sample
 - open window and terminal counts
-- median ASCII, Unicode, and CSI parser/model throughput over three 1 MiB runs
+- median ASCII, Unicode, dense-cell, CSI, and scrolling-region parser/model
+  throughput over three 1 MiB runs
 - warmed offscreen AppKit text and image paint FPS, p50, and p95 over 20 frames
+- a fresh aligned 12-workload comparison and geometric mean for Termatica,
+  Kitty, Ghostty, Alacritty, WezTerm, and Rio
+- per-terminal completion status and versions
 
 The paint number is not Metal FPS, display FPS, or physical key-to-photon
 latency. It excludes WindowServer, vsync, panel scanout, and pixel response.
+The cross-terminal matrix uses Kitty's benchmark driver. Its render-enabled
+mode allows asynchronous presentation, so those values measure accepted
+throughput rather than verified displayed frames. The `CURRENT RUN` section is
+a separate, freshly executed Termatica-only internal model and warmed offscreen
+AppKit paint measurement. The two methods are labeled separately and must not
+be compared directly.
+
+## Termatica 1.5.1 focused Unicode and escape result
+
+On 2026-08-11, released v1.5.0 and the v1.5.1 release candidate were each
+measured in three independent runs with the same active user config, SF Mono
+11, and five repetitions per workload. The table reports the median of those
+three run-level results. Higher accepted throughput is better. These are Kitty
+benchmark protocol results; render-enabled rows do not prove displayed-frame
+completion. Raw artifacts and the extracted series are in
+`benchmarks/2026-08-11-unicode-escapes/median-series`.
+
+| Workload | v1.5.0 median | v1.5.1 median | Change |
+|---|---:|---:|---:|
+| Parser Unicode | 112.8 MiB/s | **121.4 MiB/s** | +7.6% |
+| Parser unique graphemes | 87.2 MiB/s | **93.3 MiB/s** | +7.0% |
+| Parser long escapes | 215.8 MiB/s | **219.1 MiB/s** | +1.5% |
+| Render-enabled Unicode | 109.3 MiB/s | **145.9 MiB/s** | +33.5% |
+| Render-enabled unique graphemes | 84.1 MiB/s | **92.1 MiB/s** | +9.5% |
+| Render-enabled long escapes | 193.4 MiB/s | **210.3 MiB/s** | +8.7% |
+
+The implementation decodes contiguous valid UTF-8 sequences directly into a
+larger batched codepoint buffer, avoids full CSI parameter-array clearing, and
+constructs common two-scalar graphemes without intermediate strings. Invalid
+and fragmented UTF-8, fragmented OSC 6, and chunk boundaries remain covered by
+the decoder and terminal self-tests. A rejected 32-byte OSC/DCS scan experiment
+was removed after it regressed long-escape throughput. The three-run series is
+retained so the result is not selected from a single favorable sample.
+
+If an already-running app predates the benchmark request handler, `t b` now
+stops after 15 seconds with an explicit one-time restart instruction. It does
+not close the old process or its terminals. A current app replies directly.
 
 One isolated live-app verification on 2026-08-10 returned:
 
 | Measurement | Result |
 |---|---:|
-| ASCII parser/model | 261.8 MiB/s |
-| Unicode parser/model | 169.7 MiB/s |
-| CSI parser/model | 186.8 MiB/s |
-| Offscreen text paint | 620.1 FPS; 1.613 ms p50; 1.807 ms p95 |
-| Offscreen image paint | 587.7 FPS; 1.701 ms p50; 1.858 ms p95 |
-| Process footprint | 35.0 MiB before; 38.9 MiB after |
+| ASCII parser/model | 174.9 MiB/s |
+| Unicode parser/model | 90.7 MiB/s |
+| Dense cells/model | 126.7 MiB/s |
+| CSI parser/model | 99.9 MiB/s |
+| Scrolling region/model | 285.0 MiB/s |
+| Offscreen text paint | 312.8 FPS; 3.197 ms p50; 3.511 ms p95 |
+| Offscreen image paint | 303.3 FPS; 3.297 ms p50; 3.353 ms p95 |
+| Process footprint | 81.1 MiB before; 88.0 MiB after |
 
-That sample used Termatica 1.4.2 build 50, the `custom` config, AppKit,
+That sample used Termatica 1.5.0 build 51, the `custom` config, AppKit,
 Monaco 11, and a 60 Hz display. In-app results are configuration- and
 machine-specific and should not be compared with the cross-terminal protocol
 results below.
+
+## Upstream vtebench PTY throughput
+
+The [Alacritty vtebench](https://github.com/alacritty/vtebench) suite measures
+how long a terminal takes to accept workload bytes through its PTY. It does not
+measure frame rate, presentation latency, visual correctness, or the time at
+which every byte becomes visible. Lower time is better.
+
+The following run used upstream vtebench commit
+`ead80032e57dee2e75f0b51f2ea67528647d9944`, its default 10-second limit per
+workload, 1 MiB minimum samples, and the same machine as the supplied reference
+results. Raw output is `/tmp/termatica-vte-final-20260810a.dat`.
+
+| Workload | Supplied reference avg | Updated Termatica avg | Updated p90 | Change |
+|---|---:|---:|---:|---:|
+| dense_cells | 15.35 ms | **9.21 ms** | 10 ms | 40.0% lower |
+| medium_cells | 16.37 ms | **7.92 ms** | 8 ms | 51.6% lower |
+| scrolling | 113.39 ms | **60.66 ms** | 143 ms | 46.5% lower |
+| scrolling_bottom_region | 40.30 ms | **24.01 ms** | 64 ms | 40.4% lower |
+| scrolling_bottom_small_region | 43.93 ms | **23.87 ms** | 65 ms | 45.7% lower |
+| scrolling_fullscreen | 232.68 ms | **104.99 ms** | 181 ms | 54.9% lower |
+| scrolling_top_region | 393.33 ms | **24.24 ms** | 64 ms | 93.8% lower |
+| scrolling_top_small_region | 42.37 ms | **23.95 ms** | 64 ms | 43.5% lower |
+| sync_medium_cells | 12.00 ms | **8.06 ms** | 8 ms | 32.8% lower |
+| unicode | 10.11 ms | **6.85 ms** | 7 ms | 32.2% lower |
+
+The optimized implementation rotates physical row indexes for full-screen and
+DECSTBM-region scrolling and clears only the reused row. A regression test
+checks forward region scrolling and reverse-index row order. The p90 values
+show that scrolling still has scheduling-related tail latency; the table does
+not claim that variance has been eliminated.
 
 ## Cross-terminal method
 
@@ -58,11 +165,12 @@ results below.
 - Font: Monaco 11 where the terminal exposed an isolated command-line setting
 - Throughput repetitions: 3
 - Startup launches: 5
-- Raw output: `/tmp/termatica-render-fixes-final-20260810`
+- Raw output: `/tmp/termatica-all-categories-clean-20260810`
 
 ```sh
 BENCHMARK_REPETITIONS=3 \
-BENCHMARK_OUTPUT=/tmp/termatica-render-fixes-final-20260810 \
+BENCHMARK_TIMEOUT_SECONDS=900 \
+BENCHMARK_OUTPUT=/tmp/termatica-all-categories-clean-20260810 \
 make benchmark
 ```
 
@@ -74,34 +182,32 @@ lower startup and memory are better. Values are reported by Kitty's
 
 | Mode / workload (MB/s) | Termatica | Kitty | Ghostty | Alacritty | WezTerm | Rio |
 |---|---:|---:|---:|---:|---:|---:|
-| Parser ASCII | **136.7** | 95.0 | 80.3 | 129.6 | 32.5 | 125.4 |
-| Parser Unicode | 169.7 | 153.4 | 124.8 | **186.2** | 56.8 | 95.5 |
-| Parser unique graphemes | **144.3** | 50.3 | 58.3 | 82.0 | 76.7 | 73.5 |
-| Parser CSI-heavy | **168.1** | 72.8 | 51.2 | 92.8 | 24.5 | 68.5 |
-| Parser long escapes | 226.0 | **327.6** | 92.6 | 223.6 | 317.9 | 150.1 |
-| Parser image stream | 261.9 | 275.9 | 73.3 | **417.9** | 238.4 | 180.4 |
-| Render ASCII | 158.6 | 115.7 | 88.2 | 129.3 | 30.6 | **167.3** |
-| Render Unicode | 160.3 | 48.3 | 175.2 | **203.7** | 41.9 | 5.3 |
-| Render unique graphemes | **159.9** | 21.4 | 71.7 | 89.7 | 55.4 | 106.0 |
-| Render CSI-heavy | **163.4** | 72.0 | 50.9 | 101.0 | 21.3 | 85.3 |
-| Render long escapes | **291.1** | 271.9 | 102.0 | 223.7 | 267.8 | 163.9 |
-| Render image stream | 332.0 | 271.9 | 74.8 | **447.4** | 203.4 | 255.9 |
-| Scrollback ASCII | **141.8** | 82.5 | 91.8 | 100.0 | 31.2 | 98.7 |
-| Scrollback Unicode | **188.1** | 129.5 | 129.3 | 166.2 | 48.3 | 98.2 |
-| Scrollback CSI-heavy | **165.9** | 72.2 | 49.1 | 97.5 | 21.1 | 69.1 |
-| 15-workload geometric mean | **184.1** | 105.9 | 82.0 | 154.2 | 61.5 | 93.5 |
+| Parser ASCII | **309.1** | 113.0 | 89.0 | 127.1 | 34.6 | 126.4 |
+| Parser Unicode | **212.1** | 146.4 | 123.6 | 182.5 | 53.8 | 97.1 |
+| Parser unique graphemes | **160.0** | 49.0 | 58.5 | 86.4 | 70.1 | 75.1 |
+| Parser CSI-heavy | **170.1** | 55.5 | 52.1 | 94.3 | 23.5 | 70.2 |
+| Parser long escapes | 287.9 | **327.9** | 93.5 | 286.0 | 299.3 | 154.2 |
+| Parser image stream | 296.4 | 287.5 | 74.4 | **418.9** | 248.3 | 182.9 |
+| Render ASCII | **314.9** | 115.7 | 108.0 | 153.5 | 34.3 | 231.7 |
+| Render Unicode | 205.7 | 62.0 | 162.8 | **208.4** | 38.4 | 5.2 |
+| Render unique graphemes | **153.3** | 25.3 | 70.7 | 89.0 | 59.9 | 93.5 |
+| Render CSI-heavy | **165.9** | 55.5 | 55.7 | 103.0 | 22.3 | 82.8 |
+| Render long escapes | **354.3** | 326.1 | 101.2 | 269.5 | 278.6 | 162.0 |
+| Render image stream | 349.3 | 284.4 | 77.6 | **443.9** | 240.8 | 243.8 |
+| Scrollback ASCII | **231.6** | 94.4 | 88.9 | 122.9 | 34.0 | 119.1 |
+| Scrollback Unicode | **186.6** | 123.9 | 129.1 | 164.5 | 54.2 | 59.9 |
+| Scrollback CSI-heavy | **165.2** | 55.4 | 52.5 | 93.4 | 23.8 | 70.1 |
+| 15-workload geometric mean | **227.2** | 106.5 | 84.2 | 162.8 | 63.8 | 93.0 |
 
 ## Results where another terminal was faster
 
 | Measurement | Faster terminal | Faster result | Termatica | Difference |
 |---|---|---:|---:|---:|
-| Fresh shell-ready median, 5 launches | Rio | **3.513 ms** | 4.307 ms | Rio 0.794 ms lower |
-| Parser Unicode | Alacritty | **186.2 MB/s** | 169.7 MB/s | Alacritty 9.7% higher |
-| Parser long escapes | Kitty | **327.6 MB/s** | 226.0 MB/s | Kitty 45.0% higher |
-| Parser image stream | Alacritty | **417.9 MB/s** | 261.9 MB/s | Alacritty 59.6% higher |
-| Render ASCII | Rio | **167.3 MB/s** | 158.6 MB/s | Rio 5.5% higher |
-| Render Unicode | Alacritty | **203.7 MB/s** | 160.3 MB/s | Alacritty 27.1% higher |
-| Render image stream | Alacritty | **447.4 MB/s** | 332.0 MB/s | Alacritty 34.8% higher |
+| Fresh shell-ready median, 5 launches | Alacritty | **4.658 ms** | 5.837 ms | Alacritty 1.179 ms lower |
+| Parser long escapes | Kitty | **327.9 MB/s** | 287.9 MB/s | Kitty 13.9% higher |
+| Parser image stream | Alacritty | **418.9 MB/s** | 296.4 MB/s | Alacritty 41.3% higher |
+| Render Unicode | Alacritty | **208.4 MB/s** | 205.7 MB/s | Alacritty 1.3% higher |
+| Render image stream | Alacritty | **443.9 MB/s** | 349.3 MB/s | Alacritty 27.1% higher |
 
 WezTerm and Ghostty did not lead a throughput row in this particular matrix.
 This is a statement about this run, not a general claim about those applications.
@@ -111,6 +217,14 @@ the same image. The input contains terminal graphics controls; a terminal can
 increase reported throughput by rejecting or discarding an unsupported
 protocol. Visual equivalence was not instrumented by this harness.
 
+A separate seven-repetition confirmation run of Unicode, long escapes, and
+images was written to `/tmp/termatica-losses-confirm-20260810`. In that narrower
+run Termatica led rendered Unicode (205.5 versus Alacritty 187.1 MB/s), Kitty
+led long escapes by 1.9% or less, and Alacritty retained both image-stream
+throughput leads. The complete matrix above remains the primary result; the
+confirmation is reported to show run-to-run variability rather than replacing
+unfavourable primary measurements.
+
 ## Startup and memory
 
 Startup is process launch until the benchmark child shell writes and fsyncs a
@@ -119,12 +233,12 @@ footprint sample and varies with macOS caching and compression.
 
 | Terminal | Shell-ready median | Physical footprint | App allocation |
 |---|---:|---:|---:|
-| Termatica | 4.307 ms | **30.3 MiB** | **1,192 KiB** |
-| Kitty | 6.860 ms | 121.2 MiB | 160,080 KiB |
-| Ghostty | 5.321 ms | 128.3 MiB | 63,484 KiB |
-| Alacritty | 4.185 ms | 66.5 MiB | 14,328 KiB |
-| WezTerm | 4.955 ms | 46.1 MiB | 259,840 KiB |
-| Rio | **3.513 ms** | 42.3 MiB | 41,992 KiB |
+| Termatica | 5.837 ms | **25.9 MiB** | **1,208 KiB** |
+| Kitty | 5.533 ms | 115.6 MiB | 160,080 KiB |
+| Ghostty | 5.037 ms | 78.0 MiB | 63,484 KiB |
+| Alacritty | **4.658 ms** | 69.0 MiB | 14,328 KiB |
+| WezTerm | 5.701 ms | 45.4 MiB | 259,840 KiB |
+| Rio | 4.712 ms | 42.1 MiB | 41,992 KiB |
 
 ## macOS Terminal boundary
 

@@ -46,9 +46,20 @@ mkdir -p "$config/rio/rio"
 print 'local wezterm = require "wezterm"\nreturn { font = wezterm.font("Monaco"), font_size = 11.0, enable_tab_bar = false, window_close_confirmation = "NeverPrompt" }' > "$config/wezterm.lua"
 print '[fonts]\nfamily = "Monaco"\nsize = 11' > "$config/rio/rio/config.toml"
 pids=()
+stop_pid() {
+  local pid=${1:-}
+  [[ -n "$pid" ]] || return 0
+  kill "$pid" 2>/dev/null || return 0
+  for _ in {1..40}; do
+    kill -0 "$pid" 2>/dev/null || { wait "$pid" 2>/dev/null || true; return 0; }
+    sleep 0.05
+  done
+  kill -KILL "$pid" 2>/dev/null || true
+  wait "$pid" 2>/dev/null || true
+}
 cleanup() {
   for pid in $pids; do
-    kill "$pid" 2>/dev/null || true
+    stop_pid "$pid"
   done
   if (( temporary_config )); then
     rm -rf -- "$config"
@@ -132,8 +143,7 @@ run_extra_official() {
   pid=$(launch_extra "$name" "$command > '$result' 2>&1; exit" "$output/$name-$suffix-app.log")
   pids+=($pid)
   wait_for_file "$result"
-  kill "$pid" 2>/dev/null || true
-  wait "$pid" 2>/dev/null || true
+  stop_pid "$pid"
   pids=()
 }
 
@@ -147,7 +157,7 @@ run_official() {
     >"$output/termatica-$suffix-app.log" 2>&1 &
   pids+=($!)
   wait_for_file "$output/termatica-$suffix.txt"
-  kill "$pids[-1]" 2>/dev/null || true
+  stop_pid "$pids[-1]"
   pids=()
 
   : > "$output/kitty-$suffix.txt"
@@ -156,7 +166,7 @@ run_official() {
     >"$output/kitty-$suffix-app.log" 2>&1 &
   pids+=($!)
   wait_for_file "$output/kitty-$suffix.txt"
-  kill "$pids[-1]" 2>/dev/null || true
+  stop_pid "$pids[-1]"
   pids=()
 
   : > "$output/ghostty-$suffix.txt"
@@ -166,7 +176,7 @@ run_official() {
   ghost_pid=$(wait_for_ghostty_process "$output/ghostty-$suffix.txt")
   pids+=($ghost_pid)
   wait_for_file "$output/ghostty-$suffix.txt"
-  kill "$ghost_pid" 2>/dev/null || true
+  stop_pid "$ghost_pid"
   pids=()
 }
 
@@ -200,11 +210,11 @@ measure_startup() {
     child=$(<"$stamp")
     /usr/bin/python3 -c "print(round(($child-$start)/1_000_000, 3))" >> "$result"
     if [[ -n "${pid:-}" ]]; then
-      kill "$pid" 2>/dev/null || true
+      stop_pid "$pid"
       pids=()
     else
       pid=$(find_ghostty_process "$stamp")
-      [[ -n "$pid" ]] && kill "$pid" 2>/dev/null || true
+      [[ -n "$pid" ]] && stop_pid "$pid" || true
     fi
   done
 }
@@ -236,7 +246,7 @@ measure_memory() {
     vmmap -summary "$pid" 2>/dev/null | grep -E \
       'Physical footprint:|Physical footprint \\(peak\\):'
   } > "$output/$name-memory.txt"
-  kill "$pid" 2>/dev/null || true
+  stop_pid "$pid"
   pids=()
 }
 

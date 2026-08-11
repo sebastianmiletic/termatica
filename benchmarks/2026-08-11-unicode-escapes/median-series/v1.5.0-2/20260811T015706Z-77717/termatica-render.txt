@@ -1,0 +1,10 @@
+]\cThese results measure the time it takes the terminal to fully parse all the data sent to it.
+Note that not all data transmitted will be displayed as input parsing is typically asynchronous with rendering in high performance terminals.
+
+Results:
+  Only ASCII chars                     : 57.33ms    @ [32m174.4  [m MB/s
+  Unicode chars                        : 81.37ms    @ [32m111.2  [m MB/s
+  Unique multi-codepoint Unicode cells : 101.95ms   @ [32m85.8   [m MB/s
+  CSI codes with few chars             : 55.37ms    @ [32m90.3   [m MB/s
+  Long escape codes                    : 173.46ms   @ [32m226.0  [m MB/s
+  Images                               : 126.92ms   @ [32m210.1  [m MB/s

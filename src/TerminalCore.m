@@ -131,6 +131,19 @@ static inline const uint8_t *TDecoderFindStringStop(const uint8_t *bytes,size_t 
     return NULL;
 }
 
+static inline size_t TDecoderConsumeValidUTF8(TDecoderState *decoder,const uint8_t *bytes,size_t length,const TDecoderSink *sink) {
+    size_t index=0;
+    while(index<length){
+        uint8_t first=bytes[index],second=0,third=0,fourth=0;uint32_t codepoint=0;size_t width=0;
+        if(first>=0xC2&&first<=0xDF){width=2;if(length-index<width)break;second=bytes[index+1];if((second&0xC0)!=0x80)break;codepoint=((uint32_t)(first&0x1F)<<6)|(second&0x3F);}
+        else if(first>=0xE0&&first<=0xEF){width=3;if(length-index<width)break;second=bytes[index+1];third=bytes[index+2];if((second&0xC0)!=0x80||(third&0xC0)!=0x80||(first==0xE0&&second<0xA0)||(first==0xED&&second>=0xA0))break;codepoint=((uint32_t)(first&0x0F)<<12)|((uint32_t)(second&0x3F)<<6)|(third&0x3F);}
+        else if(first>=0xF0&&first<=0xF4){width=4;if(length-index<width)break;second=bytes[index+1];third=bytes[index+2];fourth=bytes[index+3];if((second&0xC0)!=0x80||(third&0xC0)!=0x80||(fourth&0xC0)!=0x80||(first==0xF0&&second<0x90)||(first==0xF4&&second>=0x90))break;codepoint=((uint32_t)(first&7)<<18)|((uint32_t)(second&0x3F)<<12)|((uint32_t)(third&0x3F)<<6)|(fourth&0x3F);}
+        else break;
+        TDecoderEmitCodepoint(decoder,sink,codepoint);index+=width;
+    }
+    return index;
+}
+
 static inline void TDecoderConsumeTextByte(TDecoderState *decoder,uint8_t byte,const TDecoderSink *sink) {
 retry:
     if(byte==27){TDecoderFlushCodepoints(decoder,sink);decoder->state=TDecodeEscape;return;}
@@ -158,6 +171,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
     if(!decoder||!bytes||!sink)return;
     for(size_t index=0;index<length;index++){
         uint8_t byte=bytes[index];
+        if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte>=0x80){size_t consumed=TDecoderConsumeValidUTF8(decoder,bytes+index,length-index,sink);if(consumed){index+=consumed-1;continue;}}
         if(decoder->state==TDecodeText&&!decoder->utf8Needed&&byte==27&&index+3<length){
             if(bytes[index+1]==']'&&bytes[index+2]=='6'&&bytes[index+3]==';'){
                 size_t cursor=index;
@@ -230,7 +244,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
         }
         if(decoder->state==TDecodeEscape){
             decoder->state=TDecodeText;
-            if(byte=='['){decoder->state=TDecodeCSI;memset(decoder->parameters,0,sizeof(decoder->parameters));decoder->parameterIndex=0;decoder->prefix=0;decoder->intermediate=0;}
+            if(byte=='['){decoder->state=TDecodeCSI;decoder->parameters[0]=0;decoder->parameterIndex=0;decoder->prefix=0;decoder->intermediate=0;}
             else if(byte==']'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeOSC;}
             else if(byte=='P'||byte=='X'||byte=='^'||byte=='_'){decoder->stringLength=0;decoder->stringDiscarded=false;decoder->state=TDecodeDCS;}
             else{TDecoderFlushCodepoints(decoder,sink);if(sink->escape)sink->escape(sink->context,byte);}
@@ -240,7 +254,7 @@ void TDecoderConsume(TDecoderState *decoder,const uint8_t *bytes,size_t length,c
             if(byte=='?'||byte=='>'||byte=='<'||byte=='='){decoder->prefix=byte;continue;}
             if(byte>=0x20&&byte<=0x2F){decoder->intermediate=byte;continue;}
             if(byte>='0'&&byte<='9'){decoder->parameters[decoder->parameterIndex]=decoder->parameters[decoder->parameterIndex]*10+byte-'0';continue;}
-            if(byte==';'||byte==':'){if(decoder->parameterIndex<19)decoder->parameterIndex++;continue;}
+            if(byte==';'||byte==':'){if(decoder->parameterIndex<19){decoder->parameterIndex++;decoder->parameters[decoder->parameterIndex]=0;}continue;}
             if(byte>=0x40&&byte<=0x7E){
                 TDecoderFlushCodepoints(decoder,sink);if(sink->csi)sink->csi(sink->context,byte,decoder->prefix,decoder->intermediate,decoder->parameters,decoder->parameterIndex+1);
                 decoder->state=TDecodeText;

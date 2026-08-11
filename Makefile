@@ -10,6 +10,7 @@ ICON := $(APP)/Contents/Resources/AppIcon.icns
 THEMES := $(patsubst Resources/Themes/%,$(APP)/Contents/Resources/Themes/%,$(wildcard Resources/Themes/*.json))
 SHELL_INTEGRATION := $(shell find Resources/ShellIntegration -type f)
 SHELL_INTEGRATION_RESOURCES := $(patsubst Resources/ShellIntegration/%,$(APP)/Contents/Resources/ShellIntegration/%,$(SHELL_INTEGRATION))
+BENCHMARK_RESOURCES := $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
@@ -19,7 +20,7 @@ COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroo
 
 all: release
 
-release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES)
+release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
 	  test "$$bytes" -le 1310720 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
@@ -60,6 +61,11 @@ $(APP)/Contents/Resources/ShellIntegration/%: Resources/ShellIntegration/%
 	@mkdir -p $(dir $@)
 	cp $< $@
 
+$(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh: scripts/benchmark-live-matrix.sh
+	@mkdir -p $(dir $@)
+	cp $< $@
+	chmod 755 $@
+
 run: release
 	open $(APP)
 
@@ -88,14 +94,15 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.5.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.5.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark.*Non-destructive'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.5.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.5.1'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -237,6 +244,18 @@ check: release $(BENCH)
 	  grep -Fq 'dispatch_async(self->_parseQueue,^{[self drainPendingData];})' src/main.m; \
 	  grep -Fq 'dataWithBytesNoCopy:buffer' src/main.m; \
 	  grep -Fq 'TDecoderConsume(&_decoder' src/main.m; \
+	  grep -Fq 't b a' src/main.m; \
+	  grep -Fq 'FRESH TERMATICA BENCHMARK' scripts/benchmark-live-matrix.sh; \
+	  grep -Fq 'FRESH ALL-TERMINAL BENCHMARK' scripts/benchmark-live-matrix.sh; \
+	  grep -Fq 'result_path=' scripts/benchmark-live-matrix.sh; \
+	  grep -Fq 'task.currentDirectoryURL=[NSURL fileURLWithPath:NSTemporaryDirectory() isDirectory:YES]' src/main.m; \
+	  grep -Fq 'cd "$$work" || exit 1' scripts/benchmark-live-matrix.sh; \
+	  grep -Fq 'TBenchmarkResultsController' src/main.m; \
+	  grep -Fq 'NSTextView *comparisonTextView' src/main.m; \
+	  grep -Fq 'adaptive-text all-data no-wrap winner=bold' src/main.m; \
+	  ! grep -Fq 'Parser ASCII          309.1' src/main.m; \
+	  test -x $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh; \
+	  zsh -n scripts/benchmark-live-matrix.sh; \
 	  grep -Fq 'routeWheelLines:lines event:event' src/main.m; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/zsh/.zshenv; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/share/fish/vendor_conf.d/termatica.fish; \
@@ -263,6 +282,7 @@ check: release $(BENCH)
 	  python3 -B -c 'compile(open("scripts/tui_mouse_probe.py").read(), "scripts/tui_mouse_probe.py", "exec")'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/self-test" $(BENCH) --terminal-self-test | grep -q '^terminal-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-test" $(BENCH) --renderer-self-test | grep -q '^renderer-self-test ok'; \
+	  $(BENCH) --benchmark-results-self-test | grep -q '^benchmark-results-self-test ok'; \
 	  $(BENCH) --decoder-self-test | grep -q '^decoder-self-test ok'; \
 	  $(CLI) editor list | grep -q 'vim, nvim, emacs, nano, micro, hx'; \
 	  fixture="$$tmp/release-fixture"; \
@@ -280,7 +300,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.5.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.5.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

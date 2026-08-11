@@ -28,20 +28,20 @@ requirements.
 ## Measured performance
 
 The 2026-08-10 Apple M4 comparison used the same Kitty benchmark protocol for
-Termatica 1.5.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
+Termatica 1.5.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
 20240203, and Rio 0.5.2. Higher throughput is better; lower startup and memory
 are better.
 
 | Measurement | Termatica | Best other result |
 |---|---:|---:|
-| 15-workload geometric mean | **184.1 MB/s** | Alacritty 154.2 MB/s |
-| Fresh shell-ready median, 5 launches | 4.307 ms | **Rio 3.513 ms** |
-| Idle physical footprint, one sample | **30.3 MiB** | Rio 42.3 MiB |
-| Render Unicode | 160.3 MB/s | **Alacritty 203.7 MB/s** |
-| Render image stream | 332.0 MB/s | **Alacritty 447.4 MB/s** |
+| 15-workload geometric mean | **227.2 MB/s** | Alacritty 162.8 MB/s |
+| Fresh shell-ready median, 5 launches | 5.837 ms | **Alacritty 4.658 ms** |
+| Idle physical footprint, one sample | **25.9 MiB** | Rio 42.1 MiB |
+| Render Unicode | 205.7 MB/s | **Alacritty 208.4 MB/s** |
+| Render image stream | 349.3 MB/s | **Alacritty 443.9 MB/s** |
 
-Termatica led 9 of 15 throughput rows in this run. Competitors led six rows,
-and Rio had the lowest startup median. The
+Termatica led 11 of 15 throughput rows in this run. Competitors led four rows,
+and Alacritty had the lowest startup median. The
 image-stream row does not prove equivalent image display because unsupported
 graphics controls may be rejected faster than they are decoded and stored.
 See the [complete matrix, method, raw-output location, and limitations](docs/BENCHMARKS.md).
@@ -51,12 +51,24 @@ To measure the currently running Termatica build with its active visual config:
 ```sh
 t benchmark
 # or: t b
+# all installed comparison terminals: t b a
 ```
 
-This in-app benchmark reports version/build, config, renderer, font, display
-refresh, process memory, ASCII/Unicode/CSI throughput, and offscreen text/image
-paint FPS. It uses an isolated offscreen terminal and does not close or replace
-existing PTYs, tabs, processes, scrollback, or windows.
+`t b` measures Termatica now and fills the competitor columns from each
+terminal's latest successful, timestamped `t b a` result. `t b a` launches
+fresh, isolated Termatica, Kitty, Ghostty, Alacritty, WezTerm, and Rio processes
+and refreshes that cache. Termatica receives a temporary copy of the active
+config, and the common font and size are applied where each competitor exposes
+command-line settings. Results open in a compact native AppKit window showing
+all 12 parser/render workloads and the aggregate result in adaptive-width,
+monospaced tables. Rows never wrap and every tied winner is bold. Current-app
+and run-status details stay in separate tabs. Only processes launched by the
+benchmark are closed. Missing or failed terminals
+remain `N/A`; a failed fresh run is never presented as successful. The command also reports the
+running app's version/build, config, renderer, font, display refresh, process
+memory, ASCII/Unicode/CSI throughput, and offscreen
+text/image paint FPS. Existing PTYs, tabs, processes, scrollback, and windows
+are not closed or replaced.
 
 ## What makes it different
 
@@ -102,7 +114,8 @@ t u
 | Command | Purpose |
 |---|---|
 | `t c` | Open the interactive categorized config UI |
-| `t b` | Benchmark this running app with its active visual config |
+| `t b` | Benchmark Termatica now and compare with saved competitor runs |
+| `t b a` | Benchmark every installed comparison terminal now |
 | `t cf` | Open `config.json` |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |

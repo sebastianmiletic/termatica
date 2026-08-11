@@ -1,0 +1,36 @@
+v1.5.0-1	parser	Long escapes	215.8
+v1.5.0-1	parser	Unicode	112.8
+v1.5.0-1	parser	Unique graphemes	87.2
+v1.5.0-1	render	Long escapes	193.4
+v1.5.0-1	render	Unicode	109.1
+v1.5.0-1	render	Unique graphemes	84.1
+v1.5.0-2	parser	Long escapes	230.3
+v1.5.0-2	parser	Unicode	115.1
+v1.5.0-2	parser	Unique graphemes	88.4
+v1.5.0-2	render	Long escapes	226.0
+v1.5.0-2	render	Unicode	111.2
+v1.5.0-2	render	Unique graphemes	85.8
+v1.5.0-3	parser	Long escapes	214.3
+v1.5.0-3	parser	Unicode	111.5
+v1.5.0-3	parser	Unique graphemes	82.6
+v1.5.0-3	render	Long escapes	190.7
+v1.5.0-3	render	Unicode	109.3
+v1.5.0-3	render	Unique graphemes	82.1
+v1.5.1-1	parser	Long escapes	219.1
+v1.5.1-1	parser	Unicode	124.7
+v1.5.1-1	parser	Unique graphemes	92.3
+v1.5.1-1	render	Long escapes	210.3
+v1.5.1-1	render	Unicode	147.0
+v1.5.1-1	render	Unique graphemes	91.5
+v1.5.1-2	parser	Long escapes	210.8
+v1.5.1-2	parser	Unicode	121.4
+v1.5.1-2	parser	Unique graphemes	93.5
+v1.5.1-2	render	Long escapes	137.3
+v1.5.1-2	render	Unicode	145.6
+v1.5.1-2	render	Unique graphemes	92.7
+v1.5.1-3	parser	Long escapes	221.6
+v1.5.1-3	parser	Unicode	112.4
+v1.5.1-3	parser	Unique graphemes	93.3
+v1.5.1-3	render	Long escapes	211.0
+v1.5.1-3	render	Unicode	145.9
+v1.5.1-3	render	Unique graphemes	92.1

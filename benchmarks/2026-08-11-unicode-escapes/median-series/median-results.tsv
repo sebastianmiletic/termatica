@@ -1,0 +1,6 @@
+parser	Long escapes	v1.5.0=215.8	v1.5.1=219.1	change=+1.5%
+parser	Unicode	v1.5.0=112.8	v1.5.1=121.4	change=+7.6%
+parser	Unique graphemes	v1.5.0=87.2	v1.5.1=93.3	change=+7.0%
+render	Long escapes	v1.5.0=193.4	v1.5.1=210.3	change=+8.7%
+render	Unicode	v1.5.0=109.3	v1.5.1=145.9	change=+33.5%
+render	Unique graphemes	v1.5.0=84.1	v1.5.1=92.1	change=+9.5%

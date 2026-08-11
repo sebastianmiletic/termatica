@@ -1,0 +1,14 @@
+mode	workload	termatica	kitty	ghostty	alacritty	wezterm	rio
+parser	ASCII	174.7	n/a	n/a	n/a	n/a	n/a
+parser	Unicode	115.1	n/a	n/a	n/a	n/a	n/a
+parser	Unique graphemes	88.4	n/a	n/a	n/a	n/a	n/a
+parser	CSI-heavy	92.7	n/a	n/a	n/a	n/a	n/a
+parser	Long escapes	230.3	n/a	n/a	n/a	n/a	n/a
+parser	Image stream	232.1	n/a	n/a	n/a	n/a	n/a
+render	ASCII	174.4	n/a	n/a	n/a	n/a	n/a
+render	Unicode	111.2	n/a	n/a	n/a	n/a	n/a
+render	Unique graphemes	85.8	n/a	n/a	n/a	n/a	n/a
+render	CSI-heavy	90.3	n/a	n/a	n/a	n/a	n/a
+render	Long escapes	226.0	n/a	n/a	n/a	n/a	n/a
+render	Image stream	210.1	n/a	n/a	n/a	n/a	n/a
+summary	12-workload geo mean	141.2	n/a	n/a	n/a	n/a	n/a
