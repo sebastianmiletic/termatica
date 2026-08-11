@@ -11,4 +11,9 @@
 @property(nonatomic,readonly) double lastGPUExecutionMilliseconds;
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error;
 - (void)setPresentationFrame:(CGRect)frame scale:(CGFloat)scale;
+#if TERMATICA_BENCHMARKS
+- (NSDictionary *)validationFrameCapture;
+- (NSDictionary *)cacheDiagnostics;
+- (void)purgeCachesForValidation;
+#endif
 @end

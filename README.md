@@ -73,7 +73,7 @@ are not closed or replaced.
 ## What makes it different
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
-- Immutable render snapshots and a complete AppKit fallback for the planned Metal backend
+- Immutable render snapshots, an opt-in Metal backend, and a complete automatic AppKit fallback
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI

@@ -3,7 +3,10 @@
 #import <CoreText/CoreText.h>
 #import <simd/simd.h>
 
-enum { TMetalAtlasSize = 2048 };
+enum { TMetalAtlasSize = 1024, TMetalColorAtlasSize = 1024, TMetalMaxAtlasPages = 4 };
+static const NSUInteger TMetalImageCacheBudget=32u*1024u*1024u;
+static const NSUInteger TMetalImageUploadLimit=256u*1024u*1024u;
+static const void *TMetalRenderQueueKey=&TMetalRenderQueueKey;
 enum { TMetalBold=1, TMetalItalic=2, TMetalUnderline=4, TMetalInverse=8, TMetalWide=16, TMetalContinuation=32, TMetalCluster=64 };
 static const uint32_t TMetalDefaultColor=0xFFFFFFFFu;
 
@@ -15,6 +18,19 @@ typedef struct {
     uint32_t color;
     uint32_t kind;
 } TMetalInstance;
+
+typedef struct {
+    CGRect uv;
+    float offsetX;
+    float offsetY;
+    float width;
+    float height;
+    uint32_t kind;
+    uint32_t page;
+#if TERMATICA_BENCHMARKS
+    uint32_t fallback;
+#endif
+} TMetalGlyph;
 
 static uint32_t TMetalRGBA(uint32_t rgb,CGFloat alpha) {
     return ((rgb&0xFFFFFFu)<<8)|(uint32_t)lrint(MAX(0,MIN(1,alpha))*255.0);
@@ -36,10 +52,20 @@ static void TMetalAppendQuad(NSMutableData *data,float x,float y,float width,flo
     [data appendBytes:&instance length:sizeof(instance)];
 }
 
-static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloat width,uint8_t style,uint32_t color) {
-    CGFloat thickness=style==2?2:1;if(style<=2){TMetalAppendQuad(data,x,y-thickness,width,thickness,0,0,0,0,color,0);return;}
+static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloat width,CGFloat baseThickness,uint8_t style,uint32_t color) {
+    CGFloat thickness=MAX(baseThickness,0.5)*(style==2?2:1);if(style<=2){TMetalAppendQuad(data,x,y-thickness,width,thickness,0,0,0,0,color,0);return;}
     CGFloat position=0;while(position<width){CGFloat length=style==4?1:(style==5&&fmod(position,9)>=6?1:4);length=MIN(length,width-position);TMetalAppendQuad(data,x+position,y-thickness,length,thickness,0,0,0,0,color,0);position+=style==4?3:(style==5?(length==1?3:6):6);}
 }
+
+static BOOL TMetalLineUsesColorGlyphs(CTLineRef line) {
+    CFArrayRef runs=CTLineGetGlyphRuns(line);for(CFIndex index=0;index<CFArrayGetCount(runs);index++){CTRunRef run=(CTRunRef)CFArrayGetValueAtIndex(runs,index);CFDictionaryRef attributes=CTRunGetAttributes(run);CTFontRef font=attributes?CFDictionaryGetValue(attributes,kCTFontAttributeName):NULL;if(font&&(CTFontGetSymbolicTraits(font)&kCTFontTraitColorGlyphs))return YES;}return NO;
+}
+
+#if TERMATICA_BENCHMARKS
+static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
+    CFStringRef requested=(__bridge CFStringRef)requestedFont.fontName;CFArrayRef runs=CTLineGetGlyphRuns(line);for(CFIndex index=0;index<CFArrayGetCount(runs);index++){CTRunRef run=(CTRunRef)CFArrayGetValueAtIndex(runs,index);CFDictionaryRef attributes=CTRunGetAttributes(run);CTFontRef font=attributes?CFDictionaryGetValue(attributes,kCTFontAttributeName):NULL;if(!font)continue;CFStringRef actual=CTFontCopyPostScriptName(font);BOOL differs=actual&&requested&&CFStringCompare(actual,requested,0)!=kCFCompareEqualTo;if(actual)CFRelease(actual);if(differs)return YES;}return NO;
+}
+#endif
 
 @interface TMetalRenderBackend ()
 @property(nonatomic,readwrite) uint64_t lastPresentedGeneration;
@@ -47,6 +73,15 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 @property(nonatomic,readwrite) BOOL lastFrameVariedPixels;
 @property(nonatomic,readwrite) double lastCPUEncodeMilliseconds;
 @property(nonatomic,readwrite) double lastGPUExecutionMilliseconds;
+#if TERMATICA_BENCHMARKS
+@property(nonatomic,readwrite) NSData *lastFramePixels;
+@property(nonatomic,readwrite) NSUInteger lastFramePixelWidth;
+@property(nonatomic,readwrite) NSUInteger lastFramePixelHeight;
+@property(nonatomic,readwrite) NSUInteger lastFrameBytesPerRow;
+@property(nonatomic,readwrite) NSUInteger lastFrameColorGlyphCount;
+@property(nonatomic,readwrite) NSUInteger lastFrameFallbackGlyphCount;
+#endif
+- (void)purgeResourceCachesForMemoryPressure;
 @end
 
 @implementation TMetalRenderBackend {
@@ -56,6 +91,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     id<MTLCommandQueue> _commandQueue;
     id<MTLRenderPipelineState> _pipeline;
     id<MTLTexture> _atlasTexture;
+    id<MTLTexture> _colorAtlasTexture;
     dispatch_queue_t _renderQueue;
     NSObject *_stateLock;
     TRenderSnapshot *_pendingSnapshot;
@@ -64,24 +100,45 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     TRenderMetrics _metrics;
     NSMutableDictionary<NSString *,NSValue *> *_glyphs;
     NSMutableDictionary<NSValue *,NSDictionary *> *_imageTextures;
-    uint8_t *_atlasBytes;
-    NSUInteger _atlasX;
-    NSUInteger _atlasY;
-    NSUInteger _atlasRowHeight;
+    NSMutableArray<NSValue *> *_imageLRU;
+    NSUInteger _atlasX[TMetalMaxAtlasPages];
+    NSUInteger _atlasY[TMetalMaxAtlasPages];
+    NSUInteger _atlasRowHeight[TMetalMaxAtlasPages];
+    NSUInteger _colorAtlasX[TMetalMaxAtlasPages];
+    NSUInteger _colorAtlasY[TMetalMaxAtlasPages];
+    NSUInteger _colorAtlasRowHeight[TMetalMaxAtlasPages];
+    NSUInteger _atlasPage;
+    NSUInteger _colorAtlasPage;
+    NSUInteger _atlasPageCount;
+    NSUInteger _colorAtlasPageCount;
+    NSUInteger _imageTextureBytes;
+#if TERMATICA_BENCHMARKS
+    NSUInteger _imageEvictionCount;
+    NSUInteger _glyphEntryCount;
+    NSUInteger _atlasResetCount;
+    NSUInteger _memoryPurgeCount;
+#endif
     BOOL _atlasResetDuringBuild;
     BOOL _validatePixels;
     NSValue *_asciiGlyphs[3][128];
     uint32_t _bmpGlyphKeys[3][256];
     NSValue *_bmpGlyphs[3][256];
+    NSFont *_slotFonts[3];
     id<MTLCommandBuffer> _lastCommandBuffer;
+    dispatch_source_t _memoryPressureSource;
 }
 
 - (NSString *)name {return @"metal";}
 - (CALayer *)presentationLayer {return _metalLayer;}
+#if TERMATICA_BENCHMARKS
+- (NSDictionary *)validationFrameCapture {@synchronized(_stateLock){if(!self.lastFramePixels.length)return @{};return @{@"pixels":self.lastFramePixels,@"width":@(self.lastFramePixelWidth),@"height":@(self.lastFramePixelHeight),@"bytesPerRow":@(self.lastFrameBytesPerRow),@"generation":@(self.lastPresentedGeneration),@"colorGlyphs":@(self.lastFrameColorGlyphCount),@"fallbackGlyphs":@(self.lastFrameFallbackGlyphCount)};}}
+- (NSDictionary *)cacheDiagnostics {__block NSDictionary *result=nil;dispatch_sync(_renderQueue,^{NSUInteger monoGPU=self->_atlasPageCount*TMetalAtlasSize*TMetalAtlasSize,colorGPU=self->_colorAtlasPageCount*TMetalColorAtlasSize*TMetalColorAtlasSize*4;result=@{@"glyphEntries":@(self->_glyphEntryCount),@"imageEntries":@(self->_imageTextures.count),@"imageBytes":@(self->_imageTextureBytes),@"imageBudget":@(TMetalImageCacheBudget),@"monoAtlasPages":@(self->_atlasPageCount),@"colorAtlasPages":@(self->_colorAtlasPageCount),@"monoAtlasGPUBytes":@(monoGPU),@"colorAtlasGPUBytes":@(colorGPU),@"atlasCPUBytes":@0,@"totalCacheBytes":@(monoGPU+colorGPU+self->_imageTextureBytes),@"colorAtlasAllocated":@(self->_colorAtlasTexture!=nil),@"imageEvictions":@(self->_imageEvictionCount),@"atlasResets":@(self->_atlasResetCount),@"memoryPurges":@(self->_memoryPurgeCount)};});return result?:@{};}
+- (void)purgeCachesForValidation {dispatch_sync(_renderQueue,^{[self purgeResourceCachesForMemoryPressure];});}
+#endif
 
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error {
     if(!(self=[super init]))return nil;
-    _hostView=view;_stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];
+    _hostView=view;_stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];_imageLRU=[NSMutableArray array];
     if(getenv("TERMATICA_METAL_FORCE_FAILURE")){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:1 userInfo:@{NSLocalizedDescriptionKey:@"forced Metal initialization failure"}];
         return nil;
@@ -98,8 +155,8 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     "vertex O tv(uint v[[vertex_id]],uint n[[instance_id]],constant I*i[[buffer(0)]],constant float2&vp[[buffer(1)]]){"
     "float2 q=v==0?float2(0,0):(v==1?float2(1,0):(v==2?float2(0,1):float2(1,1)));I a=i[n];float2 z=a.o+q*a.s;"
     "O o;o.p=float4(z.x/vp.x*2-1,1-z.y/vp.y*2,0,1);o.u=mix(a.u0,a.u1,q);o.c=color(a.c);o.k=a.k;return o;}"
-    "fragment float4 tf(O i[[stage_in]],texture2d<float> t[[texture(0)]]){constexpr sampler s(coord::normalized,filter::linear);"
-    "if(i.k==0)return i.c;float4 p=t.sample(s,i.u);if(i.k==1)return float4(i.c.rgb,i.c.a*p.r);return p*i.c;}";
+    "fragment float4 tf(O i[[stage_in]],texture2d_array<float> mono[[texture(0)]],texture2d_array<float> colorGlyphs[[texture(1)]],texture2d<float> image[[texture(2)]]){constexpr sampler s(coord::normalized,filter::linear);uint k=i.k&255;uint page=(i.k>>16)&255;"
+    "if(k==0)return i.c;if(k==1){float4 p=mono.sample(s,i.u,page);return float4(i.c.rgb,i.c.a*p.r);}if(k==3)return colorGlyphs.sample(s,i.u,page);return image.sample(s,i.u)*i.c;}";
     NSError *libraryError=nil;id<MTLLibrary> library=[_device newLibraryWithSource:source options:nil error:&libraryError];
     if(!library){if(error)*error=libraryError;return nil;}
     MTLRenderPipelineDescriptor *descriptor=[MTLRenderPipelineDescriptor new];
@@ -113,10 +170,10 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     _pipeline=[_device newRenderPipelineStateWithDescriptor:descriptor error:&libraryError];
     if(!_pipeline){if(error)*error=libraryError;return nil;}
     MTLTextureDescriptor *atlasDescriptor=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:MTLPixelFormatR8Unorm width:TMetalAtlasSize height:TMetalAtlasSize mipmapped:NO];
-    atlasDescriptor.usage=MTLTextureUsageShaderRead;_atlasTexture=[_device newTextureWithDescriptor:atlasDescriptor];
-    _atlasBytes=calloc(TMetalAtlasSize*TMetalAtlasSize,1);
-    if(!_atlasTexture||!_atlasBytes){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:4 userInfo:@{NSLocalizedDescriptionKey:@"Metal glyph atlas allocation failed"}];return nil;}
-    _renderQueue=dispatch_queue_create("com.termatica.metal-render",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);
+    atlasDescriptor.textureType=MTLTextureType2DArray;atlasDescriptor.arrayLength=1;atlasDescriptor.usage=MTLTextureUsageShaderRead;_atlasTexture=[_device newTextureWithDescriptor:atlasDescriptor];_atlasPageCount=1;
+    if(!_atlasTexture){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:4 userInfo:@{NSLocalizedDescriptionKey:@"Metal glyph atlas allocation failed"}];return nil;}
+    _renderQueue=dispatch_queue_create("com.termatica.metal-render",DISPATCH_QUEUE_SERIAL_WITH_AUTORELEASE_POOL);dispatch_queue_set_specific(_renderQueue,TMetalRenderQueueKey,(__bridge void *)self,NULL);
+    _memoryPressureSource=dispatch_source_create(DISPATCH_SOURCE_TYPE_MEMORYPRESSURE,0,DISPATCH_MEMORYPRESSURE_WARN|DISPATCH_MEMORYPRESSURE_CRITICAL,_renderQueue);if(_memoryPressureSource){__weak typeof(self) weakSelf=self;dispatch_source_set_event_handler(_memoryPressureSource,^{[weakSelf purgeResourceCachesForMemoryPressure];});dispatch_resume(_memoryPressureSource);}
     _validatePixels=getenv("TERMATICA_METAL_VALIDATE_PIXELS")!=NULL;
     _metalLayer=[CAMetalLayer layer];_metalLayer.device=_device;_metalLayer.pixelFormat=MTLPixelFormatBGRA8Unorm;_metalLayer.framebufferOnly=!_validatePixels;_metalLayer.maximumDrawableCount=2;_metalLayer.allowsNextDrawableTimeout=YES;_metalLayer.opaque=NO;_metalLayer.hidden=YES;
     [view.layer addSublayer:_metalLayer];
@@ -124,7 +181,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     return self;
 }
 
-- (void)dealloc {free(_atlasBytes);}
+- (void)dealloc {if(_memoryPressureSource){dispatch_source_set_event_handler(_memoryPressureSource,^{});dispatch_source_cancel(_memoryPressureSource);}}
 
 - (void)waitForAtlasSafety {
     id<MTLCommandBuffer> command=nil;@synchronized(_stateLock){command=_lastCommandBuffer;}
@@ -134,10 +191,29 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 
 - (void)resetAtlas {
     [self waitForAtlasSafety];
-    [_glyphs removeAllObjects];memset(_asciiGlyphs,0,sizeof(_asciiGlyphs));memset(_bmpGlyphKeys,0,sizeof(_bmpGlyphKeys));memset(_bmpGlyphs,0,sizeof(_bmpGlyphs));memset(_atlasBytes,0,TMetalAtlasSize*TMetalAtlasSize);
-    _atlasX=1;_atlasY=1;_atlasRowHeight=0;
-    MTLRegion region=MTLRegionMake2D(0,0,TMetalAtlasSize,TMetalAtlasSize);
-    [_atlasTexture replaceRegion:region mipmapLevel:0 withBytes:_atlasBytes bytesPerRow:TMetalAtlasSize];
+    [_glyphs removeAllObjects];for(NSUInteger slot=0;slot<3;slot++){for(NSUInteger scalar=0;scalar<128;scalar++)_asciiGlyphs[slot][scalar]=nil;for(NSUInteger bucket=0;bucket<256;bucket++){_bmpGlyphKeys[slot][bucket]=0;_bmpGlyphs[slot][bucket]=nil;}_slotFonts[slot]=nil;}memset(_atlasX,0,sizeof(_atlasX));memset(_atlasY,0,sizeof(_atlasY));memset(_atlasRowHeight,0,sizeof(_atlasRowHeight));memset(_colorAtlasX,0,sizeof(_colorAtlasX));memset(_colorAtlasY,0,sizeof(_colorAtlasY));memset(_colorAtlasRowHeight,0,sizeof(_colorAtlasRowHeight));for(NSUInteger page=0;page<TMetalMaxAtlasPages;page++){_atlasX[page]=1;_atlasY[page]=1;_colorAtlasX[page]=1;_colorAtlasY[page]=1;}_atlasPage=0;_colorAtlasPage=0;
+#if TERMATICA_BENCHMARKS
+    _glyphEntryCount=0;_atlasResetCount++;
+#endif
+}
+
+- (id<MTLTexture>)newGlyphAtlasColor:(BOOL)color pages:(NSUInteger)pages {NSUInteger size=color?TMetalColorAtlasSize:TMetalAtlasSize;MTLTextureDescriptor *descriptor=[MTLTextureDescriptor texture2DDescriptorWithPixelFormat:color?MTLPixelFormatBGRA8Unorm:MTLPixelFormatR8Unorm width:size height:size mipmapped:NO];descriptor.textureType=MTLTextureType2DArray;descriptor.arrayLength=MAX((NSUInteger)1,MIN((NSUInteger)TMetalMaxAtlasPages,pages));descriptor.usage=MTLTextureUsageShaderRead;return [_device newTextureWithDescriptor:descriptor];}
+
+- (BOOL)ensureColorAtlas {
+    if(_colorAtlasTexture)return YES;_colorAtlasTexture=[self newGlyphAtlasColor:YES pages:1];_colorAtlasPageCount=_colorAtlasTexture?1:0;return _colorAtlasTexture!=nil;
+}
+
+- (BOOL)growGlyphAtlasColor:(BOOL)color {NSUInteger count=color?_colorAtlasPageCount:_atlasPageCount;if(count>=TMetalMaxAtlasPages)return NO;[self waitForAtlasSafety];id<MTLTexture> texture=[self newGlyphAtlasColor:color pages:count+1];if(!texture)return NO;if(color){_colorAtlasTexture=texture;_colorAtlasPageCount=count+1;}else{_atlasTexture=texture;_atlasPageCount=count+1;}[self resetAtlas];_atlasResetDuringBuild=YES;return YES;}
+
+- (void)removeAllImageTextures {
+    [_imageTextures removeAllObjects];[_imageLRU removeAllObjects];_imageTextureBytes=0;
+}
+
+- (void)purgeResourceCachesForMemoryPressure {
+    if(_stopped)return;[self waitForAtlasSafety];id<MTLTexture> mono=[self newGlyphAtlasColor:NO pages:1];if(mono){_atlasTexture=mono;_atlasPageCount=1;}_colorAtlasTexture=nil;_colorAtlasPageCount=0;[self resetAtlas];[self removeAllImageTextures];
+#if TERMATICA_BENCHMARKS
+    _memoryPurgeCount++;
+#endif
 }
 
 - (void)setPresentationFrame:(CGRect)frame scale:(CGFloat)scale {
@@ -149,7 +225,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     if(metrics.rows==0||metrics.columns==0||metrics.viewportWidth<=0||metrics.viewportHeight<=0){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:5 userInfo:@{NSLocalizedDescriptionKey:@"invalid render metrics"}];return NO;}
     BOOL glyphMetricsChanged=_metrics.cellWidth>0&&(_metrics.cellWidth!=metrics.cellWidth||_metrics.cellHeight!=metrics.cellHeight||_metrics.scale!=metrics.scale);
     _metrics=metrics;
-    if(glyphMetricsChanged)dispatch_async(_renderQueue,^{[self resetAtlas];});
+    if(glyphMetricsChanged)dispatch_async(_renderQueue,^{[self resetAtlas];[self removeAllImageTextures];});
     dispatch_async(dispatch_get_main_queue(),^{[self setPresentationFrame:CGRectMake(0,0,metrics.viewportWidth,metrics.viewportHeight) scale:metrics.scale];});
     return YES;
 }
@@ -165,29 +241,42 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 }
 
 - (NSValue *)glyphForText:(NSString *)text font:(NSFont *)font width:(NSUInteger)width height:(NSUInteger)height scale:(CGFloat)scale slot:(NSUInteger)slot {
-    NSUInteger pixelWidth=MAX((NSUInteger)1,MIN((NSUInteger)TMetalAtlasSize-2,(NSUInteger)ceil(width*scale)));
-    NSUInteger pixelHeight=MAX((NSUInteger)1,MIN((NSUInteger)TMetalAtlasSize-2,(NSUInteger)ceil(height*scale)));
+    NSUInteger padding=MAX((NSUInteger)1,(NSUInteger)ceil(scale*2)),contentWidth=MAX((NSUInteger)1,(NSUInteger)ceil(width*scale)),contentHeight=MAX((NSUInteger)1,(NSUInteger)ceil(height*scale));
+    NSUInteger requestedWidth=contentWidth+padding*2,requestedHeight=contentHeight+padding*2;
+    if(slot<3&&_slotFonts[slot]&&_slotFonts[slot]!=font){[self resetAtlas];_atlasResetDuringBuild=YES;}
+    if(slot<3)_slotFonts[slot]=font;
     unichar firstChar=text.length>0?[text characterAtIndex:0]:128;BOOL ascii=firstChar<128&&text.length==1&&slot<3;NSValue *cached=ascii?_asciiGlyphs[slot][firstChar]:nil;
     if(!cached&&text.length==1&&slot<3){NSUInteger bucket=firstChar&0xFF;if(_bmpGlyphKeys[slot][bucket]==firstChar)cached=_bmpGlyphs[slot][bucket];}
-    NSString *key=nil;if(!cached){key=[NSString stringWithFormat:@"%@|%.3f|%lu|%lu|%@",font.fontName,font.pointSize,(unsigned long)pixelWidth,(unsigned long)pixelHeight,text];cached=_glyphs[key];}if(cached)return cached;
-    if(_atlasX+pixelWidth+1>TMetalAtlasSize){_atlasX=1;_atlasY+=_atlasRowHeight+1;_atlasRowHeight=0;}
-    if(_atlasY+pixelHeight+1>TMetalAtlasSize){[self resetAtlas];_atlasResetDuringBuild=YES;}
-    if(_atlasX+pixelWidth+1>TMetalAtlasSize||_atlasY+pixelHeight+1>TMetalAtlasSize)return nil;
-    [self waitForAtlasSafety];
-    uint8_t *glyph=calloc(pixelWidth*pixelHeight,1);if(!glyph)return nil;
-    CGContextRef context=CGBitmapContextCreate(glyph,pixelWidth,pixelHeight,8,pixelWidth,NULL,(CGBitmapInfo)kCGImageAlphaOnly);
-    if(!context){free(glyph);return nil;}
-    CGContextSetShouldAntialias(context,true);CGContextSetAllowsAntialiasing(context,true);
-    CGContextTranslateCTM(context,0,pixelHeight);CGContextScaleCTM(context,scale,-scale);
+    NSString *key=nil;if(!cached){key=[NSString stringWithFormat:@"%lu|%.3f|%lu|%lu|%@",(unsigned long)slot,scale,(unsigned long)requestedWidth,(unsigned long)requestedHeight,text];cached=_glyphs[key];}if(cached)return cached;
     NSDictionary *attributes=@{(__bridge NSString *)kCTFontAttributeName:font,(__bridge NSString *)kCTForegroundColorAttributeName:NSColor.whiteColor};
-    NSAttributedString *attributed=[[NSAttributedString alloc]initWithString:text attributes:attributes];
-    CTLineRef line=CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)attributed);
-    CGFloat baseline=MAX(1,font.ascender+1);CGContextSetTextPosition(context,0,baseline);CTLineDraw(line,context);CFRelease(line);CGContextRelease(context);
-    for(NSUInteger row=0;row<pixelHeight;row++)memcpy(_atlasBytes+(_atlasY+row)*TMetalAtlasSize+_atlasX,glyph+row*pixelWidth,pixelWidth);
-    MTLRegion region=MTLRegionMake2D(_atlasX,_atlasY,pixelWidth,pixelHeight);
-    [_atlasTexture replaceRegion:region mipmapLevel:0 withBytes:glyph bytesPerRow:pixelWidth];free(glyph);
-    CGRect rect=CGRectMake((CGFloat)_atlasX/TMetalAtlasSize,(CGFloat)_atlasY/TMetalAtlasSize,(CGFloat)pixelWidth/TMetalAtlasSize,(CGFloat)pixelHeight/TMetalAtlasSize);
-    cached=[NSValue valueWithRect:NSRectFromCGRect(rect)];if(ascii)_asciiGlyphs[slot][firstChar]=cached;else if(text.length==1&&slot<3){NSUInteger bucket=firstChar&0xFF;_bmpGlyphKeys[slot][bucket]=firstChar;_bmpGlyphs[slot][bucket]=cached;_glyphs[key]=cached;}else _glyphs[key]=cached;_atlasX+=pixelWidth+1;_atlasRowHeight=MAX(_atlasRowHeight,pixelHeight);
+    NSAttributedString *attributed=[[NSAttributedString alloc]initWithString:text attributes:attributes];CTLineRef line=CTLineCreateWithAttributedString((__bridge CFAttributedStringRef)attributed);
+    BOOL colorGlyph=TMetalLineUsesColorGlyphs(line);
+#if TERMATICA_BENCHMARKS
+    BOOL fallbackGlyph=[text isEqual:@"\uFFFD"]||TMetalLineUsesFallbackFont(line,font);
+#endif
+    NSUInteger atlasSize=colorGlyph?TMetalColorAtlasSize:TMetalAtlasSize,pixelWidth=MIN(atlasSize-2,requestedWidth),pixelHeight=MIN(atlasSize-2,requestedHeight);
+    if(colorGlyph&&![self ensureColorAtlas]){CFRelease(line);return nil;}
+    NSUInteger page=colorGlyph?_colorAtlasPage:_atlasPage,pageCount=colorGlyph?_colorAtlasPageCount:_atlasPageCount;NSUInteger *xValues=colorGlyph?_colorAtlasX:_atlasX,*yValues=colorGlyph?_colorAtlasY:_atlasY,*heightValues=colorGlyph?_colorAtlasRowHeight:_atlasRowHeight;NSUInteger *atlasX=&xValues[page],*atlasY=&yValues[page],*rowHeight=&heightValues[page];
+    if(*atlasX+pixelWidth+1>atlasSize){*atlasX=1;*atlasY+=*rowHeight+1;*rowHeight=0;}
+    if(*atlasY+pixelHeight+1>atlasSize){if(page+1<pageCount)page++;else if(pageCount<TMetalMaxAtlasPages){if(![self growGlyphAtlasColor:colorGlyph]){CFRelease(line);return nil;}page=0;}else{[self resetAtlas];_atlasResetDuringBuild=YES;page=0;}if(colorGlyph)_colorAtlasPage=page;else _atlasPage=page;xValues=colorGlyph?_colorAtlasX:_atlasX;yValues=colorGlyph?_colorAtlasY:_atlasY;heightValues=colorGlyph?_colorAtlasRowHeight:_atlasRowHeight;atlasX=&xValues[page];atlasY=&yValues[page];rowHeight=&heightValues[page];if(slot<3)_slotFonts[slot]=font;}
+    if(*atlasX+pixelWidth+1>atlasSize||*atlasY+pixelHeight+1>atlasSize){CFRelease(line);return nil;}
+    [self waitForAtlasSafety];
+    NSUInteger bytesPerPixel=colorGlyph?4:1,bytesPerRow=pixelWidth*bytesPerPixel;uint8_t *glyph=calloc(pixelHeight,bytesPerRow);if(!glyph){CFRelease(line);return nil;}
+    CGColorSpaceRef colorSpace=colorGlyph?CGColorSpaceCreateDeviceRGB():NULL;CGContextRef context=colorGlyph?CGBitmapContextCreate(glyph,pixelWidth,pixelHeight,8,bytesPerRow,colorSpace,(CGBitmapInfo)(kCGImageAlphaPremultipliedFirst|kCGBitmapByteOrder32Little)):CGBitmapContextCreate(glyph,pixelWidth,pixelHeight,8,bytesPerRow,NULL,(CGBitmapInfo)kCGImageAlphaOnly);if(colorSpace)CGColorSpaceRelease(colorSpace);
+    if(!context){free(glyph);CFRelease(line);return nil;}
+    CGContextSetShouldAntialias(context,true);CGContextSetAllowsAntialiasing(context,true);CGContextSetShouldSmoothFonts(context,true);CGContextSetAllowsFontSmoothing(context,true);
+    CGContextTranslateCTM(context,padding,pixelHeight-padding);CGContextScaleCTM(context,scale,-scale);CGFloat baseline=MAX(1,font.ascender+1);CGContextSetTextPosition(context,0,baseline);CTLineDraw(line,context);CFRelease(line);CGContextRelease(context);
+    MTLRegion region=MTLRegionMake2D(*atlasX,*atlasY,pixelWidth,pixelHeight);
+    [(colorGlyph?_colorAtlasTexture:_atlasTexture) replaceRegion:region mipmapLevel:0 slice:page withBytes:glyph bytesPerRow:bytesPerRow bytesPerImage:bytesPerRow*pixelHeight];free(glyph);
+    TMetalGlyph glyphInfo={.uv=CGRectMake((CGFloat)*atlasX/atlasSize,(CGFloat)*atlasY/atlasSize,(CGFloat)pixelWidth/atlasSize,(CGFloat)pixelHeight/atlasSize),.offsetX=-(float)padding/(float)scale,.offsetY=-(float)padding/(float)scale,.width=(float)width+(float)(padding*2)/(float)scale,.height=(float)height+(float)(padding*2)/(float)scale,.kind=colorGlyph?3u:1u,.page=(uint32_t)page};
+#if TERMATICA_BENCHMARKS
+    glyphInfo.fallback=fallbackGlyph;
+#endif
+    cached=[NSValue valueWithBytes:&glyphInfo objCType:@encode(TMetalGlyph)];if(ascii)_asciiGlyphs[slot][firstChar]=cached;else if(text.length==1&&slot<3){NSUInteger bucket=firstChar&0xFF;_bmpGlyphKeys[slot][bucket]=firstChar;_bmpGlyphs[slot][bucket]=cached;_glyphs[key]=cached;}else _glyphs[key]=cached;
+#if TERMATICA_BENCHMARKS
+    _glyphEntryCount++;
+#endif
+    *atlasX+=pixelWidth+1;*rowHeight=MAX(*rowHeight,pixelHeight);
     return cached;
 }
 
@@ -216,11 +305,16 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
             NSString *text=TMetalCellString(snapshot,cell.ch);if(!text.length||[text isEqual:@" "])continue;
             NSUInteger fontSlot=(cell.flags&TMetalBold)?1:((cell.flags&TMetalItalic)?2:0);NSFont *font=fontSlot==1?style[@"boldFont"]:(fontSlot==2?style[@"italicFont"]:style[@"font"]);if(!font)font=[NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
             NSUInteger span=(cell.flags&TMetalWide)?2:1;NSValue *glyph=[self glyphForText:text font:font width:(NSUInteger)ceil(cellWidth*span) height:(NSUInteger)ceil(cellHeight) scale:scale slot:fontSlot];if(!glyph)return NO;
-            CGRect uv=NSRectToCGRect(glyph.rectValue);CGFloat glyphX=left+x*cellWidth,glyphY=top+y*cellHeight,glyphWidth=cellWidth*span;
-            if(glow>0){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphWidth,cellHeight,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glowColor,1);}
-            TMetalAppendQuad(instances,glyphX,glyphY,glyphWidth,cellHeight,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),TMetalRGBA(fg,1),1);
+            TMetalGlyph glyphInfo={0};[glyph getValue:&glyphInfo size:sizeof(glyphInfo)];CGRect uv=glyphInfo.uv;CGFloat cellX=left+x*cellWidth,glyphX=cellX+glyphInfo.offsetX,glyphY=top+y*cellHeight+glyphInfo.offsetY,glyphWidth=cellWidth*span;
+            uint32_t glyphKind=glyphInfo.kind|(glyphInfo.page<<16);
+            if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glowColor,glyphKind);}
+#if TERMATICA_BENCHMARKS
+            if(glyphInfo.fallback)glyphKind|=0x100u;
+#endif
+            TMetalAppendQuad(instances,glyphX,glyphY,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glyphInfo.kind==3?0xFFFFFFFFu:TMetalRGBA(fg,1),glyphKind);
             if((cell.flags&TMetalUnderline)||links[index]){
-                TMetalAppendUnderline(instances,glyphX,top+(y+1)*cellHeight,glyphWidth,MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));
+                CGFloat underlineY=top+y*cellHeight+font.ascender-font.underlinePosition;
+                TMetalAppendUnderline(instances,cellX,underlineY,glyphWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));
             }
         }
     }
@@ -236,11 +330,20 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     return YES;
 }
 
+- (void)trimImageCacheForIncomingBytes:(NSUInteger)incomingBytes {
+    while(_imageLRU.count&&_imageTextureBytes+incomingBytes>TMetalImageCacheBudget){NSValue *oldestKey=_imageLRU.firstObject;NSUInteger bytes=[_imageTextures[oldestKey][@"bytes"] unsignedIntegerValue];_imageTextureBytes=bytes>_imageTextureBytes?0:_imageTextureBytes-bytes;[_imageTextures removeObjectForKey:oldestKey];[_imageLRU removeObjectAtIndex:0];
+#if TERMATICA_BENCHMARKS
+        _imageEvictionCount++;
+#endif
+    }
+}
+
 - (id<MTLTexture>)textureForImage:(CGImageRef)image error:(NSError **)error {
     NSValue *cacheKey=[NSValue valueWithPointer:(const void *)image];NSDictionary *cached=_imageTextures[cacheKey];
-    if(cached&&(__bridge CGImageRef)cached[@"image"]==image)return cached[@"texture"];
+    if(cached&&(__bridge CGImageRef)cached[@"image"]==image){[_imageLRU removeObject:cacheKey];[_imageLRU addObject:cacheKey];return cached[@"texture"];}
+    if(cached){NSUInteger cachedBytes=[cached[@"bytes"] unsignedIntegerValue];_imageTextureBytes=cachedBytes>_imageTextureBytes?0:_imageTextureBytes-cachedBytes;[_imageTextures removeObjectForKey:cacheKey];[_imageLRU removeObject:cacheKey];}
     NSUInteger width=CGImageGetWidth(image),height=CGImageGetHeight(image);
-    if(!width||!height||width>16384||height>16384){
+    if(!width||!height||width>16384||height>16384||width>NSUIntegerMax/4/height||width*height*4>TMetalImageUploadLimit){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:10 userInfo:@{NSLocalizedDescriptionKey:@"invalid image dimensions"}];
         return nil;
     }
@@ -255,7 +358,7 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     if(texture)[texture replaceRegion:MTLRegionMake2D(0,0,width,height) mipmapLevel:0 withBytes:pixels bytesPerRow:bytesPerRow];
     free(pixels);
     if(!texture&&error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:10 userInfo:@{NSLocalizedDescriptionKey:@"Metal image texture allocation failed"}];
-    if(texture){if(_imageTextures.count>=128)[_imageTextures removeAllObjects];id retainedImage=CFBridgingRelease(CGImageRetain(image));_imageTextures[cacheKey]=@{@"image":retainedImage,@"texture":texture};}
+    NSUInteger textureBytes=bytesPerRow*height;if(texture&&textureBytes<=TMetalImageCacheBudget){[self trimImageCacheForIncomingBytes:textureBytes];id retainedImage=CFBridgingRelease(CGImageRetain(image));_imageTextures[cacheKey]=@{@"image":retainedImage,@"texture":texture,@"bytes":@(textureBytes)};[_imageLRU addObject:cacheKey];_imageTextureBytes+=textureBytes;}
     return texture;
 }
 
@@ -267,24 +370,45 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
     NSMutableData *instances=[NSMutableData dataWithCapacity:snapshot.metrics.rows*snapshot.metrics.columns*sizeof(TMetalInstance)];_atlasResetDuringBuild=NO;
     if(![self buildInstancesForSnapshot:snapshot data:instances]){[self fail:@"glyph atlas could not represent the current viewport" code:6];return;}
     if(_atlasResetDuringBuild){[instances setLength:0];_atlasResetDuringBuild=NO;if(![self buildInstancesForSnapshot:snapshot data:instances]||_atlasResetDuringBuild){[self fail:@"glyph atlas overflow" code:7];return;}}
+#if TERMATICA_BENCHMARKS
+    NSUInteger colorGlyphCount=0,fallbackGlyphCount=0;if(_validatePixels){const TMetalInstance *builtInstances=instances.bytes;for(NSUInteger index=0;index<instances.length/sizeof(TMetalInstance);index++){colorGlyphCount+=(builtInstances[index].kind&0xFF)==3;fallbackGlyphCount+=(builtInstances[index].kind&0x100)!=0;}}
+#endif
     id<MTLBuffer> buffer=[_device newBufferWithBytes:instances.bytes length:MAX((NSUInteger)1,instances.length) options:MTLResourceStorageModeShared];
     id<MTLCommandBuffer> command=[_commandQueue commandBuffer];if(!buffer||!command){[self fail:@"Metal command allocation failed" code:8];return;}
     MTLRenderPassDescriptor *pass=[MTLRenderPassDescriptor renderPassDescriptor];pass.colorAttachments[0].texture=drawable.texture;pass.colorAttachments[0].loadAction=MTLLoadActionClear;pass.colorAttachments[0].storeAction=MTLStoreActionStore;pass.colorAttachments[0].clearColor=MTLClearColorMake(0,0,0,0);
     id<MTLRenderCommandEncoder> encoder=[command renderCommandEncoderWithDescriptor:pass];if(!encoder){[self fail:@"Metal command encoder failed" code:9];return;}
     vector_float2 viewport={(float)snapshot.metrics.viewportWidth,(float)snapshot.metrics.viewportHeight};
-    [encoder setRenderPipelineState:_pipeline];[encoder setVertexBuffer:buffer offset:0 atIndex:0];[encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:1];[encoder setFragmentTexture:_atlasTexture atIndex:0];
+    [encoder setRenderPipelineState:_pipeline];[encoder setVertexBuffer:buffer offset:0 atIndex:0];[encoder setVertexBytes:&viewport length:sizeof(viewport) atIndex:1];[encoder setFragmentTexture:_atlasTexture atIndex:0];[encoder setFragmentTexture:_colorAtlasTexture atIndex:1];
     NSUInteger count=instances.length/sizeof(TMetalInstance);if(count)[encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:count];
     for(NSNumber *key in snapshot.images){
         CGImageRef image=(__bridge CGImageRef)snapshot.images[key];if(!image)continue;NSError *textureError=nil;
         id<MTLTexture> texture=[self textureForImage:image error:&textureError];if(!texture){[encoder endEncoding];[self fail:textureError.localizedDescription?:@"Metal image texture failed" code:10];return;}
         NSUInteger value=key.unsignedIntegerValue,row=value>>16,column=value&0xFFFF;TMetalInstance imageInstance={{[snapshot.style[@"left"] floatValue]+column*snapshot.metrics.cellWidth,[snapshot.style[@"top"] floatValue]+row*snapshot.metrics.cellHeight},{CGImageGetWidth(image),CGImageGetHeight(image)},{0,0},{1,1},0xFFFFFFFFu,2};
-        [encoder setVertexBytes:&imageInstance length:sizeof(imageInstance) atIndex:0];[encoder setFragmentTexture:texture atIndex:0];[encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:1];
+        [encoder setVertexBytes:&imageInstance length:sizeof(imageInstance) atIndex:0];[encoder setFragmentTexture:texture atIndex:2];[encoder drawPrimitives:MTLPrimitiveTypeTriangleStrip vertexStart:0 vertexCount:4 instanceCount:1];
     }
     [encoder endEncoding];
     id<MTLBuffer> readback=nil;NSUInteger readbackWidth=0,readbackHeight=0,readbackStride=0;
     if(_validatePixels){readbackWidth=drawable.texture.width;readbackHeight=drawable.texture.height;readbackStride=(readbackWidth*4+255)&~(NSUInteger)255;readback=[_device newBufferWithLength:readbackStride*readbackHeight options:MTLResourceStorageModeShared];id<MTLBlitCommandEncoder> blit=[command blitCommandEncoder];if(readback&&blit){[blit copyFromTexture:drawable.texture sourceSlice:0 sourceLevel:0 sourceOrigin:MTLOriginMake(0,0,0) sourceSize:MTLSizeMake(readbackWidth,readbackHeight,1) toBuffer:readback destinationOffset:0 destinationBytesPerRow:readbackStride destinationBytesPerImage:readbackStride*readbackHeight];[blit endEncoding];}}
     [command presentDrawable:drawable];uint64_t generation=snapshot.generation;double cpuMilliseconds=(CFAbsoluteTimeGetCurrent()-cpuStart)*1000.0;__weak typeof(self) weakSelf=self;
-    [command addCompletedHandler:^(id<MTLCommandBuffer> completed){__strong typeof(weakSelf) self=weakSelf;if(!self)return;if(completed.status==MTLCommandBufferStatusError){[self fail:completed.error.localizedDescription?:@"Metal command buffer failed" code:11];return;}uint64_t checksum=1469598103934665603ULL;BOOL varied=NO;if(readback){const uint8_t *bytes=readback.contents;uint32_t first=0;if(readbackWidth&&readbackHeight)memcpy(&first,bytes,4);for(NSUInteger y=0;y<readbackHeight;y++){const uint8_t *row=bytes+y*readbackStride;for(NSUInteger x=0;x<readbackWidth*4;x++){checksum^=row[x];checksum*=1099511628211ULL;}for(NSUInteger x=0;x<readbackWidth;x++){uint32_t pixel=0;memcpy(&pixel,row+x*4,4);if(pixel!=first){varied=YES;break;}}}}double gpuMilliseconds=completed.GPUEndTime>completed.GPUStartTime?(completed.GPUEndTime-completed.GPUStartTime)*1000.0:0;@synchronized(self->_stateLock){self.lastPresentedGeneration=MAX(self.lastPresentedGeneration,generation);self.lastCPUEncodeMilliseconds=cpuMilliseconds;self.lastGPUExecutionMilliseconds=gpuMilliseconds;if(self->_lastCommandBuffer==completed)self->_lastCommandBuffer=nil;if(readback){self.lastFrameChecksum=checksum;self.lastFrameVariedPixels=varied;}}}];@synchronized(_stateLock){_lastCommandBuffer=command;}[command commit];
+    [command addCompletedHandler:^(id<MTLCommandBuffer> completed){
+        __strong typeof(weakSelf) self=weakSelf;if(!self)return;
+        if(completed.status==MTLCommandBufferStatusError){[self fail:completed.error.localizedDescription?:@"Metal command buffer failed" code:11];return;}
+        uint64_t checksum=1469598103934665603ULL;BOOL varied=NO;
+#if TERMATICA_BENCHMARKS
+        NSData *pixels=nil;
+#endif
+        if(readback){const uint8_t *bytes=readback.contents;uint32_t first=0;if(readbackWidth&&readbackHeight)memcpy(&first,bytes,4);for(NSUInteger y=0;y<readbackHeight;y++){const uint8_t *row=bytes+y*readbackStride;for(NSUInteger x=0;x<readbackWidth*4;x++){checksum^=row[x];checksum*=1099511628211ULL;}for(NSUInteger x=0;x<readbackWidth;x++){uint32_t pixel=0;memcpy(&pixel,row+x*4,4);if(pixel!=first){varied=YES;break;}}}
+#if TERMATICA_BENCHMARKS
+            pixels=[NSData dataWithBytes:bytes length:readbackStride*readbackHeight];
+#endif
+        }
+        double gpuMilliseconds=completed.GPUEndTime>completed.GPUStartTime?(completed.GPUEndTime-completed.GPUStartTime)*1000.0:0;
+        @synchronized(self->_stateLock){self.lastPresentedGeneration=MAX(self.lastPresentedGeneration,generation);self.lastCPUEncodeMilliseconds=cpuMilliseconds;self.lastGPUExecutionMilliseconds=gpuMilliseconds;if(self->_lastCommandBuffer==completed)self->_lastCommandBuffer=nil;if(readback){self.lastFrameChecksum=checksum;self.lastFrameVariedPixels=varied;
+#if TERMATICA_BENCHMARKS
+            self.lastFramePixels=pixels;self.lastFramePixelWidth=readbackWidth;self.lastFramePixelHeight=readbackHeight;self.lastFrameBytesPerRow=readbackStride;self.lastFrameColorGlyphCount=colorGlyphCount;self.lastFrameFallbackGlyphCount=fallbackGlyphCount;
+#endif
+        }}
+    }];@synchronized(_stateLock){_lastCommandBuffer=command;}[command commit];
 }
 
 - (void)drainSnapshots {
@@ -299,6 +423,8 @@ static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloa
 
 - (void)shutdown {
     @synchronized(_stateLock){_stopped=YES;_pendingSnapshot=nil;}
+    void (^drain)(void)=^{[self waitForAtlasSafety];[self removeAllImageTextures];[self resetAtlas];if(self->_memoryPressureSource){dispatch_source_set_event_handler(self->_memoryPressureSource,^{});dispatch_source_cancel(self->_memoryPressureSource);self->_memoryPressureSource=nil;}};
+    if(dispatch_get_specific(TMetalRenderQueueKey)==(__bridge void *)self)drain();else dispatch_sync(_renderQueue,drain);
     if(NSThread.isMainThread){_metalLayer.hidden=YES;[_metalLayer removeFromSuperlayer];}else dispatch_async(dispatch_get_main_queue(),^{self->_metalLayer.hidden=YES;[self->_metalLayer removeFromSuperlayer];});
 }
 @end

@@ -42,6 +42,9 @@ Set `appearance.renderer` to `"metal"` or launch with
 `TERMATICA_RENDERER=metal`. AppKit remains the default because full-resolution
 Retina drawable storage measured above the 40 MiB idle rollout gate. Forced
 initialization and command failures are covered by `--renderer-self-test`.
+The deterministic shared-snapshot corpus and AppKit/Metal visual gate are
+documented in `docs/METAL_PHASE1_PARITY.md` and run with
+`--renderer-parity-self-test`.
 
 ## Prohibited designs
 
@@ -54,6 +57,9 @@ initialization and command failures are covered by `--renderer-self-test`.
 ## Acceptance
 
 - `make check` passes with both the AppKit backend and Metal available.
+- The shared parity corpus passes exact semantic validation, malformed snapshot
+  rejection, 1x/2x capture, the visual tolerance, and its background-only
+  negative control.
 - ASCII, Unicode, graphemes, wide cells, style runs, cursor variants,
   selection/search, hyperlinks, Sixel, Kitty graphics, and iTerm2 images match
   the AppKit reference.
