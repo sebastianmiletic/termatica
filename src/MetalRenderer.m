@@ -266,7 +266,9 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     CGColorSpaceRef colorSpace=colorGlyph?CGColorSpaceCreateDeviceRGB():NULL;CGContextRef context=colorGlyph?CGBitmapContextCreate(glyph,pixelWidth,pixelHeight,8,bytesPerRow,colorSpace,(CGBitmapInfo)(kCGImageAlphaPremultipliedFirst|kCGBitmapByteOrder32Little)):CGBitmapContextCreate(glyph,pixelWidth,pixelHeight,8,bytesPerRow,NULL,(CGBitmapInfo)kCGImageAlphaOnly);if(colorSpace)CGColorSpaceRelease(colorSpace);
     if(!context){free(glyph);CFRelease(line);return nil;}
     CGContextSetShouldAntialias(context,true);CGContextSetAllowsAntialiasing(context,true);CGContextSetShouldSmoothFonts(context,true);CGContextSetAllowsFontSmoothing(context,true);
-    CGContextTranslateCTM(context,padding,pixelHeight-padding);CGContextScaleCTM(context,scale,-scale);CGFloat baseline=MAX(1,font.ascender+1);CGContextSetTextPosition(context,0,baseline);CTLineDraw(line,context);CFRelease(line);CGContextRelease(context);
+    // The texture quad extends one padding inset outside each cell. Rasterize
+    // bottom-up and include both quad insets so Metal lands on AppKit's baseline.
+    CGContextSetTextMatrix(context,CGAffineTransformIdentity);CGContextScaleCTM(context,scale,scale);CGFloat inset=(CGFloat)padding/scale,baseline=inset*3-font.descender;CGContextSetTextPosition(context,inset,baseline);CTLineDraw(line,context);CFRelease(line);CGContextRelease(context);
     MTLRegion region=MTLRegionMake2D(*atlasX,*atlasY,pixelWidth,pixelHeight);
     [(colorGlyph?_colorAtlasTexture:_atlasTexture) replaceRegion:region mipmapLevel:0 slice:page withBytes:glyph bytesPerRow:bytesPerRow bytesPerImage:bytesPerRow*pixelHeight];free(glyph);
     TMetalGlyph glyphInfo={.uv=CGRectMake((CGFloat)*atlasX/atlasSize,(CGFloat)*atlasY/atlasSize,(CGFloat)pixelWidth/atlasSize,(CGFloat)pixelHeight/atlasSize),.offsetX=-(float)padding/(float)scale,.offsetY=-(float)padding/(float)scale,.width=(float)width+(float)(padding*2)/(float)scale,.height=(float)height+(float)(padding*2)/(float)scale,.kind=colorGlyph?3u:1u,.page=(uint32_t)page};
@@ -308,11 +310,11 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
             NSUInteger span=(cell.flags&TMetalWide)?2:1;NSValue *glyph=[self glyphForText:text font:font width:(NSUInteger)ceil(cellWidth*span) height:(NSUInteger)ceil(cellHeight) scale:scale slot:fontSlot];if(!glyph)return NO;
             TMetalGlyph glyphInfo={0};[glyph getValue:&glyphInfo size:sizeof(glyphInfo)];CGRect uv=glyphInfo.uv;CGFloat cellX=left+x*cellWidth,glyphX=cellX+glyphInfo.offsetX,glyphY=top+y*cellHeight+glyphInfo.offsetY,glyphWidth=cellWidth*span;
             uint32_t glyphKind=glyphInfo.kind|(glyphInfo.page<<16);
-            if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,CGRectGetMaxY(uv),CGRectGetMaxX(uv),uv.origin.y,glowColor,glyphKind);}
+            if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glowColor,glyphKind);}
 #if TERMATICA_BENCHMARKS
             if(glyphInfo.fallback)glyphKind|=0x100u;
 #endif
-            TMetalAppendQuad(instances,glyphX,glyphY,glyphInfo.width,glyphInfo.height,uv.origin.x,CGRectGetMaxY(uv),CGRectGetMaxX(uv),uv.origin.y,glyphInfo.kind==3?0xFFFFFFFFu:TMetalRGBA(fg,1),glyphKind);
+            TMetalAppendQuad(instances,glyphX,glyphY,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glyphInfo.kind==3?0xFFFFFFFFu:TMetalRGBA(fg,1),glyphKind);
             if((cell.flags&TMetalUnderline)||links[index]){
                 CGFloat underlineY=top+y*cellHeight+font.ascender-font.underlinePosition;
                 TMetalAppendUnderline(instances,cellX,underlineY,glyphWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));

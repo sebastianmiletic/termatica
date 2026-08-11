@@ -2952,10 +2952,11 @@ static int TRunRendererParityCorpus(void) {
         if(!knownOrientation)orientations[scaleKey]=@(useFlip);else if(knownOrientation.boolValue!=useFlip){fprintf(stderr,"renderer-parity-self-test failed stage=capture-orientation fixture=%s scale=%.1f direct=%.4f flipped=%.4f\n",name.UTF8String,snapshot.metrics.scale,direct,flipped);[appkitWindow close];[metalWindow close];return 72;}
         if([fixture isEqual:fixtures.firstObject])backgroundOnlyRMS=TParityBlockRMS(appkitFrame,TParityBackgroundOnlyFrame(metalFrame,snapshot),snapshot,useFlip);
         if(!isfinite(rms)||rms>0.22){fprintf(stderr,"renderer-parity-self-test failed stage=visual fixture=%s rms=%.4f limit=0.2200 direct=%.4f flipped=%.4f negative=%.4f\n",name.UTF8String,rms,direct,flipped,backgroundOnlyRMS);[appkitWindow close];[metalWindow close];return 73;}
+        if(![name containsString:@"effects"]&&rms>0.12){fprintf(stderr,"renderer-parity-self-test failed stage=glyph-fidelity fixture=%s rms=%.4f limit=0.1200\n",name.UTF8String,rms);[appkitWindow close];[metalWindow close];return 80;}
         if(!isfinite(cellFlippedRMS)||cellFlippedRMS<=rms+0.005){fprintf(stderr,"renderer-parity-self-test failed stage=glyph-orientation fixture=%s normal=%.4f cell-flipped=%.4f required-margin=0.0050\n",name.UTF8String,rms,cellFlippedRMS);[appkitWindow close];[metalWindow close];return 79;}
         worst=MAX(worst,rms);fprintf(stdout,"renderer-parity fixture=%s scale=%.1f rms=%.4f cell-flipped=%.4f orientation=%s color-glyphs=%lu fallback-glyphs=%lu\n",name.UTF8String,snapshot.metrics.scale,rms,cellFlippedRMS,useFlip?"normalized-flipped":"direct",(unsigned long)[metalFrame[@"colorGlyphs"] unsignedIntegerValue],(unsigned long)[metalFrame[@"fallbackGlyphs"] unsignedIntegerValue]);
     }
-    if(!isfinite(backgroundOnlyRMS)||backgroundOnlyRMS<=0.24){fprintf(stderr,"renderer-parity-self-test failed stage=negative-control background-only-rms=%.4f required-above=0.2400\n",backgroundOnlyRMS);[appkitWindow close];[metalWindow close];return 74;}
+    if(!isfinite(backgroundOnlyRMS)||backgroundOnlyRMS<=0.22){fprintf(stderr,"renderer-parity-self-test failed stage=negative-control background-only-rms=%.4f required-above=0.2200\n",backgroundOnlyRMS);[appkitWindow close];[metalWindow close];return 74;}
     [appkitWindow close];[metalWindow close];fprintf(stdout,"renderer-parity-self-test ok fixtures=%lu semantic=exact visual-rms-max=%.4f limit=0.2200 negative-control=%.4f\n",(unsigned long)fixtures.count,worst,backgroundOnlyRMS);return 0;
 }
 

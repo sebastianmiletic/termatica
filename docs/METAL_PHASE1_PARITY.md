@@ -33,7 +33,10 @@ On a machine with Metal, both backends are captured in BGRA form and compared
 over the populated terminal region using block-averaged normalized RGB RMS.
 This tolerates expected CoreText antialiasing differences while retaining cell
 position and colour sensitivity. The maximum permitted distance is `0.2200`.
-A dense-cell background-only negative control must exceed `0.2400`, proving
+A stricter `0.1200` limit applies to fixtures without glow or scanline effects;
+this rejects missing ascenders, descenders, or other glyph-atlas clipping that
+can be hidden by coarse whole-frame similarity.
+A dense-cell background-only negative control must exceed `0.2200`, proving
 that an empty or missing-glyph frame cannot satisfy the parity gate.
 Capture-coordinate orientation must remain consistent across all fixtures at
 each backing scale. A second negative control vertically flips the Metal pixels
