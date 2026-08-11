@@ -77,6 +77,11 @@ reported side by side but are not claimed to be identical presentation APIs.
 Benchmark JSON uses a complete-write loop and has a regression requiring a
 valid artifact larger than 4 KiB.
 
+The universal bundle measured 1,320,109 bytes with the local Command Line Tools
+and 1,339,901 bytes with GitHub's Xcode 15.4 runner. The bundle guard increased
+by one 16 KiB Mach-O alignment unit, from 1,327,104 to 1,343,488 bytes, to cover
+that toolchain-dependent layout while retaining a bounded release size.
+
 ## Release boundary
 
 Metal remains opt-in through `appearance.renderer: "metal"`. Phase 4 does not

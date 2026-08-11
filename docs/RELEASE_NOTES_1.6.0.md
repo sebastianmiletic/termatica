@@ -27,6 +27,9 @@ fallback.
   content, damage, warmup, and frame counts.
 - Benchmark JSON uses a complete-write loop. The regression suite requires a
   valid JSON result larger than 4 KiB, preventing the former truncated artifact.
+- The bundle-size cap increased by one 16 KiB Mach-O alignment unit to account
+  for the Xcode 15.4 universal layout: 1,320,109 bytes locally and 1,339,901
+  bytes on GitHub's runner.
 - On five fresh 240-frame Apple M4 runs, Metal recorded zero frames over the 60
   Hz and 120 Hz work budgets. The synthetic 240 Hz budget had 2-14 overshoots,
   so this release does not claim guaranteed 240 Hz work completion.
