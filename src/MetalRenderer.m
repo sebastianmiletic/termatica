@@ -226,7 +226,8 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     BOOL glyphMetricsChanged=_metrics.cellWidth>0&&(_metrics.cellWidth!=metrics.cellWidth||_metrics.cellHeight!=metrics.cellHeight||_metrics.scale!=metrics.scale);
     _metrics=metrics;
     if(glyphMetricsChanged)dispatch_async(_renderQueue,^{[self resetAtlas];[self removeAllImageTextures];});
-    dispatch_async(dispatch_get_main_queue(),^{[self setPresentationFrame:CGRectMake(0,0,metrics.viewportWidth,metrics.viewportHeight) scale:metrics.scale];});
+    void (^applyPresentationFrame)(void)=^{[self setPresentationFrame:CGRectMake(0,0,metrics.viewportWidth,metrics.viewportHeight) scale:metrics.scale];};
+    if(NSThread.isMainThread)applyPresentationFrame();else dispatch_async(dispatch_get_main_queue(),applyPresentationFrame);
     return YES;
 }
 
@@ -307,11 +308,11 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
             NSUInteger span=(cell.flags&TMetalWide)?2:1;NSValue *glyph=[self glyphForText:text font:font width:(NSUInteger)ceil(cellWidth*span) height:(NSUInteger)ceil(cellHeight) scale:scale slot:fontSlot];if(!glyph)return NO;
             TMetalGlyph glyphInfo={0};[glyph getValue:&glyphInfo size:sizeof(glyphInfo)];CGRect uv=glyphInfo.uv;CGFloat cellX=left+x*cellWidth,glyphX=cellX+glyphInfo.offsetX,glyphY=top+y*cellHeight+glyphInfo.offsetY,glyphWidth=cellWidth*span;
             uint32_t glyphKind=glyphInfo.kind|(glyphInfo.page<<16);
-            if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glowColor,glyphKind);}
+            if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,CGRectGetMaxY(uv),CGRectGetMaxX(uv),uv.origin.y,glowColor,glyphKind);}
 #if TERMATICA_BENCHMARKS
             if(glyphInfo.fallback)glyphKind|=0x100u;
 #endif
-            TMetalAppendQuad(instances,glyphX,glyphY,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glyphInfo.kind==3?0xFFFFFFFFu:TMetalRGBA(fg,1),glyphKind);
+            TMetalAppendQuad(instances,glyphX,glyphY,glyphInfo.width,glyphInfo.height,uv.origin.x,CGRectGetMaxY(uv),CGRectGetMaxX(uv),uv.origin.y,glyphInfo.kind==3?0xFFFFFFFFu:TMetalRGBA(fg,1),glyphKind);
             if((cell.flags&TMetalUnderline)||links[index]){
                 CGFloat underlineY=top+y*cellHeight+font.ascender-font.underlinePosition;
                 TMetalAppendUnderline(instances,cellX,underlineY,glyphWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));

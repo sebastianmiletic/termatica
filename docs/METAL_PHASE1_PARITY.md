@@ -36,12 +36,18 @@ position and colour sensitivity. The maximum permitted distance is `0.2200`.
 A dense-cell background-only negative control must exceed `0.2400`, proving
 that an empty or missing-glyph frame cannot satisfy the parity gate.
 Capture-coordinate orientation must remain consistent across all fixtures at
-each backing scale.
+each backing scale. A second negative control vertically flips the Metal pixels
+inside every terminal cell and requires the unmodified frame to be closer to
+AppKit by at least `0.0050`. This distinguishes whole-buffer capture orientation
+from an incorrectly inverted glyph texture.
 
 On headless CI, the exact semantic corpus, malformed snapshot rejection, and
 forced AppKit fallback gates run without requesting a virtual-display drawable.
 A real Metal-capable host remains required for pixel capture, RMS comparison,
 cache pressure, and GPU recovery validation.
 
-The command is part of `make check`; any semantic, timeout, orientation,
-configuration, visual, or negative-control failure is a release blocker.
+The command is part of `make check`; any semantic, timeout, glyph orientation,
+capture orientation, configuration, visual, or negative-control failure is a
+release blocker. `--renderer-switch-self-test` also performs three in-place
+AppKit-to-Metal-to-AppKit cycles and verifies first-frame presentation and
+terminal-model preservation.

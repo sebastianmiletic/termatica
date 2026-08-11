@@ -2720,7 +2720,7 @@ static int TRunTerminalSelfTest(void) {
     [terminal scrollByLines:12];NSInteger offset=[terminal.diagnosticState[@"offset"] integerValue];if(offset!=12)return 2;
     [terminal consumeData:[@"anchored-a\r\nanchored-b\r\n" dataUsingEncoding:NSUTF8StringEncoding]];if([terminal.diagnosticState[@"offset"] integerValue]<=offset)return 3;
     [terminal scrollByLines:-100000];if([terminal.diagnosticState[@"offset"] integerValue]!=0)return 4;
-    CGEventRef wheelEvent=CGEventCreateScrollWheelEvent(NULL,kCGScrollEventUnitLine,1,3);NSEvent *wheel=[NSEvent eventWithCGEvent:wheelEvent];CFRelease(wheelEvent);[terminal scrollWheel:wheel];
+    CGEventRef wheelEvent=CGEventCreateScrollWheelEvent(NULL,kCGScrollEventUnitLine,1,3);CGEventSetFlags(wheelEvent,0);NSEvent *wheel=[NSEvent eventWithCGEvent:wheelEvent];CFRelease(wheelEvent);[terminal routeWheelLines:3 event:wheel modifierFlags:0];
     if([terminal.diagnosticState[@"offset"] integerValue]<=0)return 5;[terminal scrollByLines:-100000];
     NSUInteger primaryHistory=[terminal.diagnosticState[@"history"] unsignedIntegerValue];
     NSMutableString *alternateLines=[NSMutableString stringWithString:@"PRIMARY-MARKER\033[?1049hALTERNATE-MARKER\r\n"];
@@ -2757,7 +2757,7 @@ static int TRunTerminalSelfTest(void) {
     NSArray<NSDictionary *> *optionCases=@[@{@"key":@123,@"characters":@"",@"expected":@"\033b"},@{@"key":@124,@"characters":@"",@"expected":@"\033f"},@{@"key":@51,@"characters":@"\x7f",@"expected":@"\033\x7f"}];
     for(NSDictionary *optionCase in optionCases){NSEvent *optionEvent=[NSEvent keyEventWithType:NSEventTypeKeyDown location:NSZeroPoint modifierFlags:NSEventModifierFlagOption timestamp:0 windowNumber:0 context:nil characters:optionCase[@"characters"] charactersIgnoringModifiers:optionCase[@"characters"] isARepeat:NO keyCode:[optionCase[@"key"] unsignedShortValue]];[terminal startDiagnosticInputCapture];[terminal keyDown:optionEvent];NSString *reported=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![reported isEqual:optionCase[@"expected"]])return 57;}
     [terminal consumeData:[@"\033[?1049h" dataUsingEncoding:NSUTF8StringEncoding]];
-    [terminal startDiagnosticInputCapture];[terminal scrollWheel:wheel];
+    [terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:0];
     NSString *alternateScrollReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];
     if(![alternateScrollReport containsString:@"\033OA"])return 22;
     [terminal consumeData:[@"\033[?1049l" dataUsingEncoding:NSUTF8StringEncoding]];
@@ -2777,9 +2777,9 @@ static int TRunTerminalSelfTest(void) {
     if([terminal shouldForwardApplicationMouseWithModifiers:0])return 11;
     if(![terminal shouldForwardApplicationMouseWithModifiers:NSEventModifierFlagOption])return 12;
     if(![terminal.diagnosticState[@"mouseEncoding"] isEqual:@"sgr"])return 13;
-    [terminal startDiagnosticInputCapture];[terminal scrollWheel:wheel];
+    [terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:0];
     NSString *wheelReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];
-    if(![wheelReport containsString:@"\033[<64;"])return 14;
+    if(![wheelReport containsString:@"\033[<64;"]){fprintf(stderr,"mouse wheel report mismatch: %s\n",wheelReport.UTF8String);return 14;}
     [terminal scrollByLines:-100000];[terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:NSEventModifierFlagShift];
     if([terminal finishDiagnosticInputCapture].length||[terminal.diagnosticState[@"offset"] integerValue]<=0)return 15;
     [terminal scrollByLines:-100000];
@@ -2899,8 +2899,17 @@ static double TParityBlockRMS(NSDictionary *appkit,NSDictionary *metal,TRenderSn
     return samples?sqrt(squared/samples):DBL_MAX;
 }
 
+static NSDictionary *TParityCellVerticalFlipFrame(NSDictionary *frame,TRenderSnapshot *snapshot) {
+    NSData *source=frame[@"pixels"];NSUInteger width=[frame[@"width"] unsignedIntegerValue],height=[frame[@"height"] unsignedIntegerValue],stride=[frame[@"bytesPerRow"] unsignedIntegerValue];if(!source.length||!width||!height||stride<width*4)return @{};NSMutableData *pixels=[source mutableCopy];const uint8_t *input=source.bytes;uint8_t *output=pixels.mutableBytes;CGFloat scale=snapshot.metrics.scale,left=[snapshot.style[@"left"] doubleValue]*scale,top=[snapshot.style[@"top"] doubleValue]*scale,cellHeight=snapshot.metrics.cellHeight*scale;NSUInteger x0=MIN(width,(NSUInteger)floor(MAX(0,left))),x1=MIN(width,(NSUInteger)ceil(MAX(0,left+snapshot.metrics.columns*snapshot.metrics.cellWidth*scale)));for(NSUInteger row=0;row<snapshot.metrics.rows;row++){NSUInteger y0=MIN(height,(NSUInteger)floor(MAX(0,top+row*cellHeight))),y1=MIN(height,(NSUInteger)ceil(MAX(0,top+(row+1)*cellHeight)));if(y1<=y0)continue;for(NSUInteger y=y0;y<y1;y++){NSUInteger sourceY=y0+y1-1-y;memcpy(output+y*stride+x0*4,input+sourceY*stride+x0*4,(x1-x0)*4);}}return @{@"pixels":[pixels copy],@"width":@(width),@"height":@(height),@"bytesPerRow":@(stride),@"generation":frame[@"generation"]?:@0};
+}
+
 static NSDictionary *TParityBackgroundOnlyFrame(NSDictionary *frame,TRenderSnapshot *snapshot) {
     NSUInteger width=[frame[@"width"] unsignedIntegerValue],height=[frame[@"height"] unsignedIntegerValue],bytesPerRow=[frame[@"bytesPerRow"] unsignedIntegerValue];if(!width||!height||bytesPerRow<width*4)return @{};NSMutableData *pixels=[NSMutableData dataWithLength:bytesPerRow*height];uint8_t *bytes=pixels.mutableBytes;uint32_t rgb=[snapshot.style[@"background"] unsignedIntValue];uint8_t red=(rgb>>16)&255,green=(rgb>>8)&255,blue=rgb&255,alpha=(uint8_t)lrint(MAX(0,MIN(1,[snapshot.style[@"backgroundAlpha"] doubleValue]))*255.0);for(NSUInteger y=0;y<height;y++){uint8_t *row=bytes+y*bytesPerRow;for(NSUInteger x=0;x<width;x++){row[x*4]=blue;row[x*4+1]=green;row[x*4+2]=red;row[x*4+3]=alpha;}}return @{@"pixels":[pixels copy],@"width":@(width),@"height":@(height),@"bytesPerRow":@(bytesPerRow),@"generation":frame[@"generation"]?:@0};
+}
+
+static void TWriteParityPPM(NSDictionary *frame,NSString *path) {
+    NSData *pixels=frame[@"pixels"];NSUInteger width=[frame[@"width"] unsignedIntegerValue],height=[frame[@"height"] unsignedIntegerValue],stride=[frame[@"bytesPerRow"] unsignedIntegerValue];if(!pixels.length||!width||!height||stride<width*4||!path.length)return;
+    NSMutableData *ppm=[NSMutableData data];NSData *header=[[NSString stringWithFormat:@"P6\n%lu %lu\n255\n",(unsigned long)width,(unsigned long)height] dataUsingEncoding:NSASCIIStringEncoding];[ppm appendData:header];const uint8_t *source=pixels.bytes;NSMutableData *row=[NSMutableData dataWithLength:width*3];uint8_t *rgb=row.mutableBytes;for(NSUInteger y=0;y<height;y++){const uint8_t *bgra=source+y*stride;for(NSUInteger x=0;x<width;x++){rgb[x*3]=bgra[x*4+2];rgb[x*3+1]=bgra[x*4+1];rgb[x*3+2]=bgra[x*4];}[ppm appendData:row];}[ppm writeToFile:path atomically:YES];
 }
 
 static NSArray<NSDictionary *> *TParityCorpus(TRenderSnapshot *seed) {
@@ -2935,14 +2944,16 @@ static int TRunRendererParityCorpus(void) {
         NSDictionary *appkitFrame=TCaptureAppKitParityFrame(appkit,snapshot);[metal presentSnapshotForRendererSelfTest:snapshot];NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:3];
         while([metal.diagnosticState[@"renderGeneration"] unsignedLongLongValue]<snapshot.generation&&deadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];
         NSDictionary *metalFrame=[metal metalFrameCaptureForRendererSelfTest];
+        NSString *dumpDirectory=[NSProcessInfo.processInfo.environment objectForKey:@"TERMATICA_PARITY_DUMP_DIR"];if(dumpDirectory.length){NSString *safeName=[name stringByReplacingOccurrencesOfString:@"/" withString:@"-"];TWriteParityPPM(appkitFrame,[dumpDirectory stringByAppendingPathComponent:[safeName stringByAppendingString:@"-appkit.ppm"]]);TWriteParityPPM(metalFrame,[dumpDirectory stringByAppendingPathComponent:[safeName stringByAppendingString:@"-metal.ppm"]]);}
         if([metalFrame[@"generation"] unsignedLongLongValue]<snapshot.generation){fprintf(stderr,"renderer-parity-self-test failed stage=metal-timeout fixture=%s expected=%llu actual=%llu\n",name.UTF8String,(unsigned long long)snapshot.generation,(unsigned long long)[metalFrame[@"generation"] unsignedLongLongValue]);[appkitWindow close];[metalWindow close];return 71;}
         if([metalFrame[@"colorGlyphs"] unsignedIntegerValue]<3){fprintf(stderr,"renderer-parity-self-test failed stage=color-glyph-path fixture=%s color-glyphs=%lu required=3\n",name.UTF8String,(unsigned long)[metalFrame[@"colorGlyphs"] unsignedIntegerValue]);[appkitWindow close];[metalWindow close];return 77;}
         if([metalFrame[@"fallbackGlyphs"] unsignedIntegerValue]<1){fprintf(stderr,"renderer-parity-self-test failed stage=fallback-glyph-path fixture=%s fallback-glyphs=%lu required=1\n",name.UTF8String,(unsigned long)[metalFrame[@"fallbackGlyphs"] unsignedIntegerValue]);[appkitWindow close];[metalWindow close];return 78;}
-        double direct=TParityBlockRMS(appkitFrame,metalFrame,snapshot,NO),flipped=TParityBlockRMS(appkitFrame,metalFrame,snapshot,YES);BOOL useFlip=flipped<direct;double rms=MIN(direct,flipped);NSNumber *scaleKey=@(snapshot.metrics.scale),*knownOrientation=orientations[scaleKey];
+        double direct=TParityBlockRMS(appkitFrame,metalFrame,snapshot,NO),flipped=TParityBlockRMS(appkitFrame,metalFrame,snapshot,YES);BOOL useFlip=flipped<direct;double rms=MIN(direct,flipped),cellFlippedRMS=TParityBlockRMS(appkitFrame,TParityCellVerticalFlipFrame(metalFrame,snapshot),snapshot,useFlip);NSNumber *scaleKey=@(snapshot.metrics.scale),*knownOrientation=orientations[scaleKey];
         if(!knownOrientation)orientations[scaleKey]=@(useFlip);else if(knownOrientation.boolValue!=useFlip){fprintf(stderr,"renderer-parity-self-test failed stage=capture-orientation fixture=%s scale=%.1f direct=%.4f flipped=%.4f\n",name.UTF8String,snapshot.metrics.scale,direct,flipped);[appkitWindow close];[metalWindow close];return 72;}
         if([fixture isEqual:fixtures.firstObject])backgroundOnlyRMS=TParityBlockRMS(appkitFrame,TParityBackgroundOnlyFrame(metalFrame,snapshot),snapshot,useFlip);
         if(!isfinite(rms)||rms>0.22){fprintf(stderr,"renderer-parity-self-test failed stage=visual fixture=%s rms=%.4f limit=0.2200 direct=%.4f flipped=%.4f negative=%.4f\n",name.UTF8String,rms,direct,flipped,backgroundOnlyRMS);[appkitWindow close];[metalWindow close];return 73;}
-        worst=MAX(worst,rms);fprintf(stdout,"renderer-parity fixture=%s scale=%.1f rms=%.4f orientation=%s color-glyphs=%lu fallback-glyphs=%lu\n",name.UTF8String,snapshot.metrics.scale,rms,useFlip?"normalized-flipped":"direct",(unsigned long)[metalFrame[@"colorGlyphs"] unsignedIntegerValue],(unsigned long)[metalFrame[@"fallbackGlyphs"] unsignedIntegerValue]);
+        if(!isfinite(cellFlippedRMS)||cellFlippedRMS<=rms+0.005){fprintf(stderr,"renderer-parity-self-test failed stage=glyph-orientation fixture=%s normal=%.4f cell-flipped=%.4f required-margin=0.0050\n",name.UTF8String,rms,cellFlippedRMS);[appkitWindow close];[metalWindow close];return 79;}
+        worst=MAX(worst,rms);fprintf(stdout,"renderer-parity fixture=%s scale=%.1f rms=%.4f cell-flipped=%.4f orientation=%s color-glyphs=%lu fallback-glyphs=%lu\n",name.UTF8String,snapshot.metrics.scale,rms,cellFlippedRMS,useFlip?"normalized-flipped":"direct",(unsigned long)[metalFrame[@"colorGlyphs"] unsignedIntegerValue],(unsigned long)[metalFrame[@"fallbackGlyphs"] unsignedIntegerValue]);
     }
     if(!isfinite(backgroundOnlyRMS)||backgroundOnlyRMS<=0.24){fprintf(stderr,"renderer-parity-self-test failed stage=negative-control background-only-rms=%.4f required-above=0.2400\n",backgroundOnlyRMS);[appkitWindow close];[metalWindow close];return 74;}
     [appkitWindow close];[metalWindow close];fprintf(stdout,"renderer-parity-self-test ok fixtures=%lu semantic=exact visual-rms-max=%.4f limit=0.2200 negative-control=%.4f\n",(unsigned long)fixtures.count,worst,backgroundOnlyRMS);return 0;
@@ -3003,6 +3014,25 @@ static int TRunRendererSelfTest(void) {
     NSDictionary *fallbackState=fallback.diagnosticState;if(![fallbackState[@"renderer"] isEqual:@"appkit"]||![fallbackState[@"metalFailed"] boolValue]){fprintf(stderr,"renderer-self-test failed stage=init-fallback renderer=%s metalFailed=%d\n",[fallbackState[@"renderer"] UTF8String],[fallbackState[@"metalFailed"] boolValue]);return 42;}
     [fallback consumeData:[@"fallback still renders" dataUsingEncoding:NSUTF8StringEncoding]];NSBitmapImageRep *bitmap=[fallback bitmapImageRepForCachingDisplayInRect:fallback.bounds];if(!bitmap){fprintf(stderr,"renderer-self-test failed stage=appkit-bitmap\n");return 43;}[fallback cacheDisplayInRect:fallback.bounds toBitmapImageRep:bitmap];
     fprintf(stdout,"renderer-self-test ok mode=pixel-readback metal-generation=%llu checksum=%llu fallback=appkit\n",(unsigned long long)[state[@"renderGeneration"] unsignedLongLongValue],(unsigned long long)[state[@"metalFrameChecksum"] unsignedLongLongValue]);return 0;
+}
+
+static int TRunRendererSwitchSelfTest(void) {
+    [TApplication sharedApplication];
+    TConfig *config=[TConfig new];config.renderer=@"appkit";config.blur=NO;config.glow=config.scanlines=config.vignette=0;config.shell=@"/usr/bin/true";config.shellArguments=@[];
+    NSWindow *window=[[NSWindow alloc]initWithContentRect:NSMakeRect(0,0,720,440) styleMask:NSWindowStyleMaskBorderless backing:NSBackingStoreBuffered defer:NO];
+    TTerminalView *terminal=[[TTerminalView alloc]initWithFrame:window.contentView.bounds config:config];terminal.autoresizingMask=NSViewWidthSizable|NSViewHeightSizable;terminal.activeTerminal=YES;window.contentView=terminal;[window orderFront:nil];[window displayIfNeeded];
+    NSString *fixture=@"Renderer switch keeps ASCII, Unicode λ漢字🙂, combining e\u0301, and terminal state";[terminal consumeData:[fixture dataUsingEncoding:NSUTF8StringEncoding]];
+    if(![terminal.diagnosticState[@"renderer"] isEqual:@"appkit"]){fprintf(stderr,"renderer-switch-self-test failed stage=initial-appkit renderer=%s\n",[terminal.diagnosticState[@"renderer"] UTF8String]);[window close];return 93;}
+    for(NSUInteger cycle=0;cycle<3;cycle++){
+        config.renderer=@"metal";[terminal reloadAppearance];NSDictionary *metalState=terminal.diagnosticState;
+        if(![metalState[@"renderer"] isEqual:@"metal"]){if([metalState[@"metalFailed"] boolValue]){[window close];fputs("renderer-switch-self-test ok metal=unavailable semantic-only appkit-state-preserved=yes\n",stdout);return 0;}fprintf(stderr,"renderer-switch-self-test failed stage=select-metal cycle=%lu renderer=%s\n",(unsigned long)cycle,[metalState[@"renderer"] UTF8String]);[window close];return 94;}
+        uint64_t generation=[terminal presentFrameForBenchmark];if(!TWaitForMetalGeneration(terminal,generation,3)){fprintf(stderr,"renderer-switch-self-test failed stage=metal-present cycle=%lu expected=%llu actual=%llu\n",(unsigned long)cycle,(unsigned long long)generation,(unsigned long long)[terminal.diagnosticState[@"renderGeneration"] unsignedLongLongValue]);[window close];return 95;}
+        if(![[terminal visibleText] containsString:@"Renderer switch keeps ASCII"]||![[terminal visibleText] containsString:@"λ漢字🙂"]){fprintf(stderr,"renderer-switch-self-test failed stage=metal-content cycle=%lu\n",(unsigned long)cycle);[window close];return 96;}
+        config.renderer=@"appkit";[terminal reloadAppearance];if(![terminal.diagnosticState[@"renderer"] isEqual:@"appkit"]){fprintf(stderr,"renderer-switch-self-test failed stage=select-appkit cycle=%lu renderer=%s\n",(unsigned long)cycle,[terminal.diagnosticState[@"renderer"] UTF8String]);[window close];return 97;}
+        NSBitmapImageRep *bitmap=[terminal bitmapImageRepForCachingDisplayInRect:terminal.bounds];if(!bitmap){fprintf(stderr,"renderer-switch-self-test failed stage=appkit-surface cycle=%lu\n",(unsigned long)cycle);[window close];return 98;}[terminal cacheDisplayInRect:terminal.bounds toBitmapImageRep:bitmap];
+        if(![[terminal visibleText] containsString:@"terminal state"]){fprintf(stderr,"renderer-switch-self-test failed stage=appkit-content cycle=%lu\n",(unsigned long)cycle);[window close];return 99;}
+    }
+    [window close];fputs("renderer-switch-self-test ok cycles=3 appkit-to-metal=yes metal-to-appkit=yes state-preserved=yes\n",stdout);return 0;
 }
 
 static int TRunMetalBenchmark(NSUInteger requestedFrames) {
@@ -3101,6 +3131,7 @@ int main(int argc, const char *argv[]) {
 #if TERMATICA_BENCHMARKS
         if(argc>1&&!strcmp(argv[1],"--terminal-self-test"))return TRunTerminalSelfTest();
         if(argc>1&&!strcmp(argv[1],"--renderer-self-test"))return TRunRendererSelfTest();
+        if(argc>1&&!strcmp(argv[1],"--renderer-switch-self-test"))return TRunRendererSwitchSelfTest();
         if(argc>1&&!strcmp(argv[1],"--renderer-parity-self-test"))return TRunRendererParityCorpus();
         if(argc>1&&!strcmp(argv[1],"--renderer-cache-self-test"))return TRunRendererCacheSelfTest();
         if(argc>1&&!strcmp(argv[1],"--benchmark-results-self-test"))return TRunBenchmarkResultsSelfTest();
