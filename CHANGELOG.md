@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.8.0
+
+- Add `termatica renderer-report` / `t rr`, a privacy-safe JSON report for
+  display, renderer, lifecycle-recovery, generation, and Metal-failure state.
+  It excludes terminal text, paths, commands, environment, and shell details.
+- Track presentation recovery reasons and Metal failure counts across display,
+  backing-scale, occlusion, screen-wake, and system-wake paths.
+- Add a Phase 6 release gate covering AppKit and Metal, 96 lifecycle
+  recoveries, Unicode and graphemes, IME marked text, accessibility output,
+  resizing, state preservation, scheduler bounds, and report privacy.
+- Add prominent README download instructions and a fresh factual six-terminal
+  benchmark table with raw artifacts. Rio's shell-ready win remains visible.
+
 ## 1.7.0
 
 - Give exactly one terminal pane cursor ownership and invalidate both sides of

@@ -1,0 +1,2 @@
+ 8082  89264 435773248 /Users/sebastianmiletic/Coding/Termatica/build/Termatica.app/Contents/MacOS/Termatica
+Physical footprint:         29.9M

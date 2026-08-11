@@ -18,33 +18,38 @@
   <a href="https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip"><img alt="Download ZIP" src="https://img.shields.io/badge/Download-ZIP-2B3445?style=for-the-badge&logo=apple&logoColor=white"></a>
 </p>
 
+**Download:** use the [latest DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg) (recommended), drag `Termatica.app` to Applications, and open it there. A [ZIP build](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip) and checksum file are also available. See [Download and install](#download-and-install) for Gatekeeper and verification instructions.
+
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current local universal bundle is **1,305.6 KiB** and runs natively on
+The current local universal bundle is **1,321.9 KiB** and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
 footprint instead of presenting one host snapshot as a fixed requirement.
 
 ## Measured performance
 
-The 2026-08-10 Apple M4 comparison used the same Kitty benchmark protocol for
-Termatica 1.5.1, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
+The fresh 2026-08-11 Apple M4 comparison used the same Kitty benchmark protocol for
+Termatica 1.8.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
 20240203, and Rio 0.5.2. Higher throughput is better; lower startup and memory
-are better.
+are better. Bold values are the measured winner in each column.
 
-| Measurement | Termatica | Best other result |
-|---|---:|---:|
-| 15-workload geometric mean | **227.2 MB/s** | Alacritty 162.8 MB/s |
-| Fresh shell-ready median, 5 launches | 5.837 ms | **Alacritty 4.658 ms** |
-| Idle physical footprint, one sample | **25.9 MiB** | Rio 42.1 MiB |
-| Render Unicode | 205.7 MB/s | **Alacritty 208.4 MB/s** |
-| Render image stream | 349.3 MB/s | **Alacritty 443.9 MB/s** |
+| Terminal | 15-workload geo mean | Shell-ready median | Physical footprint | App allocation |
+|---|---:|---:|---:|---:|
+| Termatica 1.8.0 | **234.9 MB/s** | 5.532 ms | **29.9 MiB** | **1,360 KiB** |
+| Kitty 0.48.1 | 101.5 MB/s | 8.365 ms | 72.0 MiB | 160,080 KiB |
+| Ghostty 1.3.1 | 86.0 MB/s | 5.695 ms | 90.2 MiB | 63,484 KiB |
+| Alacritty 0.17.0 | 152.8 MB/s | 5.859 ms | 63.5 MiB | 14,328 KiB |
+| WezTerm 20240203 | 63.0 MB/s | 5.409 ms | 44.3 MiB | 259,840 KiB |
+| Rio 0.5.2 | 92.2 MB/s | **5.216 ms** | 88.5 MiB | 41,992 KiB |
 
-Termatica led 11 of 15 throughput rows in this run. Competitors led four rows,
-and Alacritty had the lowest startup median. The
-image-stream row does not prove equivalent image display because unsupported
-graphics controls may be rejected faster than they are decoded and stored.
-See the [complete matrix, method, raw-output location, and limitations](docs/BENCHMARKS.md).
+The geometric mean covers six parser, six render-enabled, and three scrollback
+workloads. Render-enabled throughput measures accepted input, not confirmed
+display completion; image rows do not prove equivalent protocol support or
+visual output. Startup is process launch until a child shell writes a ready
+marker, not first visible frame. Memory is one post-settle sample. See the
+[complete method and limitations](docs/BENCHMARKS.md) and the
+[fresh raw artifacts](benchmarks/2026-08-11-v1.8.0-matrix).
 
 To measure the currently running Termatica build with its active visual config:
 
@@ -148,6 +153,7 @@ t u
 | `t c` | Open the interactive categorized config UI |
 | `t b` | Benchmark Termatica now and compare with saved competitor runs |
 | `t b a` | Benchmark every installed comparison terminal now |
+| `t rr` | Print a privacy-safe renderer/display field report with no terminal text or paths |
 | `t cf` | Open `config.json` |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |
@@ -257,16 +263,13 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 ## Size and memory
 
-- Local universal app allocation: **1,192 KiB**
-- Clean one-tab physical footprint in the final 2026-08-10 snapshot: **30.3 MiB**
-- Three live Hyprland PTYs at 1434×793: **about 65.8 MiB**
-- Built-in capability plugins: **zero persistent helper processes**
-- Terminal history cells: **12 bytes each**
-
-The same snapshot measured Kitty at 72.1 MiB, Ghostty at 79.3 MiB,
-Alacritty at 142.5 MiB, WezTerm at 44.7 MiB, and Rio at 88.5 MiB.
-
-Memory figures are reproducible snapshots, not hard ceilings. Fonts, effects, window size, scrollback, editors, shells, and CLI processes affect total usage.
+The fresh comparison table above records app allocation and one-tab physical
+footprint for every terminal. Termatica's logical universal bundle size is
+1,321.9 KiB; the comparison harness reports its 1,360 KiB filesystem allocation.
+Built-in capability plugins use no persistent helper processes, and terminal
+history cells are 12 bytes each. Memory samples are not hard ceilings: fonts,
+renderer, effects, window size, scrollback, images, editors, shells, and child
+processes affect usage.
 
 ## License
 

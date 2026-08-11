@@ -28,6 +28,9 @@ other terminals provide. Performance results are reported separately in
 - A non-destructive `t benchmark` command that measures the running app with
   its active visual config and reports version, memory, throughput, and
   offscreen paint FPS.
+- A privacy-safe `t renderer-report` command that reports display geometry,
+  renderer selection, recovery counts, generations, and Metal failure counts
+  without terminal text, paths, commands, environment, or shell details.
 
 ## Capabilities other terminals have that Termatica does not
 

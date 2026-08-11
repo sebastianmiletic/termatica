@@ -1,0 +1,2 @@
+ 8091 119904 435702432 /Applications/kitty.app/Contents/MacOS/kitty --config NONE -o font_family=Monaco -o font_size=11 /usr/bin/python3 /Users/sebastianmiletic/Coding/Termatica/scripts/benchmark_probe.py /Users/sebastianmiletic/Coding/Termatica/benchmarks/2026-08-11-v1.8.0-matrix/kitty-memory-ready.ns
+Physical footprint:         72.0M

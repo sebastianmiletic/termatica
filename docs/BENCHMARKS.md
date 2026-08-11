@@ -71,6 +71,41 @@ a separate, freshly executed Termatica-only internal model and warmed offscreen
 AppKit paint measurement. The two methods are labeled separately and must not
 be compared directly.
 
+## Termatica 1.8.0 fresh six-terminal result
+
+On 2026-08-11, the Phase 6 release candidate and all five installed comparison
+terminals were measured in fresh isolated processes on an Apple M4 Mac with
+16 GB memory. The run used Monaco 11 where a terminal exposed an isolated font
+setting, three throughput repetitions, and five shell-ready launches. Higher
+throughput is better; lower startup, memory, and allocation are better.
+
+| Terminal | 15-workload geo mean | Shell-ready median | Physical footprint | App allocation |
+|---|---:|---:|---:|---:|
+| Termatica 1.8.0 | **234.9 MB/s** | 5.532 ms | **29.9 MiB** | **1,360 KiB** |
+| Kitty 0.48.1 | 101.5 MB/s | 8.365 ms | 72.0 MiB | 160,080 KiB |
+| Ghostty 1.3.1 | 86.0 MB/s | 5.695 ms | 90.2 MiB | 63,484 KiB |
+| Alacritty 0.17.0 | 152.8 MB/s | 5.859 ms | 63.5 MiB | 14,328 KiB |
+| WezTerm 20240203 | 63.0 MB/s | 5.409 ms | 44.3 MiB | 259,840 KiB |
+| Rio 0.5.2 | 92.2 MB/s | **5.216 ms** | 88.5 MiB | 41,992 KiB |
+
+The geometric mean covers the six parser, six render-enabled, and three
+scrollback workloads emitted by the common harness. The complete raw terminal
+output, startup samples, memory samples, versions, and Termatica internal JSON
+results are committed under `benchmarks/2026-08-11-v1.8.0-matrix`.
+
+In the equal-content internal renderer comparison, AppKit work measured 4.089
+ms p50 and 4.271 ms p95; Metal measured 2.522 ms p50 and 3.223 ms p95. Both had
+zero frames above the 60 Hz and 120 Hz work budgets. This is renderer work, not
+physical key-to-photon latency. Metal remains opt-in because performance alone
+does not complete the physical display, accessibility, Intel, and field gates.
+
+The common benchmark's render-enabled mode permits asynchronous presentation,
+so it measures accepted throughput rather than confirmed display completion.
+The image workload can be processed faster by rejecting unsupported graphics
+controls and therefore does not establish equivalent image rendering. Startup
+ends when the child shell writes and syncs a ready marker; it is not first
+visible frame. Physical footprint is one post-settle sample and can vary.
+
 ## Termatica 1.5.1 focused Unicode and escape result
 
 On 2026-08-11, released v1.5.0 and the v1.5.1 release candidate were each
