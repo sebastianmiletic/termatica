@@ -1,0 +1,2 @@
+42918 106832 411583696 /Applications/WezTerm.app/Contents/MacOS/wezterm-gui --config-file /tmp/termatica-benchmark-config.O8IVXj/wezterm.lua start --always-new-process -- /bin/zsh -lc /usr/bin/python3 '/Users/sebastianmiletic/Coding/Termatica/scripts/benchmark_probe.py' '/Users/sebastianmiletic/Coding/Termatica/benchmarks/2026-08-13-v1.12.0-matrix/wezterm-memory-ready.ns'
+Physical footprint:         48.9M

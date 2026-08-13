@@ -35,6 +35,9 @@ other terminals provide. Performance results are reported separately in
 - A factual `t renderer-qualification` summary of current-session architecture,
   display topology, scale/refresh diversity, wake and transition evidence, and
   open rollout gates. Synthetic test events cannot satisfy physical field gates.
+- Phase 10 field-campaign export and aggregation with minimal evidence payloads,
+  canonical SHA-256 tamper detection, ephemeral-session duplicate rejection,
+  no persistent machine identifier, and explicit human-review boundaries.
 - Session-local Metal failure quarantine: automatic AppKit fallback remains
   stable across lifecycle recovery. `t renderer-retry` retries only quarantined
   Metal panes in place, preserves terminal state, and leaves healthy panes

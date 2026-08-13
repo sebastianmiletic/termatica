@@ -1,0 +1,2 @@
+42907  92944 436010448 /Applications/Alacritty.app/Contents/MacOS/alacritty --config-file /dev/null -o font.normal.family="Monaco" -o font.size=11 -e /bin/zsh -lc /usr/bin/python3 '/Users/sebastianmiletic/Coding/Termatica/scripts/benchmark_probe.py' '/Users/sebastianmiletic/Coding/Termatica/benchmarks/2026-08-13-v1.12.0-matrix/alacritty-memory-ready.ns'
+Physical footprint:         142.6M

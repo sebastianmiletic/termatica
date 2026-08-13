@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.12.0
+
+- Add `termatica renderer-campaign export` / `t rc export` to create a minimal,
+  privacy-safe Phase 10 field report with a canonical SHA-256 integrity digest.
+- Add `t rc aggregate` to validate, deduplicate, and combine observed reports
+  across Apple Silicon, Intel, display, scale, refresh, hot-plug, and wake runs.
+- Reject modified payloads, unsupported schemas, synthetic evidence sources,
+  privacy violations, and repeated reports from the same ephemeral app session.
+- Label integrity separately from authenticity: reports contain no persistent
+  machine identifier and cannot automatically prove physical visual inspection.
+- Keep AppKit as the default and require explicit operator review even when all
+  automatically observable field categories have been collected.
+
 ## 1.11.0
 
 - Add `termatica renderer-qualification` / `t rq` for a privacy-safe summary

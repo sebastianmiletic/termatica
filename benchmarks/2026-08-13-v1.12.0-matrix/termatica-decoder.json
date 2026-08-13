@@ -1,0 +1,28 @@
+{
+  "bytes_per_case" : 33554432,
+  "engine" : "Termatica C decoder",
+  "results" : [
+    {
+      "bytes" : 33554432,
+      "case" : "ascii",
+      "event_hash" : 8139019921821241484,
+      "mib_per_second" : 684.97653933501749,
+      "seconds" : 0.046716928482055664
+    },
+    {
+      "bytes" : 33554432,
+      "case" : "unicode",
+      "event_hash" : 6893813285313568966,
+      "mib_per_second" : 706.77736294174338,
+      "seconds" : 0.04527592658996582
+    },
+    {
+      "bytes" : 33554432,
+      "case" : "csi",
+      "event_hash" : 15522787411454935615,
+      "mib_per_second" : 567.37527635811784,
+      "seconds" : 0.056400060653686523
+    }
+  ],
+  "schema_version" : 1
+}
