@@ -10,6 +10,7 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 |---|---|
 | `t b` | `termatica benchmark` |
 | `t rr` | `termatica renderer-report` |
+| `t rq` | `termatica renderer-qualification` |
 | `t rt` | `termatica renderer-retry` |
 | `t c` | `termatica config` |
 | `t cf` | `termatica config-file` |
@@ -40,6 +41,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica reload` | Reload configuration in the running app |
 | `termatica benchmark` | Benchmark an isolated offscreen terminal inside the running app using the active visual config |
 | `termatica renderer-report` | Print privacy-safe display, requested/actual renderer, quarantine, retry, recovery, and failure diagnostics as JSON |
+| `termatica renderer-qualification` | Print observed current-session field evidence and every open Metal rollout gate as JSON |
 | `termatica renderer-retry` | Retry only quarantined Metal panes in place without changing the active config or other panes |
 | `termatica editor <name> [file ...]` | Run a supported editor in the current terminal |
 | `termatica editor list` | List editor adapters |

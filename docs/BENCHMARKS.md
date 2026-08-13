@@ -71,30 +71,30 @@ a separate, freshly executed Termatica-only internal model and warmed offscreen
 AppKit paint measurement. The two methods are labeled separately and must not
 be compared directly.
 
-## Termatica 1.10.0 fresh six-terminal result
+## Termatica 1.11.0 fresh six-terminal result
 
-On 2026-08-13, the Phase 8 release candidate and all five installed comparison
+On 2026-08-13, the Phase 9 release candidate and all five installed comparison
 terminals were freshly measured on the same Apple M4 Mac with 16 GB memory,
 Monaco 11 where configurable, three throughput repetitions, and five
 shell-ready launches. The Mac was on battery power and the one-minute load
-average was 7.17 when the run was inspected, so these absolute values are not
+average was 2.80 when the run was inspected, so these absolute values are not
 comparable to runs captured under different power or load conditions.
 
 | Terminal | 15-workload geo mean | Shell-ready median | Physical footprint | App allocation |
 |---|---:|---:|---:|---:|
-| Termatica 1.10.0 | **75.5 MB/s** | 34.403 ms | **30.3 MiB** | **1,376 KiB** |
-| Kitty 0.48.1 | 41.6 MB/s | 61.062 ms | 118.1 MiB | 160,080 KiB |
-| Ghostty 1.3.1 | 13.4 MB/s | 30.436 ms | 97.4 MiB | 63,484 KiB |
-| Alacritty 0.17.0 | 35.4 MB/s | 50.551 ms | 147.7 MiB | 14,328 KiB |
-| WezTerm 20240203 | 16.4 MB/s | **27.897 ms** | 47.8 MiB | 259,840 KiB |
-| Rio 0.5.2 | 32.0 MB/s | 31.319 ms | 50.0 MiB | 41,992 KiB |
+| Termatica 1.11.0 | **116.5 MB/s** | 17.377 ms | **26.3 MiB** | **1,392 KiB** |
+| Kitty 0.48.1 | 44.0 MB/s | 23.044 ms | 120.5 MiB | 160,080 KiB |
+| Ghostty 1.3.1 | 25.8 MB/s | 17.195 ms | 87.0 MiB | 63,484 KiB |
+| Alacritty 0.17.0 | 56.4 MB/s | 41.767 ms | 68.6 MiB | 14,328 KiB |
+| WezTerm 20240203 | 20.8 MB/s | **11.729 ms** | 46.5 MiB | 259,840 KiB |
+| Rio 0.5.2 | 33.6 MB/s | 20.461 ms | 44.3 MiB | 41,992 KiB |
 
 The geometric mean covers six parser, six render-enabled, and three scrollback
 workloads. Render-enabled throughput measures accepted input, not confirmed
 display completion. Startup ends when the child writes and syncs a marker, not
 when a frame becomes visible. Physical footprint is one post-settle sample.
 Every raw result is committed under
-`benchmarks/2026-08-13-v1.10.0-matrix`.
+`benchmarks/2026-08-13-v1.11.0-matrix`.
 
 ## Termatica 1.9.0 fresh six-terminal result
 

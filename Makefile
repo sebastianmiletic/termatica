@@ -94,7 +94,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.10.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.11.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
@@ -102,10 +102,12 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.10.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.11.0'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-retry'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-qualification'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-retry'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-qualification'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
@@ -297,6 +299,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/phase6-field-test" $(BENCH) --phase6-field-self-test | grep -q '^phase6-field-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase7-production-test" $(BENCH) --phase7-production-self-test | grep -q '^phase7-production-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase8-recovery-test" $(BENCH) --phase8-recovery-self-test | grep -q '^phase8-recovery-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/phase9-field-test" $(BENCH) --phase9-field-self-test | grep -q '^phase9-field-self-test ok'; \
 	  if [ -z "$${CI:-}" ]; then TERMATICA_CONFIG_DIR="$$tmp/tui-compat-test" $(BENCH) --tui-compat-self-test | grep -q '^tui-compat-self-test ok'; fi; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-comparison" $(BENCH) --benchmark-experience 30 0.5 >"$$tmp/renderer-comparison.json"; \
 	  test "$$(stat -f '%z' "$$tmp/renderer-comparison.json")" -gt 4096; \
@@ -319,7 +322,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.10.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.11.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

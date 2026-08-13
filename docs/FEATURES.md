@@ -32,6 +32,9 @@ other terminals provide. Performance results are reported separately in
   requested and actual renderer, recovery counts, generations, Metal failure
   stage/age, quarantine state, and explicit retry policy without terminal text,
   paths, commands, environment, or shell details.
+- A factual `t renderer-qualification` summary of current-session architecture,
+  display topology, scale/refresh diversity, wake and transition evidence, and
+  open rollout gates. Synthetic test events cannot satisfy physical field gates.
 - Session-local Metal failure quarantine: automatic AppKit fallback remains
   stable across lifecycle recovery. `t renderer-retry` retries only quarantined
   Metal panes in place, preserves terminal state, and leaves healthy panes

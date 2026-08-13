@@ -1,0 +1,9 @@
+19:02:41.706  WARN   wezterm_font > No fonts contain glyphs for these codepoints: \u{4e1f}\u{5462}.
+Placeholder glyphs are being displayed instead.
+You may wish to install additional fonts, or adjust your
+configuration so that it can find them.
+https://wezfurlong.org/wezterm/config/fonts.html has more information about configuring fonts.
+Set warn_about_missing_glyphs=false to suppress this message.
+19:02:43.005  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding
+19:02:43.069  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding
+19:02:43.127  ERROR  wezterm_term::terminalstate::performer > kitty_img: coalesce_kitty_accumulation: base64 decode: Invalid padding

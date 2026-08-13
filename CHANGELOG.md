@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.11.0
+
+- Add `termatica renderer-qualification` / `t rq` for a privacy-safe summary
+  of observed Metal field evidence and every still-open rollout gate.
+- Upgrade `t rr` to schema 4 with process architecture and translation state,
+  display topology, refresh/scale diversity, wake events, pane display index,
+  and per-reason presentation recovery counters.
+- Keep field evidence current-session and observational: synthetic tests are
+  never accepted as physical multi-display, hot-plug, wake, Intel, or visual
+  proof, and AppKit remains the default while any gate is open.
+- Add a Phase 9 release blocker covering screen/scale/wake recovery, preserved
+  Unicode pane state, report privacy, qualification accounting, and rejection
+  of synthetic proof.
+
 ## 1.10.0
 
 - Add `termatica renderer-retry` / `t rt` for explicit in-place recovery of

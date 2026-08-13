@@ -1,0 +1,156 @@
+{
+  "engine" : "Termatica Core\/AppKit",
+  "frames" : 240,
+  "input_latency_stage_ms" : {
+    "appkit_paint" : {
+      "p50" : 1.73875,
+      "p95" : 2.966208,
+      "p99" : 3.2022919999999999
+    },
+    "echo_parse" : {
+      "p50" : 0.00075000000000000002,
+      "p95" : 0.0030000000000000001,
+      "p99" : 0.0049579999999999997
+    },
+    "event_mapping" : {
+      "p50" : 0.078958,
+      "p95" : 0.24562500000000001,
+      "p99" : 0.35841699999999999
+    }
+  },
+  "key_to_paint_lower_bound_ms" : {
+    "p50" : 1.835583,
+    "p95" : 3.2010420000000002,
+    "p99" : 3.6367919999999998
+  },
+  "methodology" : {
+    "energy" : "macOS process-attributed ri_energy_nj during sustained Unicode\/ANSI parsing; excludes display and whole-system energy",
+    "key_to_paint" : "synthetic NSEvent through Termatica input mapping, looped back as immediate PTY echo, parsed and painted to a full-surface AppKit bitmap; software lower bound, not physical key-to-photon",
+    "paint" : "warmed offscreen full-surface AppKit cacheDisplay of an ASCII terminal viewport after one-line scroll"
+  },
+  "paint_ms" : {
+    "over_60hz_budget" : 0,
+    "over_120hz_budget" : 0,
+    "over_240hz_budget" : 0,
+    "p50" : 1.7679929733276367,
+    "p95" : 3.0319690704345703,
+    "p99" : 3.5240650177001953
+  },
+  "parse_to_paint_ms" : {
+    "p50" : 1.7900466918945312,
+    "p95" : 3.0350685119628906,
+    "p99" : 3.213047981262207
+  },
+  "process_energy" : {
+    "average_watts" : 0.87246336973207028,
+    "joules" : 2.6180209040000002,
+    "joules_per_gib" : 10.635066269521873,
+    "supported" : true
+  },
+  "renderer_comparison" : {
+    "appkit" : {
+      "available" : true,
+      "cpu_encode_ms" : {
+        "p50" : 0,
+        "p95" : 0,
+        "p99" : 0
+      },
+      "frames" : 240,
+      "gpu_completion_ms" : {
+        "p50" : 0,
+        "p95" : 0,
+        "p99" : 0
+      },
+      "gpu_execution_ms" : {
+        "p50" : 0,
+        "p95" : 0,
+        "p99" : 0
+      },
+      "present_interval_ms" : {
+        "p50" : 0,
+        "p95" : 0,
+        "p99" : 0
+      },
+      "scheduler" : {
+
+      },
+      "snapshot_wait_ms" : {
+        "p50" : 0,
+        "p95" : 0,
+        "p99" : 0
+      },
+      "work_ms" : {
+        "over_60hz_budget" : 15,
+        "over_120hz_budget" : 182,
+        "over_240hz_budget" : 240,
+        "p50" : 9.326934814453125,
+        "p95" : 17.103910446166992,
+        "p99" : 21.683931350708008
+      }
+    },
+    "metal" : {
+      "available" : true,
+      "cpu_encode_ms" : {
+        "p50" : 1.8789768218994141,
+        "p95" : 2.0310878753662109,
+        "p99" : 2.0680427551269531
+      },
+      "frames" : 240,
+      "gpu_completion_ms" : {
+        "p50" : 1.0279417037963867,
+        "p95" : 4.0589570999145508,
+        "p99" : 6.3630342483520508
+      },
+      "gpu_execution_ms" : {
+        "p50" : 0.36779168294742703,
+        "p95" : 2.1149583335500211,
+        "p99" : 3.4289583563804626
+      },
+      "present_interval_ms" : {
+        "p50" : 16.626954078674316,
+        "p95" : 19.339919090270996,
+        "p99" : 22.405028343200684
+      },
+      "scheduler" : {
+        "coalescedSnapshots" : 0,
+        "displayLinkActive" : 1,
+        "generationReversals" : 0,
+        "inFlightFrames" : 0,
+        "lastAcceptedGeneration" : 252,
+        "lastCPUEncodeMs" : 1.546025276184082,
+        "lastGPUCompletionMs" : 0.87797641754150391,
+        "lastGPUExecutionMs" : 0.28712500352412462,
+        "lastPresentIntervalMs" : 16.510009765625,
+        "lastSnapshotWaitMs" : 12.495040893554688,
+        "lastSubmittedGeneration" : 252,
+        "maximumInFlightFrames" : 1,
+        "pendingSnapshots" : 0,
+        "submittedFrames" : 250
+      },
+      "snapshot_wait_ms" : {
+        "p50" : 11.968016624450684,
+        "p95" : 13.802051544189453,
+        "p99" : 15.633106231689453
+      },
+      "work_ms" : {
+        "over_60hz_budget" : 0,
+        "over_120hz_budget" : 0,
+        "over_240hz_budget" : 10,
+        "p50" : 2.3720631143078208,
+        "p95" : 3.8546619471162558,
+        "p99" : 5.3588375449180603
+      }
+    },
+    "methodology" : "identical 1000x700 Unicode\/ANSI viewport, full-row scroll damage, eight warmup frames, and equal measured frame counts; AppKit work is snapshot plus offscreen CoreText paint, Metal work is snapshot plus CPU encoding plus GPU execution; display wait is reported separately"
+  },
+  "schema_version" : 5,
+  "sustained" : {
+    "bytes" : 264321676,
+    "cpu_seconds" : 2.9334799999999994,
+    "cpu_seconds_per_wall_second" : 0.97759106580519228,
+    "mib_per_second" : 84.005352478711472,
+    "minimum_250ms_window_mib_per_second" : 64.912529496753933,
+    "wall_seconds" : 3.0007230043411255,
+    "window_coefficient_of_variation" : 0.15338633911587424
+  }
+}
