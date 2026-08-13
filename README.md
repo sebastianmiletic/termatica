@@ -22,26 +22,26 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current local universal bundle is **1,321.9 KiB** and runs natively on
+The current local universal bundle is **1,337.9 KiB** and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
 footprint instead of presenting one host snapshot as a fixed requirement.
 
 ## Measured performance
 
-The fresh 2026-08-11 Apple M4 comparison used the same Kitty benchmark protocol for
-Termatica 1.9.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
+The fresh 2026-08-13 Apple M4 comparison used the same Kitty benchmark protocol for
+Termatica 1.10.0, Kitty 0.48.1, Ghostty 1.3.1, Alacritty 0.17.0, WezTerm
 20240203, and Rio 0.5.2. Higher throughput is better; lower startup and memory
 are better. Bold values are the measured winner in each column.
 
 | Terminal | 15-workload geo mean | Shell-ready median | Physical footprint | App allocation |
 |---|---:|---:|---:|---:|
-| Termatica 1.9.0 | **232.2 MB/s** | 5.696 ms | **26.0 MiB** | **1,360 KiB** |
-| Kitty 0.48.1 | 108.7 MB/s | 6.225 ms | 118.1 MiB | 160,080 KiB |
-| Ghostty 1.3.1 | 87.3 MB/s | 6.536 ms | 79.4 MiB | 63,484 KiB |
-| Alacritty 0.17.0 | 161.7 MB/s | 5.800 ms | 66.5 MiB | 14,328 KiB |
-| WezTerm 20240203 | 63.3 MB/s | 5.910 ms | 42.4 MiB | 259,840 KiB |
-| Rio 0.5.2 | 93.9 MB/s | **4.874 ms** | 38.0 MiB | 41,992 KiB |
+| Termatica 1.10.0 | **75.5 MB/s** | 34.403 ms | **30.3 MiB** | **1,376 KiB** |
+| Kitty 0.48.1 | 41.6 MB/s | 61.062 ms | 118.1 MiB | 160,080 KiB |
+| Ghostty 1.3.1 | 13.4 MB/s | 30.436 ms | 97.4 MiB | 63,484 KiB |
+| Alacritty 0.17.0 | 35.4 MB/s | 50.551 ms | 147.7 MiB | 14,328 KiB |
+| WezTerm 20240203 | 16.4 MB/s | **27.897 ms** | 47.8 MiB | 259,840 KiB |
+| Rio 0.5.2 | 32.0 MB/s | 31.319 ms | 50.0 MiB | 41,992 KiB |
 
 The geometric mean covers six parser, six render-enabled, and three scrollback
 workloads. Render-enabled throughput measures accepted input, not confirmed
@@ -49,7 +49,9 @@ display completion; image rows do not prove equivalent protocol support or
 visual output. Startup is process launch until a child shell writes a ready
 marker, not first visible frame. Memory is one post-settle sample. See the
 [complete method and limitations](docs/BENCHMARKS.md) and the
-[fresh raw artifacts](benchmarks/2026-08-11-v1.9.0-matrix).
+[fresh raw artifacts](benchmarks/2026-08-13-v1.10.0-matrix). This run was on
+battery power with a 7.17 one-minute system load; its absolute values must not
+be compared with a differently loaded run.
 
 To measure the currently running Termatica build with its active visual config:
 
@@ -79,6 +81,7 @@ are not closed or replaced.
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
 - Immutable render snapshots, an opt-in Metal backend, automatic AppKit fallback, and state-preserving recovery after display, scale, occlusion, and wake changes
+- Pane-isolated Metal quarantine with explicit in-place recovery through `t rt`; healthy tabs and splits are not reconfigured
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
@@ -154,6 +157,7 @@ t u
 | `t b` | Benchmark Termatica now and compare with saved competitor runs |
 | `t b a` | Benchmark every installed comparison terminal now |
 | `t rr` | Print a privacy-safe renderer/display field report with no terminal text or paths |
+| `t rt` | Retry quarantined Metal panes in place without changing config |
 | `t cf` | Open `config.json` |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |
@@ -170,6 +174,7 @@ t u
 | `termatica config-file path` | Print the config file path |
 | `termatica update [check]` | Check GitHub or securely install the latest release |
 | `termatica reload` | Reload the running app |
+| `termatica renderer-retry` | Retry only quarantined Metal panes and report each result as JSON |
 | `termatica editor <name> [files]` | Run Vim, Neovim, Emacs, Nano, Micro, or Helix |
 | `termatica run <name> [text]` | Run a configured extension command |
 | `termatica completions install` | Install Zsh, Bash, and Fish completions |
@@ -265,7 +270,7 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 
 The fresh comparison table above records app allocation and one-tab physical
 footprint for every terminal. Termatica's logical universal bundle size is
-1,321.9 KiB; the comparison harness reports its 1,360 KiB filesystem allocation.
+1,337.9 KiB; the comparison harness reports its 1,376 KiB filesystem allocation.
 Built-in capability plugins use no persistent helper processes, and terminal
 history cells are 12 bytes each. Memory samples are not hard ceilings: fonts,
 renderer, effects, window size, scrollback, images, editors, shells, and child

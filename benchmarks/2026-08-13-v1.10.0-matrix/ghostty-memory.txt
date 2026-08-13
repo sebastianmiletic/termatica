@@ -1,0 +1,2 @@
+33624 130224 435981520 /Applications/Ghostty.app/Contents/MacOS/ghostty --config-file=/dev/null --font-family=Monaco --font-size=11 --command=/bin/zsh /Users/sebastianmiletic/Coding/Termatica/benchmarks/2026-08-13-v1.10.0-matrix/ghostty-memory-ready.ns.ghostty.zsh
+Physical footprint:         97.4M

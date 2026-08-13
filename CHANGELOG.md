@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.10.0
+
+- Add `termatica renderer-retry` / `t rt` for explicit in-place recovery of
+  quarantined Metal panes without toggling config or resetting terminal state.
+- Isolate retries per pane so a failed split cannot reconfigure or destabilize
+  healthy Metal or AppKit panes.
+- Upgrade `t rr` to schema 3 with aggregate renderer health, mismatch,
+  quarantine, failure, retry-attempt, and successful-retry counters.
+- Add a Phase 8 release blocker covering forced retry failure, subsequent
+  recovery, three-pane isolation, preserved Unicode content, and aggregate
+  report accounting.
+
 ## 1.9.0
 
 - Quarantine a failed Metal renderer for the current session so display,

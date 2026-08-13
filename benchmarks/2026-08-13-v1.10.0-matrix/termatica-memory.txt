@@ -1,0 +1,2 @@
+33598  88448 435615248 /Users/sebastianmiletic/Coding/Termatica/build/Termatica.app/Contents/MacOS/Termatica
+Physical footprint:         30.3M

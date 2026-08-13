@@ -33,8 +33,9 @@ other terminals provide. Performance results are reported separately in
   stage/age, quarantine state, and explicit retry policy without terminal text,
   paths, commands, environment, or shell details.
 - Session-local Metal failure quarantine: automatic AppKit fallback remains
-  stable across lifecycle recovery, and Metal is retried only after an explicit
-  AppKit-to-Metal reselection.
+  stable across lifecycle recovery. `t renderer-retry` retries only quarantined
+  Metal panes in place, preserves terminal state, and leaves healthy panes
+  untouched.
 
 ## Capabilities other terminals have that Termatica does not
 
