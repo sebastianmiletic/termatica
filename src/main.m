@@ -853,6 +853,13 @@ enum { TClusterBase = 0x110000 };
 - (void)shutdown {_stopped=YES;_presentHandler=nil;}
 @end
 
+@interface TCursorOverlayView : NSView
+@end
+
+@implementation TCursorOverlayView
+- (NSView *)hitTest:(NSPoint)point {return nil;}
+@end
+
 @interface TTerminalView : NSView <NSTextInputClient>
 @property TConfig *config;
 @property CGFloat leadingOverlayInset;
@@ -918,6 +925,9 @@ enum { TClusterBase = 0x110000 };
 - (void)purgeMetalCachesForRendererSelfTest;
 #endif
 - (void)configureRenderBackend;
+- (void)presentTerminalSnapshot:(TRenderSnapshot *)snapshot;
+- (void)applyCursorOverlayForSnapshot:(TRenderSnapshot *)snapshot visible:(BOOL)visible;
+- (void)updateCursorOverlayForSnapshot:(TRenderSnapshot *)snapshot;
 - (void)fallbackToAppKitForError:(NSError *)error;
 - (uint64_t)presentFrameForBenchmark;
 - (uint64_t)presentFrameForBenchmarkWithScrollDelta:(NSInteger)delta;
@@ -1089,6 +1099,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     id<TRenderBackend> _renderBackend;
     TMetalRenderBackend *_metalBackend;
     TRenderSnapshot *_displaySnapshot;
+    TCursorOverlayView *_cursorOverlay;
     BOOL _metalFailed;
     NSUInteger _metalFailureCount;
     NSUInteger _metalQuarantineBypassCount;
@@ -1123,6 +1134,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
         [self registerForDraggedTypes:@[NSPasteboardTypeFileURL]];
         self.wantsLayer=[self.config.renderer isEqual:@"metal"]||getenv("TERMATICA_RENDERER")!=NULL;
         self.layerContentsRedrawPolicy=NSViewLayerContentsRedrawOnSetNeedsDisplay;
+        _cursorOverlay=[[TCursorOverlayView alloc]initWithFrame:NSZeroRect];_cursorOverlay.wantsLayer=YES;_cursorOverlay.hidden=YES;_cursorOverlay.layer.zPosition=1000;_cursorOverlay.layer.actions=@{@"position":NSNull.null,@"bounds":NSNull.null,@"backgroundColor":NSNull.null,@"opacity":NSNull.null,@"hidden":NSNull.null};_cursorOverlay.accessibilityElement=NO;[self addSubview:_cursorOverlay positioned:NSWindowAbove relativeTo:nil];
         _cols=80;_rows=24;_scrollBottom=23;
         if(!deferPresentation)[self preparePresentation];
         self.accessibilityLabel = @"Terminal";
@@ -1154,8 +1166,17 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf invalidateCursorPresentation];});return;}
     if(!_renderBackend){[super setNeedsDisplay:YES];return;}
     @synchronized(self){[self markAllDamage];}
-    TRenderSnapshot *snapshot=[self renderSnapshot];[self takeDamageRect];_displaySnapshot=snapshot;if(_metalBackend)[_metalBackend requestImmediatePresentation];[_renderBackend presentSnapshot:snapshot];
+    TRenderSnapshot *snapshot=[self renderSnapshot];[self takeDamageRect];if(_metalBackend)[_metalBackend requestImmediatePresentation];[self presentTerminalSnapshot:snapshot];
 }
+- (void)applyCursorOverlayForSnapshot:(TRenderSnapshot *)snapshot visible:(BOOL)visible {
+    if(!visible||!snapshot.isValid){[CATransaction begin];[CATransaction setDisableActions:YES];_cursorOverlay.hidden=YES;[CATransaction commit];return;}
+    NSDictionary *style=snapshot.style;NSString *cursorStyle=style[@"cursorStyle"]?:@"block";CGFloat cellWidth=snapshot.metrics.cellWidth,cellHeight=snapshot.metrics.cellHeight,left=[style[@"left"] doubleValue],top=[style[@"top"] doubleValue],width=cellWidth,height=cellHeight,x=left+snapshot.cursorX*cellWidth,y=top+snapshot.cursorY*cellHeight,thickness=[style[@"cursorThickness"] doubleValue];if([cursorStyle isEqual:@"bar"])width=thickness;else if([cursorStyle isEqual:@"underline"]){height=thickness;y+=cellHeight-thickness;}CGFloat alpha=[cursorStyle isEqual:@"block"]?[style[@"cursorBlockOpacity"] doubleValue]:0.96;[CATransaction begin];[CATransaction setDisableActions:YES];_cursorOverlay.frame=NSMakeRect(x,y,MAX(1,width),MAX(1,height));_cursorOverlay.layer.backgroundColor=TColor([style[@"cursor"] unsignedIntValue]).CGColor;_cursorOverlay.layer.opacity=alpha;_cursorOverlay.hidden=NO;[CATransaction commit];
+}
+- (void)updateCursorOverlayForSnapshot:(TRenderSnapshot *)snapshot {
+    if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf updateCursorOverlayForSnapshot:snapshot];});return;}
+    BOOL visible=snapshot.isValid&&snapshot.cursorVisible&&self.activeTerminal&&self.window.isKeyWindow&&self.window.firstResponder==self;[self applyCursorOverlayForSnapshot:snapshot visible:visible];
+}
+- (void)presentTerminalSnapshot:(TRenderSnapshot *)snapshot {if(!snapshot.isValid||!_renderBackend)return;_displaySnapshot=snapshot;[self updateCursorOverlayForSnapshot:snapshot];[_renderBackend presentSnapshot:snapshot];}
 - (void)setActiveTerminal:(BOOL)activeTerminal {
     if(_activeTerminal==activeTerminal)return;
     _activeTerminal=activeTerminal;
@@ -1199,7 +1220,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     if(flag&&_renderBackend){
         @synchronized(self){[self markAllDamage];}
         if(_metalBackend)[self refreshTextView];
-        else{TRenderSnapshot *snapshot=[self renderSnapshot];[self takeDamageRect];[_renderBackend presentSnapshot:snapshot];}
+        else{TRenderSnapshot *snapshot=[self renderSnapshot];[self takeDamageRect];[self presentTerminalSnapshot:snapshot];}
         return;
     }
     [super setNeedsDisplay:flag];
@@ -1247,7 +1268,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf fallbackToAppKitForError:error];});return;}
     TLog(@"Metal renderer failure, falling back to AppKit: %@",error.localizedDescription?:@"unknown error");_metalFailed=YES;_metalFailureCount++;_lastMetalFailureStage=@"runtime";_lastMetalFailureAt=CFAbsoluteTimeGetCurrent();[_renderBackend shutdown];_renderBackend=nil;_metalBackend=nil;
     __weak typeof(self) weakSelf=self;TAppKitRenderBackend *appkit=[[TAppKitRenderBackend alloc]initWithPresentHandler:^(TRenderSnapshot *snapshot){__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displaySnapshot=snapshot;[self setNeedsDisplayInRect:self.bounds];}];
-    TRenderMetrics metrics={_rows,_cols,_cellWidth,_cellHeight,self.window.screen.backingScaleFactor?:NSScreen.mainScreen.backingScaleFactor?:1,self.bounds.size.width,self.bounds.size.height};[appkit configureWithMetrics:metrics error:nil];_renderBackend=appkit;BOOL retainLayer=self.tiledRendering||self.layer.animationKeys.count>0;self.layer.contents=nil;self.wantsLayer=retainLayer;[self markAllDamage];[_renderBackend presentSnapshot:[self renderSnapshot]];
+    TRenderMetrics metrics={_rows,_cols,_cellWidth,_cellHeight,self.window.screen.backingScaleFactor?:NSScreen.mainScreen.backingScaleFactor?:1,self.bounds.size.width,self.bounds.size.height};[appkit configureWithMetrics:metrics error:nil];_renderBackend=appkit;BOOL retainLayer=self.tiledRendering||self.layer.animationKeys.count>0;self.layer.contents=nil;self.wantsLayer=retainLayer;[self markAllDamage];[self presentTerminalSnapshot:[self renderSnapshot]];
 }
 - (NSDictionary *)retryMetalRenderer {
     if(!NSThread.isMainThread){__block NSDictionary *result=nil;dispatch_sync(dispatch_get_main_queue(),^{result=[self retryMetalRenderer];});return result;}
@@ -1263,7 +1284,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
 }
 - (uint64_t)presentFrameForBenchmark {
     @synchronized(self){[self markAllDamage];}
-    CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();TRenderSnapshot *snapshot=[self renderSnapshot];_lastSnapshotBuildMilliseconds=(CFAbsoluteTimeGetCurrent()-start)*1000.0;[self takeDamageRect];[_renderBackend presentSnapshot:snapshot];return snapshot.generation;
+    CFAbsoluteTime start=CFAbsoluteTimeGetCurrent();TRenderSnapshot *snapshot=[self renderSnapshot];_lastSnapshotBuildMilliseconds=(CFAbsoluteTimeGetCurrent()-start)*1000.0;[self takeDamageRect];[self presentTerminalSnapshot:snapshot];return snapshot.generation;
 }
 - (uint64_t)presentFrameForBenchmarkWithScrollDelta:(NSInteger)delta {
     @synchronized(self){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,_historyOffset+delta));_hasSelection=NO;[self markAllDamage];}
@@ -1931,7 +1952,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     }
     if(_synchronizedUpdates||_displayScheduled||self.hidden)return;_displayScheduled=YES;__weak typeof(self) weakSelf=self;
     NSScreen *screen=self.window.screen?:NSScreen.mainScreen;NSUInteger fps=(screen&&[screen respondsToSelector:@selector(maximumFramesPerSecond)])?screen.maximumFramesPerSecond:60;uint64_t delay=self.activeTerminal?MAX(4,MIN(8,1000/fps)):(fps>=100?8:16);
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_MSEC)),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;TRenderSnapshot *snapshot=[self renderSnapshot];NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage)&&self->_renderBackend){self->_displaySnapshot=snapshot;[self->_renderBackend presentSnapshot:snapshot];}[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW,(int64_t)(delay*NSEC_PER_MSEC)),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displayScheduled=NO;TRenderSnapshot *snapshot=[self renderSnapshot];NSRect damage=[self takeDamageRect];if(!NSIsEmptyRect(damage)&&self->_renderBackend)[self presentTerminalSnapshot:snapshot];[self updateSecureKeyboardInput];if(NSWorkspace.sharedWorkspace.isVoiceOverEnabled&&!self->_accessibilityUpdatePending){self->_accessibilityUpdatePending=YES;dispatch_after(dispatch_time(DISPATCH_TIME_NOW,100*NSEC_PER_MSEC),dispatch_get_main_queue(),^{__strong typeof(weakSelf) self=weakSelf;if(!self)return;self.accessibilityValue=[self visibleText];self->_accessibilityUpdatePending=NO;});}});
 }
 - (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow underlineStyle:(uint8_t)underlineStyle {NSNumber *key=@((foreground<<16)|(flags<<8)|underlineStyle);NSDictionary *cached=_attributeCache[key];if(cached)return cached;NSFont *font=(flags&TBold)?_boldFont:((flags&TItalic)?_italicFont:_font);CGFloat glyphAdvance=font==_font?_cachedGlyphAdvance:[@"M" sizeWithAttributes:@{NSFontAttributeName:font}].width,cellKern=_cellWidth-glyphAdvance;NSMutableDictionary *attrs=[@{NSFontAttributeName:font,NSForegroundColorAttributeName:TColor(foreground),NSKernAttributeName:@(cellKern),NSLigatureAttributeName:@1} mutableCopy];if(shadow)attrs[NSShadowAttributeName]=shadow;if(flags&TUnderline){NSInteger style=NSUnderlineStyleSingle;if(underlineStyle==2)style=NSUnderlineStyleThick;else if(underlineStyle==3)style=NSUnderlineStyleSingle|NSUnderlinePatternDash;else if(underlineStyle==4)style=NSUnderlineStyleSingle|NSUnderlinePatternDot;else if(underlineStyle==5)style=NSUnderlineStyleSingle|NSUnderlinePatternDashDot;attrs[NSUnderlineStyleAttributeName]=@(style);}if(_attributeCache.count>=1024){NSEnumerator *e=[_attributeCache keyEnumerator];NSNumber *evict=[e nextObject];if(evict)[_attributeCache removeObjectForKey:evict];}_attributeCache[key]=attrs;return attrs;}
 - (NSDictionary *)textAttributesForForeground:(uint32_t)foreground flags:(uint8_t)flags shadow:(NSShadow *)shadow {return [self textAttributesForForeground:foreground flags:flags shadow:shadow underlineStyle:0];}
@@ -1963,7 +1984,6 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
         NSInteger x=firstColumn;while(x<lastColumn){NSUInteger index=y*columns+x;TCell cell=line[x];BOOL inverse=(cell.flags&TInverse)!=0;uint32_t background=inverse?(cell.fg==TDefaultColor?defaultForeground:cell.fg):(cell.bg==TDefaultColor?defaultBackground:cell.bg);if(searched[index])background=accent;NSInteger kind=selected[index]?1:(searched[index]?3:((cell.bg!=TDefaultColor||inverse)?2:0)),start=x;x++;while(x<lastColumn){NSUInteger nextIndex=y*columns+x;TCell next=line[x];BOOL nextInverse=(next.flags&TInverse)!=0;uint32_t nextBackground=nextInverse?(next.fg==TDefaultColor?defaultForeground:next.fg):(next.bg==TDefaultColor?defaultBackground:next.bg);if(searched[nextIndex])nextBackground=accent;NSInteger nextKind=selected[nextIndex]?1:(searched[nextIndex]?3:((next.bg!=TDefaultColor||nextInverse)?2:0));if(nextKind!=kind||(kind==2&&nextBackground!=background))break;x++;}if(kind){[TColor(kind==1?selectionColor:(kind==3?accent:background))setFill];NSRectFill(NSMakeRect(left+start*cellWidth,top+y*cellHeight,(x-start)*cellWidth,cellHeight));}}
         x=firstColumn;while(x<lastColumn){NSUInteger index=y*columns+x;TCell cell=line[x];if(cell.flags&TContinuation){x++;continue;}BOOL inverse=(cell.flags&TInverse)!=0;uint32_t foreground=inverse?(cell.bg==TDefaultColor?defaultBackground:cell.bg):(cell.fg==TDefaultColor?plainForegrounds[x]:cell.fg);uint8_t flags=(cell.flags&TStyleMask)|(linked[index]?TUnderline:0),underline=underlines[index];if(cell.flags&(TWide|TCluster)){NSString *text=[self stringForSnapshot:snapshot codepoint:cell.ch];[text drawAtPoint:NSMakePoint(left+x*cellWidth,top+y*cellHeight) withAttributes:[self wideSnapshotTextAttributes:snapshot foreground:foreground flags:flags shadow:shadow underlineStyle:underline]];x+=(cell.flags&TWide)?2:1;continue;}NSInteger start=x;NSUInteger length=0;BOOL hasGlyph=NO;while(x<lastColumn){NSUInteger nextIndex=y*columns+x;TCell next=line[x];if(next.flags&(TWide|TCluster|TContinuation))break;BOOL nextInverse=(next.flags&TInverse)!=0;uint32_t nextForeground=nextInverse?(next.bg==TDefaultColor?defaultBackground:next.bg):(next.fg==TDefaultColor?plainForegrounds[x]:next.fg);uint8_t nextFlags=(next.flags&TStyleMask)|(linked[nextIndex]?TUnderline:0);if(nextForeground!=foreground||nextFlags!=flags)break;uint32_t codepoint=next.ch?:' ';if(codepoint!=' ')hasGlyph=YES;length=TAppendUTF16(glyphs,length,codepoint);x++;}if(hasGlyph&&length){NSString *text=CFBridgingRelease(CFStringCreateWithCharactersNoCopy(NULL,glyphs,length,kCFAllocatorNull));[text drawAtPoint:NSMakePoint(left+start*cellWidth,top+y*cellHeight) withAttributes:[self snapshotTextAttributes:snapshot foreground:foreground flags:flags shadow:shadow underlineStyle:underline]];}}
     }
-    if(snapshot.cursorVisible){NSString *cursorStyle=style[@"cursorStyle"]?:@"block";BOOL block=![cursorStyle isEqual:@"bar"]&&![cursorStyle isEqual:@"underline"],focused=[style[@"cursorFocused"] boolValue];CGFloat thickness=[style[@"cursorThickness"] doubleValue],blockOpacity=[style[@"cursorBlockOpacity"] doubleValue],inactiveOpacity=[style[@"cursorInactiveOpacity"] doubleValue];[[TColor([style[@"cursor"] unsignedIntValue]) colorWithAlphaComponent:focused?(block?blockOpacity:0.96):(block?inactiveOpacity:0.5)]setFill];NSRect cursorRect=NSMakeRect(left+snapshot.cursorX*cellWidth,top+snapshot.cursorY*cellHeight,cellWidth,cellHeight);if([cursorStyle isEqual:@"bar"])cursorRect.size.width=thickness;else if([cursorStyle isEqual:@"underline"]){cursorRect.origin.y+=cellHeight-thickness;cursorRect.size.height=thickness;}NSRectFillUsingOperation(cursorRect,NSCompositingOperationSourceOver);}
     for(NSNumber *key in snapshot.images){NSUInteger value=key.unsignedIntegerValue,row=value>>16,column=value&0xFFFF;CGImageRef image=(__bridge CGImageRef)snapshot.images[key];if(!image)continue;NSRect imageRect=NSMakeRect(left+column*cellWidth,top+row*cellHeight,CGImageGetWidth(image),CGImageGetHeight(image));if(NSIntersectsRect(imageRect,dirtyRect)){CGContextRef context=NSGraphicsContext.currentContext.CGContext;CGContextSaveGState(context);CGContextDrawImage(context,NSRectToCGRect(imageRect),image);CGContextRestoreGState(context);}}
     CGFloat scanlines=[style[@"scanlines"] doubleValue],scanlineSpacing=[style[@"scanlineSpacing"] doubleValue],scanlineThickness=[style[@"scanlineThickness"] doubleValue];if(scanlines>0){[[NSColor colorWithWhite:0 alpha:scanlines*0.10]setFill];for(CGFloat y=MAX(scanlineThickness,floor(NSMinY(dirtyRect)/scanlineSpacing)*scanlineSpacing);y<NSMaxY(dirtyRect);y+=scanlineSpacing)NSRectFillUsingOperation(NSMakeRect(NSMinX(dirtyRect),y,NSWidth(dirtyRect),scanlineThickness),NSCompositingOperationSourceOver);}
     CGFloat vignette=[style[@"vignette"] doubleValue];NSUInteger vignetteLayers=[style[@"vignetteLayers"] unsignedIntegerValue];if(vignette>0&&![style[@"tiled"] boolValue])for(NSUInteger i=0;i<vignetteLayers;i++){[[NSColor colorWithWhite:0 alpha:vignette*(vignetteLayers-i)/MAX(1.0,vignetteLayers*5.0)]setStroke];[[NSBezierPath bezierPathWithRect:NSInsetRect(self.bounds,i+0.5,i+0.5)]stroke];}
@@ -2138,7 +2158,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 - (NSDictionary *)diagnosticState {
     @synchronized(self){return @{
       @"history":@(_historyCount),@"offset":@(_historyOffset),@"cursorX":@(_cursorX),@"cursorY":@(_cursorY),
-      @"activeTerminal":@(self.activeTerminal),@"firstResponder":@(self.window.firstResponder==self),@"displayCursorVisible":@(_displaySnapshot.cursorVisible),
+      @"activeTerminal":@(self.activeTerminal),@"firstResponder":@(self.window.firstResponder==self),@"displayCursorVisible":@(_displaySnapshot.cursorVisible),@"overlayCursorVisible":@(!_cursorOverlay.hidden),@"overlayCursorFrame":NSStringFromRect(_cursorOverlay.frame),
       @"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"inlineViewportTop":@(_inlineViewportTop),@"synchronizedUpdates":@(_synchronizedUpdates),
       @"selecting":@(_selecting),@"selection":@(_hasSelection),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),
       @"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),
@@ -2858,10 +2878,13 @@ static double TPercentile(double *values,NSUInteger count,double percentile);
 static BOOL TWaitForMetalGeneration(TTerminalView *terminal,uint64_t generation,NSTimeInterval seconds);
 static int TRunTerminalSelfTest(void) {
     [TApplication sharedApplication];
-    TConfig *freshConfig=[TConfig new];freshConfig.oscIntegration=NO;TTerminalView *fresh=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:freshConfig];
+    TConfig *freshConfig=[TConfig new];freshConfig.oscIntegration=NO;freshConfig.cursorStyle=@"bar";freshConfig->cursorThickness=2;TTerminalView *fresh=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:freshConfig];
     [fresh consumeData:[@"stale-row-a\r\nstale-row-b\r\n" dataUsingEncoding:NSUTF8StringEncoding]];[fresh setValue:@YES forKey:@"freshLaunchAwaitingPrompt"];
     [fresh consumeData:[@"\033]133;A\aCoding/Termatica ; " dataUsingEncoding:NSUTF8StringEncoding]];NSDictionary *freshState=fresh.diagnosticState;
     if([freshState[@"cursorY"] unsignedIntegerValue]!=0||[freshState[@"history"] unsignedIntegerValue]!=0||![[fresh visibleText] isEqual:@"Coding/Termatica ;"])return 50;
+    fresh.activeTerminal=YES;TRenderSnapshot *cursorBefore=fresh.renderSnapshot;[fresh applyCursorOverlayForSnapshot:cursorBefore visible:YES];NSDictionary *cursorBeforeState=fresh.diagnosticState;NSRect cursorBeforeFrame=NSRectFromString(cursorBeforeState[@"overlayCursorFrame"]);if(![cursorBeforeState[@"overlayCursorVisible"] boolValue]||fabs(NSWidth(cursorBeforeFrame)-2)>0.01){fprintf(stderr,"terminal-self-test failed stage=cursor-overlay-show visible=%s frame=%s style=%s thickness=%.2f snapshot-visible=%s\n",[cursorBeforeState[@"overlayCursorVisible"] boolValue]?"yes":"no",[cursorBeforeState[@"overlayCursorFrame"] UTF8String],[cursorBefore.style[@"cursorStyle"] UTF8String],[cursorBefore.style[@"cursorThickness"] doubleValue],cursorBefore.cursorVisible?"yes":"no");return 74;}
+    [fresh consumeData:[@"\033[D" dataUsingEncoding:NSUTF8StringEncoding]];TRenderSnapshot *cursorAfter=fresh.renderSnapshot;[fresh applyCursorOverlayForSnapshot:cursorAfter visible:YES];NSRect cursorAfterFrame=NSRectFromString(fresh.diagnosticState[@"overlayCursorFrame"]);if(fabs((NSMinX(cursorAfterFrame)-NSMinX(cursorBeforeFrame))+cursorAfter.metrics.cellWidth)>0.01||!NSEqualSizes(cursorBeforeFrame.size,cursorAfterFrame.size))return 75;
+    fresh.activeTerminal=NO;if([fresh.diagnosticState[@"overlayCursorVisible"] boolValue])return 76;
     [fresh consumeData:[@"\r\nsecond-prompt\033]133;A\a" dataUsingEncoding:NSUTF8StringEncoding]];if(![[fresh visibleText] containsString:@"Coding/Termatica ;\nsecond-prompt"])return 51;
     TTerminalView *wrapTerminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:freshConfig];NSUInteger wrapColumns=[wrapTerminal.diagnosticState[@"columns"] unsignedIntegerValue];NSMutableString *fullLine=[NSMutableString stringWithCapacity:wrapColumns];for(NSUInteger i=0;i<wrapColumns;i++)[fullLine appendString:@"W"];[fullLine appendString:@"\nX"];[wrapTerminal consumeData:[fullLine dataUsingEncoding:NSUTF8StringEncoding]];TRenderSnapshot *wrapSnapshot=wrapTerminal.renderSnapshot;if([wrapTerminal.diagnosticState[@"cursorY"] unsignedIntegerValue]!=1||wrapSnapshot.cursorX>=wrapSnapshot.metrics.columns)return 61;
     TTerminalView *regionTerminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:freshConfig];
@@ -2970,12 +2993,12 @@ static int TRunTerminalSelfTest(void) {
     if(tiles.terminals.count!=3||NSHeight(quarter.frame)>=NSHeight(rightRoot.frame))return 52;
     for(TTerminalView *focusTarget in @[leftRoot,rightRoot,quarter,leftRoot,quarter]){
         [tiles focusTerminal:focusTarget];
-        NSUInteger expectedCursorCount=tiles.window.isKeyWindow?1:0,immediateActiveCount=0,immediateCursorCount=0;for(TTerminalView *tile in tiles.terminals){immediateActiveCount+=tile.activeTerminal;immediateCursorCount+=tile.renderSnapshot.cursorVisible;}
-        if(tiles.window.firstResponder!=focusTarget||immediateActiveCount!=1||immediateCursorCount!=expectedCursorCount)return 68;
+        NSUInteger expectedCursorCount=tiles.window.isKeyWindow?1:0,immediateActiveCount=0,immediateCursorCount=0,immediateOverlayCount=0;for(TTerminalView *tile in tiles.terminals){immediateActiveCount+=tile.activeTerminal;immediateCursorCount+=tile.renderSnapshot.cursorVisible;immediateOverlayCount+=[tile.diagnosticState[@"overlayCursorVisible"] boolValue];}
+        if(tiles.window.firstResponder!=focusTarget||immediateActiveCount!=1||immediateCursorCount!=expectedCursorCount||immediateOverlayCount!=expectedCursorCount)return 68;
         NSDate *focusDeadline=[NSDate dateWithTimeIntervalSinceNow:0.08];while(focusDeadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];
-        NSUInteger activeCount=0,visibleCursorCount=0,displayCursorCount=0;
-        for(TTerminalView *tile in tiles.terminals){if(tile.activeTerminal)activeCount++;if(tile.renderSnapshot.cursorVisible)visibleCursorCount++;if([tile.diagnosticState[@"displayCursorVisible"] boolValue])displayCursorCount++;}
-        if(tiles.terminal!=focusTarget||tiles.window.firstResponder!=focusTarget||activeCount!=1||visibleCursorCount!=expectedCursorCount||displayCursorCount!=expectedCursorCount)return 68;
+        NSUInteger activeCount=0,visibleCursorCount=0,displayCursorCount=0,overlayCursorCount=0;
+        for(TTerminalView *tile in tiles.terminals){if(tile.activeTerminal)activeCount++;if(tile.renderSnapshot.cursorVisible)visibleCursorCount++;if([tile.diagnosticState[@"displayCursorVisible"] boolValue])displayCursorCount++;if([tile.diagnosticState[@"overlayCursorVisible"] boolValue])overlayCursorCount++;}
+        if(tiles.terminal!=focusTarget||tiles.window.firstResponder!=focusTarget||activeCount!=1||visibleCursorCount!=expectedCursorCount||displayCursorCount!=expectedCursorCount||overlayCursorCount!=expectedCursorCount)return 68;
     }
     TConfig *otherWindowConfig=[TConfig new];otherWindowConfig.renderer=@"appkit";otherWindowConfig.shell=@"/usr/bin/true";otherWindowConfig.shellArguments=@[];TWindowController *otherWindow=[[TWindowController alloc]initWithConfig:otherWindowConfig extensions:nil];[otherWindow.window orderFront:nil];[otherWindow.window makeKeyWindow];NSDate *keyTransferDeadline=[NSDate dateWithTimeIntervalSinceNow:0.04];while(keyTransferDeadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];NSUInteger oldWindowCursors=0,newWindowCursors=0;for(TTerminalView *tile in tiles.terminals)oldWindowCursors+=tile.renderSnapshot.cursorVisible;for(TTerminalView *tile in otherWindow.terminals)newWindowCursors+=tile.renderSnapshot.cursorVisible;if(oldWindowCursors!=(tiles.window.isKeyWindow?1:0)||newWindowCursors!=(otherWindow.window.isKeyWindow?1:0)||(oldWindowCursors+newWindowCursors)>1)return 69;[otherWindow.terminal stopShellTerminating:YES];[otherWindow.window close];[tiles.window makeKeyWindow];[tiles focusTerminal:quarter];
     tiledConfig.tabAnimations=YES;NSRect quarterSlot=quarter.frame,halfSlot=rightRoot.frame;NSEvent *dragDown=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(NSMidX(quarterSlot),NSMidY(quarterSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:1 windowNumber:tiles.window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1];NSEvent *dragMove=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:2 windowNumber:tiles.window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1];NSEvent *dragUp=[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:3 windowNumber:tiles.window.windowNumber context:nil eventNumber:3 clickCount:1 pressure:0];[quarter mouseDown:dragDown];[quarter mouseDragged:dragMove];[quarter mouseUp:dragUp];
@@ -3003,8 +3026,8 @@ static int TRunRendererReliabilitySelfTest(void) {
             if(cycle%12==0){NSSize size=NSMakeSize(880+(cycle%5)*11,600+(cycle%7)*9);[controller.window setContentSize:size];for(TTerminalView *terminal in controller.terminals)[terminal recoverPresentationAfterLifecycleChange];lifecycleRecoveries+=controller.terminals.count;}
             if(cycle==40||cycle==80){config.fontName=cycle==40?@"Monaco":@"Menlo";for(TTerminalView *terminal in controller.terminals)[terminal reloadAppearance];}
             NSDate *deadline=[NSDate dateWithTimeIntervalSinceNow:0.025];while(deadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];
-            NSUInteger active=0,cursors=0,displayCursors=0;for(TTerminalView *terminal in controller.terminals){active+=terminal.activeTerminal;cursors+=terminal.renderSnapshot.cursorVisible;displayCursors+=[terminal.diagnosticState[@"displayCursorVisible"] boolValue];}
-            NSUInteger expectedCursors=controller.window.isKeyWindow?1:0;if(controller.terminal!=target||controller.window.firstResponder!=target||active!=1||cursors!=expectedCursors||displayCursors!=expectedCursors){[controller.window close];fprintf(stderr,"renderer-reliability-self-test failed stage=cursor requested=%s cycle=%lu active=%lu snapshots=%lu displayed=%lu key=%s\n",requested.UTF8String,(unsigned long)cycle,(unsigned long)active,(unsigned long)cursors,(unsigned long)displayCursors,controller.window.isKeyWindow?"yes":"no");return 111;}
+            NSUInteger active=0,cursors=0,displayCursors=0,overlayCursors=0;for(TTerminalView *terminal in controller.terminals){active+=terminal.activeTerminal;cursors+=terminal.renderSnapshot.cursorVisible;displayCursors+=[terminal.diagnosticState[@"displayCursorVisible"] boolValue];overlayCursors+=[terminal.diagnosticState[@"overlayCursorVisible"] boolValue];}
+            NSUInteger expectedCursors=controller.window.isKeyWindow?1:0;if(controller.terminal!=target||controller.window.firstResponder!=target||active!=1||cursors!=expectedCursors||displayCursors!=expectedCursors||overlayCursors!=expectedCursors){[controller.window close];fprintf(stderr,"renderer-reliability-self-test failed stage=cursor requested=%s cycle=%lu active=%lu snapshots=%lu displayed=%lu overlays=%lu key=%s\n",requested.UTF8String,(unsigned long)cycle,(unsigned long)active,(unsigned long)cursors,(unsigned long)displayCursors,(unsigned long)overlayCursors,controller.window.isKeyWindow?"yes":"no");return 111;}
         }
         [controller.window orderOut:nil];for(TTerminalView *terminal in controller.terminals)[terminal recoverPresentationAfterLifecycleChange];[controller.window orderFront:nil];for(TTerminalView *terminal in controller.terminals)[terminal recoverPresentationAfterLifecycleChange];lifecycleRecoveries+=controller.terminals.count*2;
         NSDate *recoveryDeadline=[NSDate dateWithTimeIntervalSinceNow:0.08];while(recoveryDeadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];

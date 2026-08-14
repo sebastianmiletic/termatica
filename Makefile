@@ -94,7 +94,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.12.1$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.12.2$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
@@ -102,7 +102,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.12.1'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.12.2'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-retry'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-qualification'; \
@@ -325,7 +325,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.12.1 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.12.2 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

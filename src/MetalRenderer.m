@@ -327,7 +327,7 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
     const uint8_t *underlines=snapshot.underlineStyles.bytes,*selection=snapshot.selectionMask.bytes,*search=snapshot.searchMask.bytes,*links=snapshot.linkMask.bytes;
     CGFloat scale=snapshot.metrics.scale,cellWidth=snapshot.metrics.cellWidth,cellHeight=snapshot.metrics.cellHeight;
     CGFloat left=[style[@"left"] doubleValue],top=[style[@"top"] doubleValue];
-    uint32_t foreground=[style[@"foreground"] unsignedIntValue],background=[style[@"background"] unsignedIntValue],cursor=[style[@"cursor"] unsignedIntValue],accent=[style[@"accent"] unsignedIntValue],selectionColor=[style[@"selection"] unsignedIntValue];
+    uint32_t foreground=[style[@"foreground"] unsignedIntValue],background=[style[@"background"] unsignedIntValue],accent=[style[@"accent"] unsignedIntValue],selectionColor=[style[@"selection"] unsignedIntValue];
     CGFloat backgroundAlpha=[style[@"backgroundAlpha"] doubleValue];
     CGFloat glow=[style[@"glow"] doubleValue];
     NSArray<NSNumber *> *plain=style[@"plainPalette"];BOOL colorize=[style[@"colorize"] boolValue]&&plain.count;
@@ -359,12 +359,6 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
                 TMetalAppendUnderline(instances,cellX,underlineY,glyphWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));
             }
         }
-    }
-    if(snapshot.cursorVisible){
-        NSString *cursorStyle=style[@"cursorStyle"]?:@"block";CGFloat width=cellWidth,height=cellHeight,x=left+snapshot.cursorX*cellWidth,y=top+snapshot.cursorY*cellHeight;
-        CGFloat thickness=[style[@"cursorThickness"] doubleValue];if([cursorStyle isEqual:@"bar"])width=thickness;else if([cursorStyle isEqual:@"underline"]){height=thickness;y+=cellHeight-thickness;}
-        CGFloat alpha=[style[@"cursorFocused"] boolValue]?([cursorStyle isEqual:@"block"]?[style[@"cursorBlockOpacity"] doubleValue]:0.96):([cursorStyle isEqual:@"block"]?[style[@"cursorInactiveOpacity"] doubleValue]:0.5);
-        TMetalAppendQuad(instances,x,y,width,height,0,0,0,0,TMetalRGBA(cursor,alpha),0);
     }
     CGFloat scanlines=[style[@"scanlines"] doubleValue],scanlineSpacing=[style[@"scanlineSpacing"] doubleValue],scanlineThickness=[style[@"scanlineThickness"] doubleValue];if(scanlines>0)for(CGFloat y=scanlineThickness;y<snapshot.metrics.viewportHeight;y+=scanlineSpacing)TMetalAppendQuad(instances,0,y,snapshot.metrics.viewportWidth,scanlineThickness,0,0,0,0,TMetalRGBA(0,scanlines*0.10),0);
     CGFloat vignette=[style[@"vignette"] doubleValue];NSUInteger vignetteLayers=[style[@"vignetteLayers"] unsignedIntegerValue];if(vignette>0&&![style[@"tiled"] boolValue])for(NSUInteger i=0;i<vignetteLayers;i++){CGFloat alpha=vignette*(vignetteLayers-i)/MAX(1.0,vignetteLayers*5.0),w=snapshot.metrics.viewportWidth-i*2,h=snapshot.metrics.viewportHeight-i*2;TMetalAppendQuad(instances,i,i,w,1,0,0,0,0,TMetalRGBA(0,alpha),0);TMetalAppendQuad(instances,i,i+h-1,w,1,0,0,0,0,TMetalRGBA(0,alpha),0);TMetalAppendQuad(instances,i,i,1,h,0,0,0,0,TMetalRGBA(0,alpha),0);TMetalAppendQuad(instances,i+w-1,i,1,h,0,0,0,0,TMetalRGBA(0,alpha),0);}
