@@ -6,7 +6,7 @@ Themes are open JSON files. Termatica searches `~/.config/termatica/themes/` and
 
 1. Create `~/.config/termatica/themes/`.
 2. Copy a theme such as `my-crt.json` into that folder.
-3. Select `my-crt` in the Themes section of `termatica config`, or set `"theme": "my-crt"` through `termatica config-file`.
+3. Select `my-crt` in the Appearance section of `termatica config`, or set `"theme": "my-crt"` through `termatica config-file`.
 4. Press Command-R if the change is not already visible.
 
 The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, and `green-screen`. `terminal-default` is the neutral, opaque default with standard ANSI colors; the phosphor themes are optional.
@@ -49,11 +49,11 @@ The bundled starting points are `terminal-default`, `amber-crt`, `ghost-glass`, 
 
 Colors use `#RRGGBB` or `#RRGGBBAA`. `palette` contains the standard 8 ANSI colors followed by their 8 bright variants.
 
-`plainTextPalette` is only used when the user explicitly selects `textColorMode: "spectrum"` in `config.json`. The default `ansi` mode keeps ordinary text on the single `foreground` color and lets shells, CLI tools, and editors choose colors through the normal ANSI palette.
+`plainTextPalette` is only used when the user explicitly selects `textColorMode: "spectrum"` in the selected config file. The default `ansi` mode keeps ordinary text on the single `foreground` color and lets shells, CLI tools, and editors choose colors through the normal ANSI palette.
 
-User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.accent`, `colors.panel`, `colors.muted`, `colors.selection`, and `colors.palette` values in `config.json` override those theme tokens without copying or editing the theme file. Use `"theme"` to inherit, a precise hex value for a color, or a complete 16-entry array for the ANSI palette.
+User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.accent`, `colors.panel`, `colors.muted`, `colors.selection`, and `colors.palette` values in the selected config file override those theme tokens without copying or editing the theme file. Use `"theme"` to inherit, a precise hex value for a color, or a complete 16-entry array for the ANSI palette.
 
-`appearance.hyprlandBlur` lets a transparent theme request the shared masked blur surface when terminals are tiled. An explicit `tabs.hyprlandBlur` setting in `config.json` always wins.
+`appearance.hyprlandBlur` lets a transparent theme request the shared masked blur surface when terminals are tiled. An explicit `tabs.hyprlandBlur` setting in the selected config file always wins.
 
 ## Transparency recipes
 
@@ -64,7 +64,7 @@ User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.ac
 
 macOS accessibility settings can reduce transparency system-wide. A theme should remain readable when blur is unavailable. Set `scanlines`, `glow`, and `vignette` to `0` for a clean pixel-terminal look.
 
-The macOS titlebar uses the same window material and transparency as the terminal. Titlebar removal is intentionally not a theme token: enable `plugins.borderless-window` in `termatica config` or `config.json`. The window keeps rounded corners and remains resizable.
+The macOS titlebar uses the same window material and transparency as the terminal. Titlebar removal is intentionally not a theme token: enable Borderless window under Window in `termatica config` or set `plugins.borderless-window` in the selected config file. The window keeps rounded corners and remains resizable.
 
 ## Share themes
 

@@ -1,5 +1,19 @@
 # Changelog
 
+## 1.12.3
+
+- Make each config's `.json` filename its authoritative identity and use a
+  separate atomic selector for the current profile.
+- Make create, select, rename, and delete operations deterministic, reject
+  invalid JSON selections, and prevent values leaking between profiles.
+- Reorganize `t c` into Appearance, Performance, Tabs & Tiling, Window,
+  Terminal & Input, Motion, Extensions, Updates, and Keybindings.
+- Keep long config and setting lists inside the visible terminal viewport.
+- Reload repeated direct edits and profile switches by monitoring and re-arming
+  the selector, profile directory, and selected file watchers.
+- Migrate existing `config.json` installations to schema version 2 while
+  preserving a compatibility link and user-only file permissions.
+
 ## 1.12.0
 
 - Add `termatica renderer-campaign export` / `t rc export` to create a minimal,

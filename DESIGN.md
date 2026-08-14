@@ -18,7 +18,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 ## Typography
 
 - Default terminal face: Monaco, 11 pt.
-- The user may choose any installed fixed-width font and an 8–48 pt size in `config.json`.
+- The user may choose any installed fixed-width font and an 8–48 pt size in the selected config file.
 - UI overlays use the same terminal-minded hierarchy and never compete with PTY content.
 
 ## Color and themes
@@ -49,7 +49,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 - Toggle rows always show `ON` or `OFF`; Enter and Left/Right toggle them directly. Their JSON values are the matching readable strings `"on"` and `"off"`.
 - Config Files is the entry screen. Config selection and lifecycle actions happen before the categorized settings screen.
 - `termatica config-file` opens the single JSON source of truth for users, scripts, and coding agents.
-- Themes, plugins, saved configs, system behavior, updates, and keybindings are categories inside the unified terminal UI rather than separate menus.
+- Appearance, performance, tabs and tiling, window behavior, terminal input, motion, extensions, updates, and keybindings are categories inside the unified terminal UI rather than separate menus.
 
 ## Performance constraints
 

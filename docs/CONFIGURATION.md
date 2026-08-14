@@ -1,8 +1,8 @@
 # Termatica Configuration
 
-All settings live at `~/.config/termatica/config.json`. Named configs are stored in `~/.config/termatica/configs/*.json`. The config is plain JSON and user- and AI-readable. Toggle values are always `"on"` or `"off"`, never `0`, `1`, `true`, or `false`. Changes can be made by a person, shell script, or coding agent. Run `t r` to reload, or just save the file. Termatica watches it for changes.
+Each config is a plain JSON file in `~/.config/termatica/configs/`. The filename is its complete and only identity: `work.json` is shown as `work.json` in `t c`, selected by `termatica config use work.json`, and opened by `t cf` while current. The private `~/.config/termatica/current` selector contains the current filename. `~/.config/termatica/config.json` remains as a compatibility symlink to the selected file, so existing scripts and editors continue to edit the right config. Toggle values are always `"on"` or `"off"`, never `0`, `1`, `true`, or `false`.
 
-Every named config is a complete, self-contained schema rather than a partial overlay. `config.json` is the active working copy; when it names a saved config, edits are synchronized only to that config. Switching replaces the active copy from the selected file after filling missing defaults, so settings from two configs are never merged together. Existing partial configs are upgraded atomically to schema version 1 with user-only `0600` permissions. A named file's `configName` is always repaired to match its filename, which makes the files portable between Macs and safe to copy independently.
+Every config is a complete, self-contained schema rather than a partial overlay. Switching changes the selector and reloads that one file; it never copies or merges values from another config. Existing partial configs are upgraded atomically to schema version 2 while preserving their explicit values. Config files and the selector use user-only `0600` permissions. Termatica watches the whole config directory, including repeated direct edits, renames, new files, deletion, and selection changes. Run `t r` for an explicit reload if needed.
 
 Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. The newly created complete profile becomes current and can then be customized independently.
 
@@ -12,7 +12,7 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
 
 ```json
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
   "scrollback": 2000,
@@ -352,13 +352,13 @@ Themes are JSON files in `~/.config/termatica/themes/` or the bundled `Resources
 }
 ```
 
-The `colors` key in `config.json` overrides theme colors. Set `"palette": "theme"` to use the theme's palette, or provide a 16-element array for a custom ANSI palette.
+The `colors` key in the selected config file overrides theme colors. Set `"palette": "theme"` to use the theme's palette, or provide a 16-element array for a custom ANSI palette.
 
 ## CLI
 
 ```sh
 t c                    # Open config UI
-t cf                   # Open config.json in editor
+t cf                   # Open the selected config file in editor
 t cf path              # Print config file path
 t r                    # Reload config
 t u check              # Check for update

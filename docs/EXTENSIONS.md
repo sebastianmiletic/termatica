@@ -2,7 +2,7 @@
 
 Termatica extensions are executable folders. The host has no language runtime requirement and communicates over stdin/stdout using one JSON object per line.
 
-Built-in capabilities are recognized by identifier and registered natively, avoiding a persistent helper process. Enable or disable them in the Plugins section of `termatica config` or through `plugins.<id>` in `config.json`. There is no separate plugin browser, marketplace, or install command.
+Built-in capabilities are recognized by identifier and registered natively, avoiding a persistent helper process. Enable or disable them in the relevant settings category or Extensions section of `termatica config`, or through `plugins.<id>` in the selected config file. There is no separate plugin browser, marketplace, or install command.
 
 Custom extensions placed in `~/.config/termatica/extensions` use the complete protocol below without reduced capabilities.
 

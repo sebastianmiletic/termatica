@@ -161,7 +161,7 @@ t u
 | `t rr` | Print a privacy-safe renderer/display field report with no terminal text or paths |
 | `t rq` | Show observed Metal field evidence and every open rollout gate |
 | `t rt` | Retry quarantined Metal panes in place without changing config |
-| `t cf` | Open `config.json` |
+| `t cf` | Open the selected config file |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |
 | `t e <name> [files]` | Run a terminal editor |
@@ -173,7 +173,7 @@ t u
 | `termatica config use <name>` | Activate a named config |
 | `termatica config rename <old> <new>` | Rename a config |
 | `termatica config delete <name>` | Delete a saved config |
-| `termatica config-file` | Open `config.json` |
+| `termatica config-file` | Open the selected config file |
 | `termatica config-file path` | Print the config file path |
 | `termatica update [check]` | Check GitHub or securely install the latest release |
 | `termatica reload` | Reload the running app |
@@ -189,32 +189,35 @@ See the complete [CLI reference](docs/CLI.md).
 
 ## Configuration
 
-`termatica config` always opens on Config Files first. The initial screen shows the current config once, then lists only the other saved JSON configs, with New, Rename, and Delete actions. Enter opens the current config's settings; Enter on a saved config makes it current and then opens its settings. Creating a config also makes it current and moves directly into settings.
+`termatica config` always opens on Config Files first. It lists each real `.json` filename exactly once and marks it CURRENT, SAVED, or INVALID. Enter opens the current file's settings; Enter on another valid file selects it and opens its settings. New creates a complete default config and selects it. Rename changes the actual filename. Delete removes the selected file, and deleting the current file selects the first valid remaining filename; the only valid config cannot be deleted.
 
 Boolean settings are direct toggles. The terminal UI shows `ON` or `OFF`, and config files store the matching lowercase strings `"on"` or `"off"` instead of numeric or JSON boolean values.
 
 Settings are grouped into:
 
-1. Themes
-2. Text & Colour
-3. Appearance
-4. Tabs & Motion
-5. Plugins
-6. System & Updates
-7. Keybindings
+1. Appearance — theme, font, colours, transparency, blur, effects, and cursor styling
+2. Performance — AppKit/Metal renderer, scrollback, Unicode rendering, and OSC integration
+3. Tabs & Tiling — tab rail, tile layout, and Hyprland behavior
+4. Window — dimensions, corners, shadow, and borderless mode
+5. Terminal & Input — shell, clipboard, security, bell, scrollbar, and search
+6. Motion — animation switches, speed, and durations
+7. Extensions
+8. Updates
+9. Keybindings
 
 Use Up/Down or J/K to move, Left/Right to change values, Enter to open or edit, and Q to return from settings to Config Files. Changes are written atomically with user-only permissions and reloaded immediately.
 
 All settings live at:
 
 ```text
-~/.config/termatica/config.json
 ~/.config/termatica/configs/*.json
+~/.config/termatica/current
+~/.config/termatica/config.json  # compatibility symlink to the current file
 ```
 
 The same fields can be changed by a person, shell script, or coding agent. See [Configuration](docs/CONFIGURATION.md) for every setting.
 
-Each named config is a full portable schema. The active `config.json` mirrors only the selected config, so switching files cannot inherit stale nested values or overwrite an unrelated config.
+Each filename is a full portable schema and is the config's only identity. Switching changes `current`; Termatica never merges the selected file with another profile. `config.json` is only a compatibility link to the selected file, so direct edits still update exactly that profile.
 
 ## Updating
 

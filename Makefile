@@ -94,7 +94,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.12.2$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.12.3$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
@@ -102,7 +102,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.12.2'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.12.3'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-retry'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-qualification'; \
@@ -110,20 +110,24 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-retry'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-qualification'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-campaign'; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/config.json"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
+	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
+	  test "$$(tr -d '\n' <"$$tmp/current")" = default.json; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config </dev/null >/dev/null 2>&1; \
 	  command -v expect >/dev/null; \
-	  TERMATICA_CONFIG_DIR="$$tmp/ui" expect -c 'set timeout 5; spawn $(CLI) config; expect "TERMATICA CONFIG / CONFIG FILES"; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
-	  TERMATICA_CONFIG_DIR="$$tmp/ui-toggle" expect -c 'set timeout 5; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / PLUGINS"; expect -re "BORDERLESS-WINDOW +OFF"; send "\r"; expect -re "BORDERLESS-WINDOW +ON"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
-	  TERMATICA_CONFIG_DIR="$$tmp/ui-arrows" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / TEXT & COLOUR"; expect -re "Font name +Monaco"; send "\033\[C"; expect "SAVED + RELOADED"; send "\033\[B\033\[B\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / SYSTEM & UPDATES"; send "\033\[C"; expect "SAVED + RELOADED"; send "\033\[B\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / KEYBINDINGS"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
-	  TERMATICA_CONFIG_DIR="$$tmp/ui-surfaces" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / WINDOW & SURFACES"; send "\033\[B\033\[B\033\[B\033\[B\033\[C"; expect "SAVED + RELOADED"; send "\033"; expect "TERMATICA CONFIG / SETTINGS"; send "\033"; expect "TERMATICA CONFIG / CONFIG FILES"; send "\033"; expect eof' >/dev/null; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-surfaces" $(CLI) config get window.cornerRadius)" = 15; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui" expect -c 'set timeout 5; spawn $(CLI) config; expect "TERMATICA CONFIG / CONFIG FILES"; expect "current default.json"; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; expect "APPEARANCE"; expect "PERFORMANCE"; expect "TABS & TILING"; expect "WINDOW"; expect "TERMINAL & INPUT"; expect "MOTION"; expect "EXTENSIONS"; expect "UPDATES"; expect "KEYBINDINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-performance" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / PERFORMANCE"; expect -re "Renderer +appkit"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-performance" $(CLI) config get appearance.renderer)" = metal; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\r"; expect "TERMATICA CONFIG / TABS & TILING"; expect -re "Hyprland layout +OFF"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" $(CLI) config get plugins.hyprland-layout)" = ON; \
 	  mkdir -p "$$tmp/migrate"; \
 	  mkdir -p "$$tmp/migrate/screens"; \
 	  printf '%s\n' '{"plugins":{"hidden-path":true},"skeleterm":0,"system":{"restoreSession":true,"pasteProtection":false}}' >"$$tmp/migrate/config.json"; \
 	  printf '%s\n' '{"legacy":"terminal state"}' >"$$tmp/migrate/session.json"; \
 	  printf '%s\n' 'legacy screen text' >"$$tmp/migrate/screens/pane.txt"; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/migrate" $(CLI) config get plugins.hidden-path)" = ON; \
+	  test "$$(readlink "$$tmp/migrate/config.json")" = configs/default.json; \
+	  test "$$(tr -d '\n' <"$$tmp/migrate/current")" = default.json; \
 	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/migrate/config.json"; \
 	  grep -Eq '"pasteProtection"[[:space:]]*:[[:space:]]*"off"' "$$tmp/migrate/config.json"; \
 	  ! grep -q '"restoreSession"' "$$tmp/migrate/config.json"; \
@@ -131,7 +135,7 @@ check: release $(BENCH)
 	  test ! -e "$$tmp/migrate/session.json"; \
 	  test ! -e "$$tmp/migrate/screens"; \
 	  config_path=$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config-file path); \
-	  test "$$config_path" = "$$tmp/config.json"; \
+	  test "$$config_path" = "$$tmp/configs/default.json"; \
 	  grep -Eq '"textColorMode"[[:space:]]*:[[:space:]]*"ansi"' "$$tmp/config.json"; \
 	  grep -Eq '"backgroundOpacity"[[:space:]]*:[[:space:]]*"theme"' "$$tmp/config.json"; \
 	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*"off"' "$$tmp/config.json"; \
@@ -157,16 +161,16 @@ check: release $(BENCH)
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = ON; \
 	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
 	  ! grep -Eq ':[[:space:]]*(true|false)([,}])' "$$tmp/config.json"; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'SAVED + CURRENT'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'CREATED + CURRENT.*dev.json'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.renderer)" = appkit; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get theme)" = terminal-default; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = OFF; \
 	  test "$$(plutil -extract fontSize raw "$$tmp/configs/dev.json")" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -c 'dev')" = 1; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^current[[:space:]]dev$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^current[[:space:]]dev.json$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" expect -c 'set timeout 5; spawn $(CLI) config; expect "CURRENT"; expect "dev"; send "q"; expect eof' >"$$tmp/current-ui.out"; \
-	  grep -q 'CURRENT.*dev' "$$tmp/current-ui.out"; \
+	  grep -q 'CURRENT.*dev.json' "$$tmp/current-ui.out"; \
 	  ! grep -q 'ACTIVE.*dev' "$$tmp/current-ui.out"; \
 	  test "$$(stat -f '%Lp' "$$tmp/configs/dev.json")" = 600; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config rename dev work | grep -q 'RENAMED'; \
@@ -188,19 +192,37 @@ check: release $(BENCH)
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 30; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use alpha >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 21; \
+	  plutil -replace fontSize -integer 31 "$$tmp/configs/beta.json"; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 21; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use beta >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 31; \
 	  printf '%s\n' '{"fontSize":17,"tabs":{"tileGap":3}}' >"$$tmp/configs/partial.json"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use partial >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 17; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get tabs.tileGap)" = 3; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get tabs.railWidth)" = 34; \
-	  test "$$(plutil -extract configName raw "$$tmp/configs/partial.json")" = partial; \
-	  test "$$(plutil -extract schemaVersion raw "$$tmp/configs/partial.json")" = 1; \
-	  test "$$(stat -f '%Lp' "$$tmp/config.json")" = 600; \
+	  ! plutil -extract configName raw "$$tmp/configs/partial.json" >/dev/null 2>&1; \
+	  test "$$(plutil -extract schemaVersion raw "$$tmp/configs/partial.json")" = 2; \
+	  test "$$(tr -d '\n' <"$$tmp/current")" = partial.json; \
+	  test "$$(readlink "$$tmp/config.json")" = configs/partial.json; \
+	  test "$$(stat -f '%Lp' "$$tmp/current")" = 600; \
 	  test "$$(stat -f '%Lp' "$$tmp/configs/partial.json")" = 600; \
+	  printf '%s\n' '{broken' >"$$tmp/configs/broken.json"; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^invalid[[:space:]]broken.json$$'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config use broken >/dev/null 2>&1; \
+	  test "$$(tr -d '\n' <"$$tmp/current")" = partial.json; \
 	  mkdir -p "$$tmp/orphan"; \
 	  printf '%s\n' '{"configName":"portable","fontSize":19}' >"$$tmp/orphan/config.json"; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/orphan" $(CLI) config get fontSize)" = 19; \
-	  test "$$(plutil -extract configName raw "$$tmp/orphan/configs/portable.json")" = portable; \
+	  test "$$(tr -d '\n' <"$$tmp/orphan/current")" = portable.json; \
+	  test "$$(readlink "$$tmp/orphan/config.json")" = configs/portable.json; \
+	  ! plutil -extract configName raw "$$tmp/orphan/configs/portable.json" >/dev/null 2>&1; \
+	  test "$$(plutil -extract schemaVersion raw "$$tmp/orphan/configs/portable.json")" = 2; \
+	  mkdir -p "$$tmp/only"; \
+	  TERMATICA_CONFIG_DIR="$$tmp/only" $(CLI) config get fontSize >/dev/null; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp/only" $(CLI) config delete default >/dev/null 2>&1; \
+	  test -f "$$tmp/only/configs/default.json"; \
+	  test "$$(tr -d '\n' <"$$tmp/only/current")" = default.json; \
 	  for removed in code configs plugins themes install skeleterm marketplace profiles catalog config-dir plugins-dir themes-dir; do \
 	    ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) "$$removed" >/dev/null 2>&1; \
 	  done; \
@@ -303,6 +325,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/phase8-recovery-test" $(BENCH) --phase8-recovery-self-test | grep -q '^phase8-recovery-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase9-field-test" $(BENCH) --phase9-field-self-test | grep -q '^phase9-field-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase10-campaign-test" $(BENCH) --phase10-campaign-self-test | grep -q '^phase10-campaign-self-test ok'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/config-watcher-test" $(BENCH) --config-watcher-self-test | grep -q '^config-watcher-self-test ok'; \
 	  if [ -z "$${CI:-}" ]; then TERMATICA_CONFIG_DIR="$$tmp/tui-compat-test" $(BENCH) --tui-compat-self-test | grep -q '^tui-compat-self-test ok'; fi; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-comparison" $(BENCH) --benchmark-experience 30 0.5 >"$$tmp/renderer-comparison.json"; \
 	  test "$$(stat -f '%z' "$$tmp/renderer-comparison.json")" -gt 4096; \
@@ -325,7 +348,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.12.2 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.12.3 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

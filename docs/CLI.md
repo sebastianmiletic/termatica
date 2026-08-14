@@ -36,7 +36,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica config use <name>` | Activate a named config |
 | `termatica config rename <old> <new>` | Rename a saved config |
 | `termatica config delete <name>` | Delete a saved config |
-| `termatica config-file` | Create and open the authoritative `config.json` |
+| `termatica config-file` | Create and open the selected config's authoritative JSON file |
 | `termatica config-file path` | Print the authoritative config path |
 | `termatica update` | Download, verify, and install the latest GitHub release |
 | `termatica update check` | Check GitHub without installing |
@@ -60,9 +60,9 @@ The separate `plugins`, `themes`, `configs`, `code`, `marketplace`, profile, and
 
 ## Config UI
 
-The first screen is always Config Files. It shows the current config once, followed only by other saved JSON configs. Enter on the current row opens its settings. Enter on a saved config makes it current and then opens settings. Creating a config also makes it current and opens settings immediately.
+The first screen is always Config Files. It lists every actual `.json` filename exactly once and marks it CURRENT, SAVED, or INVALID. Enter opens the current file or selects another valid file and opens it. New, Rename, and Delete operate on the actual filenames; `.json` is optional when entering a name.
 
-The next screen contains Themes, Text & Colour, Appearance, Tabs & Motion, Plugins, System & Updates, and Keybindings.
+The next screen contains Appearance, Performance, Tabs & Tiling, Window, Terminal & Input, Motion, Extensions, Updates, and Keybindings. Renderer selection between AppKit and Metal is under Performance; blur, transparency, colours, and fonts are under Appearance.
 
 | Key | Action |
 |---|---|
@@ -76,7 +76,7 @@ The next screen contains Themes, Text & Colour, Appearance, Tabs & Motion, Plugi
 
 Changes are saved and sent to the running app immediately. Config names may contain letters, numbers, dots, dashes, and underscores.
 
-Named configs are independent, complete files. The active `config.json` mirrors only the currently selected file, and switching never shallow-merges one config into another. Older partial configs are normalized to the universal schema on first use without discarding their explicit values.
+Configs are independent, complete files under `~/.config/termatica/configs/`, and their filenames are their identities. `~/.config/termatica/current` selects one filename; `config.json` is a compatibility symlink to that file. Switching never shallow-merges one config into another. Older partial configs are normalized to schema version 2 on first use without discarding their explicit values.
 
 ## Scriptable config
 
