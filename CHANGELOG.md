@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.1
+
+- Make `t sm` update only changed terminal rows instead of clearing and repainting the entire screen each second.
+- Make bare `t` and `termatica` show one concise public-command list without the quick-alias section or renderer diagnostics.
+- Remove top-level `--help` and `--version`; use `help` and `version` as commands.
+- Remove renderer report, qualification, campaign, and retry commands and aliases from the public CLI and completions.
+
 ## 1.13.0
 
 - Add `t sm` / `termatica system-monitor`, a compact live terminal monitor with CPU, load, memory pressure, storage, network rates, device details, uptime, battery state, and CPU- or memory-sorted processes.

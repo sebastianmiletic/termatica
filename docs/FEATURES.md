@@ -31,20 +31,9 @@ other terminals provide. Performance results are reported separately in
 - A non-destructive `t benchmark` command that measures the running app with
   its active visual config and reports version, memory, throughput, and
   offscreen paint FPS.
-- A privacy-safe `t renderer-report` command that reports display geometry,
-  requested and actual renderer, recovery counts, generations, Metal failure
-  stage/age, quarantine state, and explicit retry policy without terminal text,
-  paths, commands, environment, or shell details.
-- A factual `t renderer-qualification` summary of current-session architecture,
-  display topology, scale/refresh diversity, wake and transition evidence, and
-  open rollout gates. Synthetic test events cannot satisfy physical field gates.
-- Phase 10 field-campaign export and aggregation with minimal evidence payloads,
-  canonical SHA-256 tamper detection, ephemeral-session duplicate rejection,
-  no persistent machine identifier, and explicit human-review boundaries.
-- Session-local Metal failure quarantine: automatic AppKit fallback remains
-  stable across lifecycle recovery. `t renderer-retry` retries only quarantined
-  Metal panes in place, preserves terminal state, and leaves healthy panes
-  untouched.
+- Session-local Metal failure quarantine keeps automatic AppKit fallback stable
+  across display and lifecycle recovery without exposing maintenance commands in
+  the everyday CLI.
 
 ## Capabilities other terminals have that Termatica does not
 

@@ -29,7 +29,7 @@ horizontal, vertical, quarter, half, and mixed-size panes can run local shells,
 AI coding agents, monitors, editors, and independent remote hosts side by side—
 without bundling a browser engine or JavaScript runtime.
 
-The current local universal bundle is **1,473.4 KiB (1,508,721 bytes)**—well
+The current local universal bundle is **1,441.7 KiB (1,476,306 bytes)**—well
 under 2 MB—and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
@@ -89,9 +89,6 @@ are not closed or replaced.
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
 - Immutable render snapshots, an opt-in Metal backend, automatic AppKit fallback, and state-preserving recovery after display, scale, occlusion, and wake changes
-- Pane-isolated Metal quarantine with explicit in-place recovery through `t rt`; healthy tabs and splits are not reconfigured
-- Privacy-safe Metal field qualification through `t rq`, with architecture, display, scale, refresh, wake, and recovery evidence that leaves unobserved gates explicitly open
-- Privacy-safe cross-machine Metal field campaigns through `t rc export` and `t rc aggregate`, with canonical SHA-256 integrity checks, ephemeral-session deduplication, and explicit operator review
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
@@ -163,6 +160,9 @@ t u
 
 `t` is the fast command. Common commands include `ssh` (SSH manager), `sm` (system monitor), `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
 
+Running bare `t` or `termatica` prints one concise list of full public commands.
+Quick aliases stay documented here instead of being repeated in that output.
+
 | Command | Purpose |
 |---|---|
 | `t ssh` | Open the terminal-native SSH profile manager |
@@ -171,9 +171,6 @@ t u
 | `t sm` | Open the live terminal-native system monitor |
 | `t b` | Benchmark Termatica now and compare with saved competitor runs |
 | `t b a` | Benchmark every installed comparison terminal now |
-| `t rr` | Print a privacy-safe renderer/display field report with no terminal text or paths |
-| `t rq` | Show observed Metal field evidence and every open rollout gate |
-| `t rt` | Retry quarantined Metal panes in place without changing config |
 | `t cf` | Open the selected config file |
 | `t u check` | Check GitHub for an update |
 | `t r` | Reload the running app |
@@ -192,8 +189,6 @@ t u
 | `termatica ssh <action>` | Manage, inspect, check, connect, split, or tile OpenSSH profiles; see [SSH manager](docs/SSH.md) |
 | `termatica update [check]` | Check GitHub or securely install the latest release |
 | `termatica reload` | Reload the running app |
-| `termatica renderer-qualification` | Report current-session qualification evidence without accepting synthetic proof |
-| `termatica renderer-retry` | Retry only quarantined Metal panes and report each result as JSON |
 | `termatica editor <name> [files]` | Run Vim, Neovim, Emacs, Nano, Micro, or Helix |
 | `termatica run <name> [text]` | Run a configured extension command |
 | `termatica completions install` | Install Zsh, Bash, and Fish completions |

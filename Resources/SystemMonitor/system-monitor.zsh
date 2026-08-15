@@ -6,6 +6,7 @@ zmodload zsh/datetime
 typeset -gi once=0 paused=0
 typeset sort_mode=cpu
 typeset -gi previous_rx=0 previous_tx=0 previous_time=0
+typeset -ga frame_lines previous_lines
 
 [[ "${1:-}" == "--once" ]] && once=1
 [[ -t 1 ]] || once=1
@@ -23,7 +24,7 @@ cleanup() {
 }
 trap cleanup EXIT
 trap 'exit 130' INT TERM HUP
-(( once )) || printf '\e[?1049h\e[?25l'
+(( once )) || printf '\e[?1049h\e[?25l\e[2J\e[H'
 
 human_bytes() {
   /usr/bin/awk -v value="${1:-0}" 'BEGIN {
@@ -64,6 +65,24 @@ network_totals() {
     }
     END { printf "%.0f %.0f", rx, tx }
   '
+}
+
+paint_changed_rows() {
+  if (( once )); then
+    printf '%s\n' "${frame_lines[@]}"
+    return
+  fi
+
+  local count=${#frame_lines} previous_count=${#previous_lines} row next previous
+  (( previous_count > count )) && count=$previous_count
+  for (( row=1; row<=count; row++ )); do
+    next="${frame_lines[row]-}"
+    previous="${previous_lines[row]-}"
+    [[ "$next" == "$previous" ]] && continue
+    printf '\e[%d;1H\e[2K%s' "$row" "$next"
+  done
+  previous_lines=("${frame_lines[@]}")
+  printf '\e[%d;1H' "$(( ${#frame_lines} + 1 ))"
 }
 
 render() {
@@ -111,47 +130,51 @@ render() {
   (( bar_width > 28 )) && bar_width=28
   local rule=${(l:$inner::-:)}
 
-  (( once )) || printf '\e[H\e[2J'
-  printf '%s%s TERMATICA / SYSTEM MONITOR%s\n' "$accent" "$strong" "$reset"
-  printf '%s%s%s\n' "$muted" "$rule" "$reset"
-  printf '%s%-10s%s %s  macOS %s  %s  uptime %s\n' "$muted" DEVICE "$reset" "$hostname" "$os_version" "$architecture" "$(human_duration "$uptime")"
-  printf '%s%-10s%s %s  %s\n\n' "$muted" HARDWARE "$reset" "$model" "$battery"
+  frame_lines=()
+  frame_lines+=("${accent}${strong} TERMATICA / SYSTEM MONITOR${reset}")
+  frame_lines+=("${muted}${rule}${reset}")
+  frame_lines+=("${muted}DEVICE    ${reset} ${hostname}  macOS ${os_version}  ${architecture}  uptime $(human_duration "$uptime")")
+  frame_lines+=("${muted}HARDWARE  ${reset} ${model}  ${battery}")
+  frame_lines+=("")
+  frame_lines+=("${strong}CPU       ${reset} $(bar "$cpu_total" "$bar_width") ${cpu_total}%   ${muted}load${reset} ${load}")
+  frame_lines+=("${strong}MEMORY    ${reset} $(bar "$memory_used" "$bar_width") ${memory_used}%   ${muted}used${reset} $(human_bytes $(( memory_total * memory_used / 100 ))) / $(human_bytes "$memory_total")")
+  frame_lines+=("${strong}STORAGE   ${reset} $(bar "${disk_percent:-0}" "$bar_width") ${disk_percent:-0}%   ${muted}used${reset} $(human_bytes $(( ${disk_used_k:-0} * 1024 ))) / $(human_bytes $(( ${disk_total_k:-0} * 1024 )))")
+  frame_lines+=("${strong}NETWORK   ${reset} ${muted}down${reset} $(human_bytes "$rx_rate")/s  ${muted}up${reset} $(human_bytes "$tx_rate")/s  ${muted}total${reset} $(human_bytes "$rx") / $(human_bytes "$tx")")
+  frame_lines+=("")
+  frame_lines+=("${accent}${strong} TOP PROCESSES / ${sort_mode:u}${reset}")
+  frame_lines+=("${muted}${rule}${reset}")
+  frame_lines+=("${muted}   PID    CPU%    MEMORY  COMMAND${reset}")
 
-  printf '%s%-10s%s ' "$strong" CPU "$reset"; bar "$cpu_total" "$bar_width"; printf ' %5.1f%%   %sload%s %s\n' "$cpu_total" "$muted" "$reset" "$load"
-  printf '%s%-10s%s ' "$strong" MEMORY "$reset"; bar "$memory_used" "$bar_width"; printf ' %5.1f%%   %sused%s %s / %s\n' "$memory_used" "$muted" "$reset" "$(human_bytes $(( memory_total * memory_used / 100 )))" "$(human_bytes "$memory_total")"
-  printf '%s%-10s%s ' "$strong" STORAGE "$reset"; bar "${disk_percent:-0}" "$bar_width"; printf ' %5.1f%%   %sused%s %s / %s\n' "${disk_percent:-0}" "$muted" "$reset" "$(human_bytes $(( ${disk_used_k:-0} * 1024 )))" "$(human_bytes $(( ${disk_total_k:-0} * 1024 )))"
-  printf '%s%-10s%s %sdown%s %-11s  %sup%s %-11s  %stotal%s %s / %s\n' "$strong" NETWORK "$reset" "$muted" "$reset" "$(human_bytes "$rx_rate")/s" "$muted" "$reset" "$(human_bytes "$tx_rate")/s" "$muted" "$reset" "$(human_bytes "$rx")" "$(human_bytes "$tx")"
-
-  printf '\n%s%s TOP PROCESSES / %s%s\n' "$accent" "$strong" "${sort_mode:u}" "$reset"
-  printf '%s%s%s\n' "$muted" "$rule" "$reset"
-  printf '%s%6s  %6s  %8s  %s%s\n' "$muted" PID CPU% MEMORY COMMAND "$reset"
   local process_rows=$(( rows - 14 )); (( process_rows < 4 )) && process_rows=4; (( process_rows > 12 )) && process_rows=12
-  local ps_flag=-r
+  local ps_flag=-r process_data pid pcpu rss command command_width=$(( columns - 29 ))
+  (( command_width < 20 )) && command_width=20
   [[ "$sort_mode" == memory ]] && ps_flag=-m
-  /bin/ps -A -o pid=,pcpu=,rss=,comm= "$ps_flag" 2>/dev/null | /usr/bin/head -n "$process_rows" | while read pid pcpu rss command; do
-    local command_width=$(( columns - 29 )); (( command_width < 20 )) && command_width=20
+  process_data=$(/bin/ps -A -o pid=,pcpu=,rss=,comm= "$ps_flag" 2>/dev/null | /usr/bin/head -n "$process_rows")
+  while read pid pcpu rss command; do
     command=${command:t}
-    printf '%6s  %6s  %8s  %s\n' "$pid" "$pcpu" "$(human_bytes $(( rss * 1024 )))" "${command[1,$command_width]}"
-  done
+    frame_lines+=("$(printf '%6s  %6s  %8s  %s' "$pid" "$pcpu" "$(human_bytes $(( rss * 1024 )))" "${command[1,$command_width]}")")
+  done <<< "$process_data"
 
-  printf '%s%s%s\n' "$muted" "$rule" "$reset"
+  frame_lines+=("${muted}${rule}${reset}")
   if (( once )); then
-    printf '%sSnapshot complete.%s\n' "$muted" "$reset"
+    frame_lines+=("${muted}Snapshot complete.${reset}")
   else
-    printf '%sQ%s quit   %sP%s %s   %sC%s CPU sort   %sM%s memory sort   %sR%s refresh\n' "$accent" "$reset" "$accent" "$reset" "$([[ $paused == 1 ]] && print resume || print pause)" "$accent" "$reset" "$accent" "$reset" "$accent" "$reset"
+    local pause_label=$([[ $paused == 1 ]] && print resume || print pause)
+    frame_lines+=("${accent}Q${reset} quit   ${accent}P${reset} ${pause_label}   ${accent}C${reset} CPU sort   ${accent}M${reset} memory sort   ${accent}R${reset} refresh")
   fi
+  paint_changed_rows
 }
 
-while true; do
-  (( paused )) || render
-  (( once )) && break
+render
+while (( ! once )); do
   key=''
   read -rsk1 -t 1 key 2>/dev/null || true
   case "${key:l}" in
     q) break ;;
-    p) paused=$(( 1 - paused )); (( paused )) || render ;;
+    p) paused=$(( 1 - paused )); render ;;
     c) sort_mode=cpu; paused=0; render ;;
     m) sort_mode=memory; paused=0; render ;;
     r) paused=0; render ;;
+    '') (( paused )) || render ;;
   esac
 done

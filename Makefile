@@ -100,18 +100,26 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.13.0$$'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't sm.*system monitor'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't ssh.*SSH manager'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.1$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q '^COMMANDS$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) | grep -q '^COMMANDS$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q 'config-file'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q 'update \[check\]'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q 'benchmark \[all\]'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q 'QUICK'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) | grep -q 'renderer'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --help >/dev/null 2>&1; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version >/dev/null 2>&1; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'system-monitor'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'known-hosts'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) sm --once | grep -q 'TERMATICA / SYSTEM MONITOR'; \
+	  grep -Fq 'paint_changed_rows' Resources/SystemMonitor/system-monitor.zsh; \
+	  grep -Fq '[[ "$$next" == "$$previous" ]] && continue' Resources/SystemMonitor/system-monitor.zsh; \
+	  test "$$(grep -Fc '\e[2J' Resources/SystemMonitor/system-monitor.zsh)" = 1; \
+	  monitor_log="$$tmp/system-monitor-live.log"; \
+	  env MONITOR_LOG="$$monitor_log" TERMATICA_CONFIG_DIR="$$tmp/monitor-live" expect -c 'set timeout 6; log_file -noappend $$env(MONITOR_LOG); spawn $(SHORTCLI) sm; expect "TERMATICA / SYSTEM MONITOR"; after 2200; send "q"; expect eof' >/dev/null; \
+	  clear_sequence=$$(printf '\033[2J'); \
+	  test "$$(LC_ALL=C grep -aoF "$$clear_sequence" "$$monitor_log" | wc -l | tr -d ' ')" = 1; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh add prod server.example.com --user deploy --port 2222 --identity '~/.ssh/id_prod' --jump bastion.example.com -L 8080:localhost:80 -R 9000:localhost:9000 -D 1080 -o ServerAliveInterval=30; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh list | grep -q 'prod.*deploy@server.example.com.*2222.*bastion'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh command prod -- uname -a | grep -q "ssh.*2222.*id_prod.*bastion.*deploy@server.example.com.*uname.*-a"; \
@@ -122,14 +130,8 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh remove production; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh-ui" expect -c 'set timeout 5; spawn $(SHORTCLI) ssh; expect "TERMATICA / SSH MANAGER"; send "q"; expect eof' >/dev/null; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.0'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-retry'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-qualification'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-campaign'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-retry'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-qualification'; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer-campaign'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.1'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
 	  test "$$(tr -d '\n' <"$$tmp/current")" = default.json; \
@@ -373,7 +375,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.13.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.13.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

@@ -12,11 +12,6 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 | `t ssh tile <names...>` | Start saved SSH profiles across split panes |
 | `t b` | `termatica benchmark` |
 | `t sm` | `termatica system-monitor` |
-| `t rr` | `termatica renderer-report` |
-| `t rq` | `termatica renderer-qualification` |
-| `t rc export [file]` | Export the current field report to stdout or a `0600` file |
-| `t rc aggregate <file ...>` | Validate, deduplicate, and aggregate field reports |
-| `t rt` | `termatica renderer-retry` |
 | `t c` | `termatica config` |
 | `t cf` | `termatica config-file` |
 | `t u [check]` | `termatica update [check]` |
@@ -25,7 +20,9 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 | `t x <name> [text]` | `termatica run <name> [text]` |
 | `t h` / `t v` | Help / version |
 
-Running `t` by itself prints the quick guide. The full commands remain stable for scripts.
+Running `t` or `termatica` by itself prints the clean public command list. It
+does not repeat the quick aliases, flags, or internal renderer diagnostics.
+The aliases remain available and are documented here for discoverability.
 
 ## Public commands
 
@@ -54,11 +51,6 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica update check` | Check GitHub without installing |
 | `termatica reload` | Reload configuration in the running app |
 | `termatica benchmark` | Benchmark an isolated offscreen terminal inside the running app using the active visual config |
-| `termatica renderer-report` | Print privacy-safe display, requested/actual renderer, quarantine, retry, recovery, and failure diagnostics as JSON |
-| `termatica renderer-qualification` | Print observed current-session field evidence and every open Metal rollout gate as JSON |
-| `termatica renderer-campaign export [file]` | Export a privacy-safe Phase 10 envelope with a canonical SHA-256 integrity digest |
-| `termatica renderer-campaign aggregate <file ...>` | Reject invalid reports and aggregate unique observed sessions without asserting machine authenticity |
-| `termatica renderer-retry` | Retry only quarantined Metal panes in place without changing the active config or other panes |
 | `termatica editor <name> [file ...]` | Run a supported editor in the current terminal |
 | `termatica editor list` | List editor adapters |
 | `termatica run <name> [text]` | Invoke a configured extension command |
@@ -72,7 +64,14 @@ The separate `plugins`, `themes`, `configs`, `code`, `marketplace`, profile, and
 
 ## System monitor
 
-`t sm` opens a live, alternate-screen view without changing the current shell or terminal history. It reports device and power state, uptime, CPU and load, memory pressure, root-volume usage, network rates and totals, and the busiest processes. Press `C` or `M` to order processes by CPU or memory, `P` to pause, `R` to refresh, and `Q` to return to the shell. `termatica system-monitor --once` prints one non-interactive snapshot for scripts and diagnostics.
+`t sm` opens a live, alternate-screen view without changing the current shell
+or terminal history. Each sample is buffered and compared with the previous
+frame, then only changed rows are repainted. It reports device and power state,
+uptime, CPU and load, memory pressure, root-volume usage, network rates and
+totals, and the busiest processes. Press `C` or `M` to order processes by CPU
+or memory, `P` to pause, `R` to refresh, and `Q` to return to the shell.
+`termatica system-monitor --once` prints one non-interactive snapshot for
+scripts and diagnostics.
 
 ## SSH manager
 
