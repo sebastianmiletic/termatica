@@ -8,7 +8,10 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 
 | Quick command | Full command |
 |---|---|
+| `t ssh` | Open the terminal-native SSH manager |
+| `t ssh tile <names...>` | Start saved SSH profiles across split panes |
 | `t b` | `termatica benchmark` |
+| `t sm` | `termatica system-monitor` |
 | `t rr` | `termatica renderer-report` |
 | `t rq` | `termatica renderer-qualification` |
 | `t rc export [file]` | Export the current field report to stdout or a `0600` file |
@@ -28,6 +31,14 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 
 | Command | Result |
 |---|---|
+| `termatica ssh` | Open the interactive manager for saved and OpenSSH-config hosts |
+| `termatica ssh list [--json]` | List saved profiles as a table or JSON |
+| `termatica ssh add\|set <name> <host> [options]` | Create or replace a validated password-free profile |
+| `termatica ssh connect <name> [-- command]` | Connect with the system OpenSSH client |
+| `termatica ssh check <name>` | Make a five-second non-interactive connection attempt |
+| `termatica ssh split <name> [vertical]` | Open a profile in a new split |
+| `termatica ssh tile [--vertical] <names...>` | Start multiple profiles across independent panes |
+| `termatica ssh keys\|keygen` | Inspect fingerprints or create an OpenSSH identity |
 | `termatica config` | Open the categorized terminal config UI |
 | `termatica config list` | Print the current config and every other saved config |
 | `termatica config get <path>` | Print a dot-separated setting |
@@ -38,6 +49,7 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica config delete <name>` | Delete a saved config |
 | `termatica config-file` | Create and open the selected config's authoritative JSON file |
 | `termatica config-file path` | Print the authoritative config path |
+| `termatica system-monitor` | Open a responsive live monitor for CPU, memory, storage, network, device, and top-process statistics |
 | `termatica update` | Download, verify, and install the latest GitHub release |
 | `termatica update check` | Check GitHub without installing |
 | `termatica reload` | Reload configuration in the running app |
@@ -57,6 +69,19 @@ Running `t` by itself prints the quick guide. The full commands remain stable fo
 | `termatica version` | Print the app version |
 
 The separate `plugins`, `themes`, `configs`, `code`, `marketplace`, profile, and directory menus have been removed. Use `termatica config` for all settings and named configs. Use `termatica config-file` for direct JSON access.
+
+## System monitor
+
+`t sm` opens a live, alternate-screen view without changing the current shell or terminal history. It reports device and power state, uptime, CPU and load, memory pressure, root-volume usage, network rates and totals, and the busiest processes. Press `C` or `M` to order processes by CPU or memory, `P` to pause, `R` to refresh, and `Q` to return to the shell. `termatica system-monitor --once` prints one non-interactive snapshot for scripts and diagnostics.
+
+## SSH manager
+
+`t ssh` manages validated, password-free profiles while continuing to honor the
+system OpenSSH configuration and security model. Profiles support users, ports,
+identity files, ProxyJump, local/remote/dynamic forwarding, and custom OpenSSH
+options. They can be inspected without connecting, checked against the real
+network, opened normally, or launched directly into independent split panes.
+See the [complete SSH guide](SSH.md) for every command and security boundary.
 
 ## Config UI
 

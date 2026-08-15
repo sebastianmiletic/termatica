@@ -23,6 +23,9 @@ other terminals provide. Performance results are reported separately in
 - Scrollback, search, prompt navigation, numbered terminals, native splits,
   optional Hyprland-style tiling, JSON themes/configuration, named configs,
   shell integration, and a local control socket.
+- Password-free SSH profile management backed by the system OpenSSH client,
+  including config-alias discovery, identities, fingerprints, ProxyJump,
+  forwarding, connection checks, and multi-host split/tile launch commands.
 - Single cursor ownership across tabs and visible splits, including immediate
   invalidation of the previously focused pane after Command-T or focus changes.
 - A non-destructive `t benchmark` command that measures the running app with
@@ -58,8 +61,9 @@ other terminals provide. Performance results are reported separately in
 
 - macOS 13 or later only; no Linux, Windows, BSD, or web build.
 - Public builds are ad-hoc signed, not Apple-notarized.
-- No SSH/TLS multiplexer, reconnectable remote domain, serial terminal, or
-  predictive local echo.
+- SSH sessions use the system OpenSSH client; there is no proprietary SSH/TLS
+  multiplexer, reconnectable remote domain, serial terminal, or predictive
+  local echo.
 - No Kitty-style session files/watchers/network remote control or WezTerm-style
   Lua object model.
 - No Ghostty Quick Terminal, AppleScript dictionary, Quick Look integration,
@@ -82,7 +86,8 @@ Codex-style inline scrolling, Kitty and legacy keyboard input, mouse modes,
 Sixel/iTerm2/Kitty images, real Metal pixel variation, resize behavior, cursor
 ownership across three panes, lifecycle recovery, scheduler/cache bounds, and
 automatic AppKit fallback. A separate real-PTY gate exercises installed shells,
-editors, pagers, monitors, tmux, SSH tooling, Codex, and OpenCode and reports
-missing applications instead of treating them as passed. Passing these checks
+editors, pagers, monitors, tmux, SSH tooling, Codex, Claude, Gemini, OpenCode,
+Pi, Nano, btop, and Yazi and reports missing applications instead of treating
+them as passed. Passing these checks
 supports the listed behaviors; it is not a guarantee that every current or
 future CLI is defect-free.

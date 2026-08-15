@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>A native PTY terminal for macOS with AppKit and optional Metal rendering.</strong></p>
+<p align="center"><strong>A sub-2 MB native macOS terminal with SSH management, split tiling, AI/TUI compatibility, system monitoring, AppKit, and optional Metal rendering.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -22,7 +22,15 @@
 
 Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
 
-The current local universal bundle is **1,370.1 KiB** and runs natively on
+It combines a full terminal emulator with a password-free SSH profile manager,
+OpenSSH config discovery, connection diagnostics, key fingerprints, forwarding,
+ProxyJump, and one-command remote split layouts. Native tabs and arbitrary
+horizontal, vertical, quarter, half, and mixed-size panes can run local shells,
+AI coding agents, monitors, editors, and independent remote hosts side by side—
+without bundling a browser engine or JavaScript runtime.
+
+The current local universal bundle is **1,473.4 KiB (1,508,721 bytes)**—well
+under 2 MB—and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
 footprint instead of presenting one host snapshot as a fixed requirement.
@@ -87,12 +95,13 @@ are not closed or replaced.
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
-- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Codex-compatible Kitty keyboard handling (flags 0-31 + REP), modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
+- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Kitty keyboard flags 0-31 with bounded per-screen push/pop state, repeat/release and associated-text events, modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
 - Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, Codex inline-viewport routing, and a visible position indicator
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
 - Native numbered tabs and optional Hyprland-style terminal tiling, with animated movement between arbitrary quarter, half, horizontal, vertical, and mixed-size slots
+- Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
 - Exact cursor ownership across tabs and splits: focus changes redraw the old and new cursor cells so Command-T cannot leave cursor ghosts in other terminals
 - An overlay tab rail that never changes the terminal grid or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
@@ -145,17 +154,21 @@ Termatica puts its own command in `PATH` for every shell it opens.
 
 ```sh
 t c
+t sm
 t cf
 t cf path
 t u check
 t u
 ```
 
-`t` is the fast command. Common abbreviations are `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
+`t` is the fast command. Common commands include `ssh` (SSH manager), `sm` (system monitor), `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
 
 | Command | Purpose |
 |---|---|
+| `t ssh` | Open the terminal-native SSH profile manager |
+| `t ssh tile <names...>` | Start multiple remote hosts across independent split panes |
 | `t c` | Open the interactive categorized config UI |
+| `t sm` | Open the live terminal-native system monitor |
 | `t b` | Benchmark Termatica now and compare with saved competitor runs |
 | `t b a` | Benchmark every installed comparison terminal now |
 | `t rr` | Print a privacy-safe renderer/display field report with no terminal text or paths |
@@ -175,6 +188,8 @@ t u
 | `termatica config delete <name>` | Delete a saved config |
 | `termatica config-file` | Open the selected config file |
 | `termatica config-file path` | Print the config file path |
+| `termatica system-monitor` | Show live CPU, memory, storage, network, device, and process statistics |
+| `termatica ssh <action>` | Manage, inspect, check, connect, split, or tile OpenSSH profiles; see [SSH manager](docs/SSH.md) |
 | `termatica update [check]` | Check GitHub or securely install the latest release |
 | `termatica reload` | Reload the running app |
 | `termatica renderer-qualification` | Report current-session qualification evidence without accepting synthetic proof |

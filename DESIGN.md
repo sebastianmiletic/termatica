@@ -32,7 +32,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 
 - Motion uses Core Animation only, has no continuous frame loop, and scales with `tabs.animationSpeed`.
 - App and terminal entry use a clip-only center-to-edge reveal with a short 160–300 ms ease-out. The window frame settles before launch motion begins, and glyph layers are never scaled or faded. Adding a Hyprland tile animates only the new terminal; existing tiles settle immediately into their new frames.
-- Tabs use compact bubble/slide motion; Hyprland tiles snap directly between computed frames.
+- Ordinary tabs switch terminal surfaces immediately and animate only the compact tab control with a short fade and three-point slide. Hyprland tiles snap directly between computed frames.
 - No decorative bounce, long easing tail, or animation that delays keyboard focus.
 
 ## Interaction

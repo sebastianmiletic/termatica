@@ -11,6 +11,7 @@ THEMES := $(patsubst Resources/Themes/%,$(APP)/Contents/Resources/Themes/%,$(wil
 SHELL_INTEGRATION := $(shell find Resources/ShellIntegration -type f)
 SHELL_INTEGRATION_RESOURCES := $(patsubst Resources/ShellIntegration/%,$(APP)/Contents/Resources/ShellIntegration/%,$(SHELL_INTEGRATION))
 BENCHMARK_RESOURCES := $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh
+SYSTEM_MONITOR_RESOURCE := $(APP)/Contents/Resources/SystemMonitor/system-monitor.zsh
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
@@ -20,7 +21,7 @@ COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroo
 
 all: release
 
-release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES)
+release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES) $(SYSTEM_MONITOR_RESOURCE)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
 	  test "$$bytes" -le 1572864 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
@@ -66,6 +67,11 @@ $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh: scripts/benchmark
 	cp $< $@
 	chmod 755 $@
 
+$(APP)/Contents/Resources/SystemMonitor/system-monitor.zsh: Resources/SystemMonitor/system-monitor.zsh
+	@mkdir -p $(dir $@)
+	cp $< $@
+	chmod 755 $@
+
 run: release
 	open $(APP)
 
@@ -94,15 +100,29 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.12.3$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version | grep -q '^Termatica 1.13.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'config-file'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'update check'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'benchmark \[all\].*Benchmark Termatica only'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q '^QUICK$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b.*Benchmark'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't b a.*Benchmark all'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't sm.*system monitor'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) help | grep -q 't ssh.*SSH manager'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'system-monitor'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'known-hosts'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) sm --once | grep -q 'TERMATICA / SYSTEM MONITOR'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh add prod server.example.com --user deploy --port 2222 --identity '~/.ssh/id_prod' --jump bastion.example.com -L 8080:localhost:80 -R 9000:localhost:9000 -D 1080 -o ServerAliveInterval=30; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh list | grep -q 'prod.*deploy@server.example.com.*2222.*bastion'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh command prod -- uname -a | grep -q "ssh.*2222.*id_prod.*bastion.*deploy@server.example.com.*uname.*-a"; \
+	  test "$$(stat -f %Lp "$$tmp/ssh/ssh-hosts.json")" = 600; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh rename prod production; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh show production | grep -q 'localForwards'; \
+	  ! TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh add unsafe 'bad host'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh remove production; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh-ui" expect -c 'set timeout 5; spawn $(SHORTCLI) ssh; expect "TERMATICA / SSH MANAGER"; send "q"; expect eof' >/dev/null; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.12.3'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.0'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-report'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-retry'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) help | grep -q 'renderer-qualification'; \
@@ -244,8 +264,11 @@ check: release $(BENCH)
 	  TERM_COMPLETION_DIR="$$tmp/completions" FPATH="$$tmp/completions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions" zsh -flic 'source "$$TERM_COMPLETION_DIR/termatica.zsh"; test "$${_comps[termatica]}" = _termatica; test "$${_comps[t]}" = _termatica'; \
 	  grep -Fq 'canBecomeKeyWindow {return YES;}' src/main.m; \
 	  grep -Fq 'terminal.topContentInset=self.config.topBar?0:6' src/main.m; \
-	  grep -Fq 'BOOL animateTerminal=animate&&(!tile||!_enteringTerminal||terminal==_enteringTerminal)' src/main.m; \
 	  grep -Fq 'BOOL animateWindow=self.window.isVisible&&self.config.tabAnimations' src/main.m; \
+	  grep -Fq 'BOOL animateTerminal=tile&&animate' src/main.m; \
+	  grep -Fq 'termatica.tab.add.fade' src/main.m; \
+	  ! grep -Fq 'termatica.tab.slide.in' src/main.m; \
+	  ! grep -Fq 'termatica.rail.unfold' src/main.m; \
 	  grep -Fq 'tabRailAvailable {return _terminals.count>1&&!self.config.hyprlandLayout;}' src/main.m; \
 	  grep -Fq 'if(![self tabRailAvailable]){_animateTabLayout=NO;[self suppressTabRail]' src/main.m; \
 	  grep -Fq '[controller showWindow:nil];dispatch_async(dispatch_get_main_queue(),^{[controller animateLaunchReveal];})' src/main.m; \
@@ -288,6 +311,8 @@ check: release $(BENCH)
 	  grep -Fq 'adaptive-text all-data no-wrap winner=bold' src/main.m; \
 	  ! grep -Fq 'Parser ASCII          309.1' src/main.m; \
 	  test -x $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh; \
+	  test -x $(APP)/Contents/Resources/SystemMonitor/system-monitor.zsh; \
+	  zsh -n Resources/SystemMonitor/system-monitor.zsh; \
 	  zsh -n scripts/benchmark-live-matrix.sh; \
 	  grep -Fq 'routeWheelLines:lines event:event' src/main.m; \
 	  test -f $(APP)/Contents/Resources/ShellIntegration/zsh/.zshenv; \
@@ -299,7 +324,7 @@ check: release $(BENCH)
 	  grep -Fq '_alternateScroll' src/main.m; \
 	  grep -Fq 'poll(&descriptor,1,20)' src/main.m; \
 	  grep -Fq 'NSKernAttributeName:@(cellKern)' src/main.m; \
-	  grep -Fq 'termatica.rail.fold' src/main.m; \
+	  ! grep -Fq 'termatica.rail.fold' src/main.m; \
 	  grep -Fq '"backgroundOpacity": 0.28' Resources/Themes/ghost-glass.json; \
 	  grep -Fq '"#FF6B6B"' Resources/Themes/ghost-glass.json; \
 	  grep -Fq '"#7CE38B"' Resources/Themes/ghost-glass.json; \
@@ -348,7 +373,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.12.3 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.13.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

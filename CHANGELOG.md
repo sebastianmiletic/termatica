@@ -1,5 +1,17 @@
 # Changelog
 
+## 1.13.0
+
+- Add `t sm` / `termatica system-monitor`, a compact live terminal monitor with CPU, load, memory pressure, storage, network rates, device details, uptime, battery state, and CPU- or memory-sorted processes.
+- Complete Kitty keyboard progressive-enhancement handling for AI CLIs and TUIs: bounded main/alternate-screen mode stacks, set/add/remove modes, repeat and release events, shifted keys, associated text, and modifier-key events.
+- Expand the real-PTY compatibility gate to installed Codex, Claude, Gemini, OpenCode, Pi, Nano, btop, and Yazi builds while continuing to report unavailable programs as skipped.
+- Add `t ssh`, a terminal-native OpenSSH manager with secure saved profiles, config alias discovery, CRUD and JSON output, identities and fingerprints, ProxyJump, port forwarding, connection checks, and one-command split or multi-host tiled sessions.
+- Add a complete SSH guide and expand the main product description around remote management, split tiling, AI/TUI workflows, monitoring, and the sub-2 MB universal app footprint.
+- Keep ordinary tab creation and switching off the full-screen terminal layer,
+  replacing center reveals and content slides with restrained tab-control motion.
+- Remove the scaled rail fold/unfold effect and prevent hidden AppKit tabs from
+  remaining temporarily layer-backed after opening a tab.
+
 ## 1.12.3
 
 - Make each config's `.json` filename its authoritative identity and use a
