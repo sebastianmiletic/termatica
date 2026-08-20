@@ -92,7 +92,7 @@ are not closed or replaced.
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI
-- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, mouse selection, bracketed paste, Kitty keyboard flags 0-31 with bounded per-screen push/pop state, repeat/release and associated-text events, modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and five mouse coordinate encodings
+- Real login shells with ANSI 16/256/true color, UTF-8, Unicode, OSC, document-anchored mouse selection, bracketed paste, Kitty keyboard flags 0-31 with bounded per-screen push/pop state, repeat/release and associated-text events, modifyOtherKeys, focus events, alternate screens, synchronized output (DECSET 2026 + BSU/ESU), DCS dispatch, and X10/normal/button-motion/all-motion reporting across five mouse coordinate encodings
 - Native wheel and precision-trackpad scrollback with momentum, keyboard paging, new-output anchoring, alternate-screen scrolling, Codex inline-viewport routing, and a visible position indicator
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
@@ -244,6 +244,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Copy / paste | Command-C / Command-V |
 | Focus or begin text selection | Click / drag |
 | Forward a click to mouse-aware terminal software | Option-click |
+| Forward middle/right clicks or pointer motion requested by mouse-aware software | Option-middle/right/move |
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |

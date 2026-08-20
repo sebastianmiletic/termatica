@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.13.2
+
+- Anchor selections to terminal document rows so highlighted text and copied content remain attached to the original scrollback cells while the viewport moves.
+- Complete application-mouse reporting for left, middle, right, and extended buttons; press, release, button-drag, and all-motion modes; and X10, legacy, UTF-8, SGR, urxvt, and SGR-pixel encodings.
+- Correct legacy release reports, suppress duplicate motion events within one reported cell or pixel, and preserve native context menus and ordinary text selection while Option explicitly forwards application mouse input.
+- Clear selections safely when their underlying cells are discarded, reflowed, or rearranged instead of allowing a stale highlight to attach to unrelated text.
+
 ## 1.13.1
 
 - Make `t sm` update only changed terminal rows instead of clearing and repainting the entire screen each second.

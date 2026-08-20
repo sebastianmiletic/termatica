@@ -421,7 +421,7 @@ static NSArray<NSString *> *TStandardPaletteHex(void) {return @[@"#1B1D23",@"#E0
     if(selectionNeedsWrite&&!TWriteSelectedConfigFilename(selected,&writeError))TLog(@"could not select config %@: %@",selected,writeError.localizedDescription);
     for(NSString *file in [fm contentsOfDirectoryAtPath:TConfigProfilesPath() error:nil]?:@[]){NSString *valid=TConfigFilename(file);if(!valid||![valid isEqual:file])continue;NSString *profilePath=TCanonicalConfigPath(file);NSDictionary *profile=TReadJSONDictionaryAtPath(profilePath);if(!profile)continue;NSMutableDictionary *normalized=[self normalizedDictionary:profile configName:nil];if(![normalized isEqualToDictionary:profile])TWriteJSONDictionary(normalized,profilePath,nil);}
     self.path=selectedPath;
-    BOOL mayCreateCompatibilityLink=YES;if(legacyRegular&&!legacy){NSString *backup=[TConfigDirectoryPath() stringByAppendingPathComponent:@"config.invalid.json"];if([fm fileExistsAtPath:backup])backup=[TConfigDirectoryPath() stringByAppendingPathComponent:[NSString stringWithFormat:@"config.invalid-%@.json",NSUUID.UUID.UUIDString.lowercaseString]];if([fm moveItemAtPath:legacyPath toPath:backup error:&writeError]){TLog(@"preserved invalid legacy config at %@",backup);legacyRegular=NO;}else{mayCreateCompatibilityLink=NO;TLog(@"could not preserve invalid legacy config: %@",writeError.localizedDescription);}}
+    BOOL mayCreateCompatibilityLink=YES;if(legacyRegular&&!legacy){NSString *backup=[TConfigDirectoryPath() stringByAppendingPathComponent:@"config.invalid.json"];if([fm fileExistsAtPath:backup])backup=[TConfigDirectoryPath() stringByAppendingPathComponent:[NSString stringWithFormat:@"config.invalid-%@.json",NSUUID.UUID.UUIDString.lowercaseString]];if([fm moveItemAtPath:legacyPath toPath:backup error:&writeError])TLog(@"preserved invalid legacy config at %@",backup);else{mayCreateCompatibilityLink=NO;TLog(@"could not preserve invalid legacy config: %@",writeError.localizedDescription);}}
     NSString *expectedTarget=[@"configs" stringByAppendingPathComponent:selected];BOOL correctLink=[legacyTarget isEqual:expectedTarget];if(mayCreateCompatibilityLink&&!correctLink){if(legacyTarget||[fm fileExistsAtPath:legacyPath]){if(![fm removeItemAtPath:legacyPath error:&writeError])TLog(@"could not replace legacy config path: %@",writeError.localizedDescription);}[fm createSymbolicLinkAtPath:legacyPath withDestinationPath:expectedTarget error:&writeError];}
 }
 - (NSMutableDictionary *)editableDictionary {
@@ -910,6 +910,10 @@ enum { TClusterBase = 0x110000 };
 - (NSString *)functionalKeySequenceForKeyCode:(unsigned short)key modifier:(NSInteger)modifier;
 - (NSString *)kittyTextCodepoints:(NSString *)text;
 - (BOOL)shouldForwardApplicationMouseWithModifiers:(NSEventModifierFlags)modifiers;
+- (NSString *)selectedText;
+- (const TCell *)lineAtDocumentIndex:(NSInteger)index temporary:(NSData **)temporary;
+- (NSInteger)documentRowForVisibleRow:(NSInteger)row;
+- (void)discardSelectionDocumentRows:(NSUInteger)rows;
 - (void)startDiagnosticInputCapture;
 - (NSData *)finishDiagnosticInputCapture;
 - (void)reloadAppearance;
@@ -1067,6 +1071,11 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     NSUInteger _damageMinX, _damageMinY, _damageMaxX, _damageMaxY;
     NSPoint _selectionStart, _selectionEnd;
     BOOL _selecting, _hasSelection, _tileDragging;
+    NSTrackingArea *_terminalMouseTrackingArea;
+    BOOL _applicationMouseButtonDown;
+    NSUInteger _applicationMouseButton;
+    BOOL _hasLastMouseMotion;
+    NSUInteger _lastMouseMotionX, _lastMouseMotionY, _lastMouseMotionCode;
     BOOL _hiddenPathDesired;
     NSInteger _hiddenPathApplied;
     NSUInteger _hiddenPathGeneration;
@@ -1306,7 +1315,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     @synchronized(self) {
     if(_historyCount>self.config.scrollback){
         NSUInteger drop=_historyCount-self.config.scrollback;
-        _historyStart=(_historyStart+drop)%_historyCapacity;_historyCount=self.config.scrollback;
+        _historyStart=(_historyStart+drop)%_historyCapacity;_historyCount=self.config.scrollback;[self discardSelectionDocumentRows:drop];
     }
     [_attributeCache removeAllObjects];[_wideAttributeCache removeAllObjects];_cachedPlainPalette=nil;
     _cachedUnicodeRendering = self.config.unicodeRendering;
@@ -1372,8 +1381,15 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     free(_historyBlankRow);_historyBlankRow=malloc(_cols*sizeof(TCell));
     _historyBlankCols=_historyBlankRow?_cols:0;if(_historyBlankRow){TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols;i++)_historyBlankRow[i]=blank;_historyBlankValid=YES;}
 }
+- (void)discardSelectionDocumentRows:(NSUInteger)rows {
+    if(!_hasSelection||!rows)return;
+    NSInteger start=(NSInteger)_selectionStart.y,end=(NSInteger)_selectionEnd.y;
+    if(start<(NSInteger)rows&&end<(NSInteger)rows){_hasSelection=NO;_selecting=NO;return;}
+    _selectionStart.y=MAX(0,start-(NSInteger)rows);
+    _selectionEnd.y=MAX(0,end-(NSInteger)rows);
+}
 - (void)addHistoryCells:(const TCell *)cells count:(NSUInteger)count __attribute__((objc_direct)) {
-    NSUInteger limit=self.config.scrollback;if(!limit){[self ensureBlankRow];return;}
+    NSUInteger limit=self.config.scrollback;if(!limit){[self discardSelectionDocumentRows:1];[self ensureBlankRow];return;}
     NSUInteger cols=_cols,len=MIN(count,cols);
     [self ensureBlankRow];
     if(len==0)return;
@@ -1391,7 +1407,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     }
     NSUInteger dstIdx;
     if(_historyCount<limit){dstIdx=_historyCount;_historyCount++;}
-    else{dstIdx=_historyStart;_historyStart=(_historyStart+1)%_historyCapacity;}
+    else{dstIdx=_historyStart;_historyStart=(_historyStart+1)%_historyCapacity;[self discardSelectionDocumentRows:1];}
     TCell *dst=_historyCells+dstIdx*cols;
     if(len)memcpy(dst,cells,len*sizeof(TCell));
     if(len<cols)memcpy(dst+len,_historyBlankRow+len,(cols-len)*sizeof(TCell));
@@ -1400,7 +1416,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     if(!_historyCells||index>=_historyCount||_historyCols!=_cols)return _historyCount?[_history[(_historyStart+index)%_historyCount] copy]:nil;
     return [NSData dataWithBytesNoCopy:_historyCells+(((_historyStart+index)%_historyCapacity)*_historyCols) length:_historyCols*sizeof(TCell) freeWhenDone:NO];
 }
-- (void)clearHistory {[_history removeAllObjects];_historyStart=0;if(_historyCells){TCell blank=[self blankCell];for(NSUInteger i=0;i<_historyCapacity*_historyCols;i++)_historyCells[i]=blank;}_historyCount=0;}
+- (void)clearHistory {[_history removeAllObjects];_historyStart=0;if(_historyCells){TCell blank=[self blankCell];for(NSUInteger i=0;i<_historyCapacity*_historyCols;i++)_historyCells[i]=blank;}_historyCount=0;_hasSelection=NO;_selecting=NO;}
 - (void)resizeGrid {
     @synchronized(self) {
     CGFloat topInset=self.topContentInset,bottomInset=self.safeAreaInsets.bottom;
@@ -1409,6 +1425,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     NSUInteger cols=MAX((NSUInteger)2,(NSUInteger)floor(availableWidth/MAX(1.0,_cellWidth)));
     NSUInteger rows=MAX((NSUInteger)2,(NSUInteger)floor(availableHeight/MAX(1.0,_cellHeight)));
     if(cols == _cols && rows == _rows) return;
+    _hasSelection=NO;_selecting=NO;
     TCell *next = calloc(cols * rows, sizeof(TCell));
     TCell blank = [self blankCell];
     for (NSUInteger i = 0; i < cols * rows; i++) next[i] = blank;
@@ -1613,7 +1630,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     else if(finalByte=='c')[self resetTerminal];
 }
 static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index,int defaultValue){return index<count&&parameters[index]?parameters[index]:defaultValue;}
-- (int)privateModeStatus:(int)mode {BOOL known=YES,enabled=NO;if(mode==1)enabled=_applicationCursorKeys;else if(mode==7)enabled=_autoWrap;else if(mode==12)enabled=_cursorBlink;else if(mode==25)enabled=_cursorVisible;else if(mode==47||mode==1047||mode==1049)enabled=_alternateScreen;else if(mode==1000||mode==1002||mode==1003)enabled=_mouseTrackingMode==(NSUInteger)mode;else if(mode==1004)enabled=_focusReporting;else if(mode==1005)enabled=_utf8Mouse;else if(mode==1006)enabled=_sgrMouse;else if(mode==1007)enabled=_alternateScroll;else if(mode==1015)enabled=_urxvtMouse;else if(mode==1016)enabled=_pixelMouse;else if(mode==2004)enabled=_bracketedPaste;else if(mode==2026)enabled=_synchronizedUpdates;else known=NO;return known?(enabled?1:2):0;}
+- (int)privateModeStatus:(int)mode {BOOL known=YES,enabled=NO;if(mode==1)enabled=_applicationCursorKeys;else if(mode==7)enabled=_autoWrap;else if(mode==9||mode==1000||mode==1002||mode==1003)enabled=_mouseTrackingMode==(NSUInteger)mode;else if(mode==12)enabled=_cursorBlink;else if(mode==25)enabled=_cursorVisible;else if(mode==47||mode==1047||mode==1049)enabled=_alternateScreen;else if(mode==1004)enabled=_focusReporting;else if(mode==1005)enabled=_utf8Mouse;else if(mode==1006)enabled=_sgrMouse;else if(mode==1007)enabled=_alternateScroll;else if(mode==1015)enabled=_urxvtMouse;else if(mode==1016)enabled=_pixelMouse;else if(mode==2004)enabled=_bracketedPaste;else if(mode==2026)enabled=_synchronizedUpdates;else known=NO;return known?(enabled?1:2):0;}
 - (void)executeCSI:(uint8_t)command prefix:(uint8_t)prefix intermediate:(uint8_t)intermediate parameters:(const int *)parameters count:(NSUInteger)count __attribute__((objc_direct)) {
     int n=TCSIParameter(parameters,count,0,1);
     if(intermediate==' '&&command=='q'){int style=parameters[0];_applicationCursorStyle=(style==3||style==4)?@"underline":((style==5||style==6)?@"bar":@"block");_cursorBlink=style==0||style==1||style==3||style==5;[self startCursorBlink];[self setNeedsDisplay:YES];return;}
@@ -1708,10 +1725,10 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     int v = 8 + (i - 232) * 10; return (v<<16)|(v<<8)|v;
 }
 - (void)enterAlternateScreen {
-    if(_alternateScreen)return;_mainKittyKeyboardFlags=_kittyKeyboardFlags;_kittyKeyboardFlags=_alternateKittyKeyboardFlags;_inlineViewportMode=NO;_inlineViewportTop=0;[self normalizeRows];_primaryScreen=[NSData dataWithBytes:_cells length:_cols*_rows*sizeof(TCell)];_primaryUnderlineStyles=_underlineStyles?[NSData dataWithBytes:_underlineStyles length:_cols*_rows]:nil;_primaryInlineImages=[_inlineImages copy];_primaryKittyImageIDs=[_kittyImageIDs copy];_inlineImages=[NSMutableDictionary dictionary];_kittyImageIDs=[NSMutableDictionary dictionary];_primaryCols=_cols;_primaryRows=_rows;_primaryCursorX=_cursorX;_primaryCursorY=_cursorY;_alternateScreen=YES;_historyOffset=0;[self eraseDisplay:2];_cursorX=_cursorY=0;[self markAllDamage];
+    if(_alternateScreen)return;_hasSelection=NO;_selecting=NO;_mainKittyKeyboardFlags=_kittyKeyboardFlags;_kittyKeyboardFlags=_alternateKittyKeyboardFlags;_inlineViewportMode=NO;_inlineViewportTop=0;[self normalizeRows];_primaryScreen=[NSData dataWithBytes:_cells length:_cols*_rows*sizeof(TCell)];_primaryUnderlineStyles=_underlineStyles?[NSData dataWithBytes:_underlineStyles length:_cols*_rows]:nil;_primaryInlineImages=[_inlineImages copy];_primaryKittyImageIDs=[_kittyImageIDs copy];_inlineImages=[NSMutableDictionary dictionary];_kittyImageIDs=[NSMutableDictionary dictionary];_primaryCols=_cols;_primaryRows=_rows;_primaryCursorX=_cursorX;_primaryCursorY=_cursorY;_alternateScreen=YES;_historyOffset=0;[self eraseDisplay:2];_cursorX=_cursorY=0;[self markAllDamage];
 }
 - (void)leaveAlternateScreen {
-    if(!_alternateScreen)return;_alternateKittyKeyboardFlags=_kittyKeyboardFlags;_kittyKeyboardFlags=_mainKittyKeyboardFlags;TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols*_rows;i++)_cells[i]=blank;if(_underlineStyles)memset(_underlineStyles,0,_cols*_rows);NSUInteger copyRows=MIN(_rows,_primaryRows),copyCols=MIN(_cols,_primaryCols);const TCell *saved=_primaryScreen.bytes;const uint8_t *savedUnderlines=_primaryUnderlineStyles.bytes;for(NSUInteger y=0;y<copyRows;y++){memcpy(_cells+y*_cols,saved+y*_primaryCols,copyCols*sizeof(TCell));if(_underlineStyles&&savedUnderlines)memcpy(_underlineStyles+y*_cols,savedUnderlines+y*_primaryCols,copyCols);}_cursorX=MIN(_primaryCursorX,_cols-1);_cursorY=MIN(_primaryCursorY,_rows-1);_inlineImages=[_primaryInlineImages mutableCopy]?:[NSMutableDictionary dictionary];_kittyImageIDs=[_primaryKittyImageIDs mutableCopy]?:[NSMutableDictionary dictionary];_primaryScreen=nil;_primaryUnderlineStyles=nil;_primaryInlineImages=nil;_primaryKittyImageIDs=nil;_alternateScreen=NO;_historyOffset=0;[self markAllDamage];
+    if(!_alternateScreen)return;_hasSelection=NO;_selecting=NO;_alternateKittyKeyboardFlags=_kittyKeyboardFlags;_kittyKeyboardFlags=_mainKittyKeyboardFlags;TCell blank=[self blankCell];for(NSUInteger i=0;i<_cols*_rows;i++)_cells[i]=blank;if(_underlineStyles)memset(_underlineStyles,0,_cols*_rows);NSUInteger copyRows=MIN(_rows,_primaryRows),copyCols=MIN(_cols,_primaryCols);const TCell *saved=_primaryScreen.bytes;const uint8_t *savedUnderlines=_primaryUnderlineStyles.bytes;for(NSUInteger y=0;y<copyRows;y++){memcpy(_cells+y*_cols,saved+y*_primaryCols,copyCols*sizeof(TCell));if(_underlineStyles&&savedUnderlines)memcpy(_underlineStyles+y*_cols,savedUnderlines+y*_primaryCols,copyCols);}_cursorX=MIN(_primaryCursorX,_cols-1);_cursorY=MIN(_primaryCursorY,_rows-1);_inlineImages=[_primaryInlineImages mutableCopy]?:[NSMutableDictionary dictionary];_kittyImageIDs=[_primaryKittyImageIDs mutableCopy]?:[NSMutableDictionary dictionary];_primaryScreen=nil;_primaryUnderlineStyles=nil;_primaryInlineImages=nil;_primaryKittyImageIDs=nil;_alternateScreen=NO;_historyOffset=0;[self markAllDamage];
 }
 - (void)setPrivateMode:(int)mode enabled:(BOOL)enabled {
     if (mode == 25) _cursorVisible = enabled;
@@ -1721,7 +1738,7 @@ static int TCSIParameter(const int *parameters,NSUInteger count,NSUInteger index
     else if(mode==7)_autoWrap=enabled;
     else if(mode==1004)_focusReporting=enabled;
     else if(mode==1007)_alternateScroll=enabled;
-    else if(mode==1000||mode==1002||mode==1003)_mouseTrackingMode=enabled?(NSUInteger)mode:0;
+    else if(mode==9||mode==1000||mode==1002||mode==1003){_mouseTrackingMode=enabled?(NSUInteger)mode:0;_applicationMouseButtonDown=NO;_hasLastMouseMotion=NO;}
     else if(mode==1005)_utf8Mouse=enabled;
     else if(mode==1006)_sgrMouse=enabled;
     else if(mode==1015)_urxvtMouse=enabled;
@@ -1770,6 +1787,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
             if(_autoWrap){
                 _cursorX=0;
                 if(_alternateScreen&&_cursorY==_scrollBottom&&_scrollTop==0&&_scrollBottom==_rows-1){
+                    _hasSelection=NO;_selecting=NO;
                     _damageValid=_damageFull=YES;_damageMinX=_damageMinY=0;_damageMaxX=_cols;_damageMaxY=_rows;
                     NSUInteger physical=[self rotateRowsUpFrom:0 to:_rows-1];[self clearPhysicalRow:physical];
                 }else [self lineFeed];
@@ -1831,11 +1849,13 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 }
 - (void)scrollUp __attribute__((objc_direct)) {
     if(_alternateScreen&&_scrollTop==0&&_scrollBottom==_rows-1){
+        _hasSelection=NO;_selecting=NO;
         _damageValid=_damageFull=YES;_damageMinX=_damageMinY=0;_damageMaxX=_cols;_damageMaxY=_rows;
         NSUInteger physical=[self rotateRowsUpFrom:0 to:_rows-1];[self clearPhysicalRow:physical];
         return;
     }
     [self markDamageX:0 y:_scrollTop width:_cols height:_scrollBottom-_scrollTop+1];
+    if(_alternateScreen||_scrollTop>0){_hasSelection=NO;_selecting=NO;}
     if(!_alternateScreen&&_scrollTop==0){
         TCell *top=[self cellsForRow:0];NSUInteger used=_cols;TCell blank=[self blankCell];while(used){TCell cell=top[used-1];if(cell.ch!=blank.ch||cell.flags!=blank.flags||cell.fg!=blank.fg||cell.bg!=blank.bg)break;used--;}
         [self addHistoryCells:top count:MAX((NSUInteger)1,used)];
@@ -1846,6 +1866,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     NSUInteger physical=[self rotateRowsUpFrom:_scrollTop to:_scrollBottom];[self clearPhysicalRow:physical];
 }
 - (void)reverseIndex {
+    _hasSelection=NO;_selecting=NO;
     [self markDamageX:0 y:_scrollTop width:_cols height:_scrollBottom-_scrollTop+1];
     if (_cursorY > _scrollTop) { _cursorY--; return; }
     NSUInteger physical=[self rotateRowsDownFrom:_scrollTop to:_scrollBottom];[self clearPhysicalRow:physical];
@@ -1865,8 +1886,8 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 - (void)eraseCharacters:(int)n { TCell b=[self blankCell],*row=[self cellsForRow:_cursorY];NSUInteger end=MIN(_cols,_cursorX+(NSUInteger)n);for(NSUInteger x=_cursorX;x<end;x++)row[x]=b;if(_underlineStyles)memset(_underlineStyles+[self physicalRowForRow:_cursorY]*_cols+_cursorX,0,end-_cursorX);[self clearLinksInRow:_cursorY from:_cursorX to:end];[self markDamageX:_cursorX y:_cursorY width:end-_cursorX height:1]; }
 - (void)deleteCharacters:(int)n { NSUInteger count=MIN((NSUInteger)n,_cols-_cursorX);TCell b=[self blankCell],*row=[self cellsForRow:_cursorY];memmove(row+_cursorX,row+_cursorX+count,(_cols-_cursorX-count)*sizeof(TCell));for(NSUInteger x=_cols-count;x<_cols;x++)row[x]=b;if(_underlineStyles){uint8_t *styles=_underlineStyles+[self physicalRowForRow:_cursorY]*_cols;memmove(styles+_cursorX,styles+_cursorX+count,_cols-_cursorX-count);memset(styles+_cols-count,0,count);}[self clearLinksInRow:_cursorY from:_cursorX to:_cols];[self markDamageX:_cursorX y:_cursorY width:_cols-_cursorX height:1]; }
 - (void)insertCharacters:(int)n { NSUInteger count=MIN((NSUInteger)n,_cols-_cursorX);TCell b=[self blankCell],*row=[self cellsForRow:_cursorY];memmove(row+_cursorX+count,row+_cursorX,(_cols-_cursorX-count)*sizeof(TCell));for(NSUInteger x=_cursorX;x<_cursorX+count;x++)row[x]=b;if(_underlineStyles){uint8_t *styles=_underlineStyles+[self physicalRowForRow:_cursorY]*_cols;memmove(styles+_cursorX+count,styles+_cursorX,_cols-_cursorX-count);memset(styles+_cursorX,0,count);}[self clearLinksInRow:_cursorY from:_cursorX to:_cols];[self markDamageX:_cursorX y:_cursorY width:_cols-_cursorX height:1]; }
-- (void)insertLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+(_cursorY+count)*_cols,_cells+_cursorY*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));if(_underlineStyles){memmove(_underlineStyles+(_cursorY+count)*_cols,_underlineStyles+_cursorY*_cols,(_scrollBottom-_cursorY+1-count)*_cols);memset(_underlineStyles+_cursorY*_cols,0,count*_cols);}TCell b=[self blankCell];for(NSUInteger i=_cursorY*_cols;i<(_cursorY+count)*_cols;i++)_cells[i]=b;[_linksByCell removeAllObjects];[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
-- (void)deleteLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+_cursorY*_cols,_cells+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));if(_underlineStyles){memmove(_underlineStyles+_cursorY*_cols,_underlineStyles+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols);memset(_underlineStyles+(_scrollBottom-count+1)*_cols,0,count*_cols);}TCell b=[self blankCell];for(NSUInteger i=(_scrollBottom-count+1)*_cols;i<=_scrollBottom*_cols+_cols-1;i++)_cells[i]=b;[_linksByCell removeAllObjects];[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
+- (void)insertLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;_hasSelection=NO;_selecting=NO;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+(_cursorY+count)*_cols,_cells+_cursorY*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));if(_underlineStyles){memmove(_underlineStyles+(_cursorY+count)*_cols,_underlineStyles+_cursorY*_cols,(_scrollBottom-_cursorY+1-count)*_cols);memset(_underlineStyles+_cursorY*_cols,0,count*_cols);}TCell b=[self blankCell];for(NSUInteger i=_cursorY*_cols;i<(_cursorY+count)*_cols;i++)_cells[i]=b;[_linksByCell removeAllObjects];[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
+- (void)deleteLines:(int)n { if(_cursorY<_scrollTop||_cursorY>_scrollBottom)return;_hasSelection=NO;_selecting=NO;[self normalizeRows];NSUInteger count=MIN((NSUInteger)n,_scrollBottom-_cursorY+1);memmove(_cells+_cursorY*_cols,_cells+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols*sizeof(TCell));if(_underlineStyles){memmove(_underlineStyles+_cursorY*_cols,_underlineStyles+(_cursorY+count)*_cols,(_scrollBottom-_cursorY+1-count)*_cols);memset(_underlineStyles+(_scrollBottom-count+1)*_cols,0,count*_cols);}TCell b=[self blankCell];for(NSUInteger i=(_scrollBottom-count+1)*_cols;i<=_scrollBottom*_cols+_cols-1;i++)_cells[i]=b;[_linksByCell removeAllObjects];[self markDamageX:0 y:_cursorY width:_cols height:_scrollBottom-_cursorY+1]; }
 #pragma clang diagnostic push
 #pragma clang diagnostic ignored "-Wdeprecated-declarations"
 - (void)finishOSC:(NSString *)osc __attribute__((objc_direct)) {
@@ -1911,13 +1932,19 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 
 - (const TCell *)lineAtVisibleIndex:(NSInteger)index temporary:(NSData **)temporary {
     if(_inlineViewportMode&&_historyOffset>0&&_inlineViewportTop>0&&_inlineViewportTop<_rows&&index>=(NSInteger)_inlineViewportTop&&index<(NSInteger)_rows)return [self cellsForRow:(NSUInteger)index];
+    NSInteger logical=(NSInteger)_historyCount-(NSInteger)_historyOffset+index;
+    return [self lineAtDocumentIndex:logical temporary:temporary];
+}
+- (const TCell *)lineAtDocumentIndex:(NSInteger)logical temporary:(NSData **)temporary {
     NSInteger totalHistory=(NSInteger)_historyCount;
-    NSInteger first=totalHistory-(NSInteger)_historyOffset;
-    NSInteger logical=first+index;
     if(logical<totalHistory && logical>=0){NSData *d=[self historyLineAtIndex:(NSUInteger)logical];NSUInteger full=_cols*sizeof(TCell);if(d.length>=full){*temporary=d;return d.bytes;}[_scratchLine setLength:full];TCell blank=[self blankCell],*cells=_scratchLine.mutableBytes;for(NSUInteger i=0;i<_cols;i++)cells[i]=blank;if(d.length)memcpy(cells,d.bytes,d.length);*temporary=_scratchLine;return cells;}
     NSInteger row=logical-totalHistory;
     if(row>=0 && row<(NSInteger)_rows)return [self cellsForRow:(NSUInteger)row];
     return NULL;
+}
+- (NSInteger)documentRowForVisibleRow:(NSInteger)row {
+    if(_inlineViewportMode&&_historyOffset>0&&_inlineViewportTop>0&&_inlineViewportTop<_rows&&row>=(NSInteger)_inlineViewportTop)return (NSInteger)_historyCount+row;
+    return (NSInteger)_historyCount-(NSInteger)_historyOffset+row;
 }
 - (TRenderSnapshot *)renderSnapshot {
     @synchronized(self){
@@ -1958,7 +1985,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     if(!_hasSelection)return NO;
     NSInteger a=(NSInteger)_selectionStart.y*(NSInteger)_cols+(NSInteger)_selectionStart.x;
     NSInteger b=(NSInteger)_selectionEnd.y*(NSInteger)_cols+(NSInteger)_selectionEnd.x;
-    if(a>b){NSInteger t=a;a=b;b=t;} NSInteger p=(NSInteger)y*(NSInteger)_cols+(NSInteger)x;
+    if(a>b){NSInteger t=a;a=b;b=t;} NSInteger p=[self documentRowForVisibleRow:(NSInteger)y]*(NSInteger)_cols+(NSInteger)x;
     return p>=a&&p<=b;
 }
 - (NSString *)stringForCodepoint:(uint32_t)cp {if(cp>=TClusterBase){NSUInteger index=cp-TClusterBase;return index<_graphemes.count?_graphemes[index]:@"\uFFFD";}if(cp<=0xFFFF)return [NSString stringWithCharacters:(unichar[]){(unichar)(cp?:' ')} length:1];if(cp>0x10FFFF)return @"\uFFFD";uint32_t v=cp-0x10000;unichar pair[2]={(unichar)(0xD800+(v>>10)),(unichar)(0xDC00+(v&0x3FF))};return [NSString stringWithCharacters:pair length:2];}
@@ -2019,10 +2046,12 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 }
 - (void)sendMouseButton:(NSUInteger)button event:(NSEvent *)event release:(BOOL)release motion:(BOOL)motion {
     NSPoint local=[self convertPoint:event.locationInWindow fromView:nil],cell=[self cellForPoint:local];NSUInteger code=button+(motion?32:0);if(event.modifierFlags&NSEventModifierFlagShift)code+=4;if(event.modifierFlags&NSEventModifierFlagOption)code+=8;if(event.modifierFlags&NSEventModifierFlagControl)code+=16;NSUInteger x=_pixelMouse?(NSUInteger)MAX(1,floor(local.x)+1):(NSUInteger)cell.x+1,y=_pixelMouse?(NSUInteger)MAX(1,floor(local.y)+1):(NSUInteger)cell.y+1;
+    if(motion&&_hasLastMouseMotion&&x==_lastMouseMotionX&&y==_lastMouseMotionY&&code==_lastMouseMotionCode)return;
+    if(motion){_hasLastMouseMotion=YES;_lastMouseMotionX=x;_lastMouseMotionY=y;_lastMouseMotionCode=code;}else _hasLastMouseMotion=NO;
     if(_sgrMouse||_pixelMouse)[self sendString:[NSString stringWithFormat:@"\033[<%lu;%lu;%lu%c",(unsigned long)code,(unsigned long)x,(unsigned long)y,release?'m':'M']];
-    else if(_urxvtMouse)[self sendString:[NSString stringWithFormat:@"\033[%lu;%lu;%luM",(unsigned long)(32+code),(unsigned long)x,(unsigned long)y]];
-    else if(_utf8Mouse){uint8_t header[]={27,'[','M'};NSMutableData *sequence=[NSMutableData dataWithBytes:header length:sizeof(header)];uint32_t values[]={(uint32_t)(32+code),(uint32_t)(32+x),(uint32_t)(32+y)};for(NSUInteger i=0;i<3;i++){uint32_t value=MIN(values[i],(uint32_t)0x7FF);uint8_t encoded[2];if(value<0x80){encoded[0]=(uint8_t)value;[sequence appendBytes:encoded length:1];}else{encoded[0]=(uint8_t)(0xC0|(value>>6));encoded[1]=(uint8_t)(0x80|(value&0x3F));[sequence appendBytes:encoded length:2];}}[self sendBytes:sequence.bytes length:sequence.length];}
-    else{uint8_t sequence[]={27,'[','M',(uint8_t)MIN(255,32+code),(uint8_t)MIN(255,32+x),(uint8_t)MIN(255,32+y)};[self sendBytes:sequence length:sizeof(sequence)];}
+    else{NSUInteger legacyCode=release?((code&~(NSUInteger)3)|3):code;if(_urxvtMouse)[self sendString:[NSString stringWithFormat:@"\033[%lu;%lu;%luM",(unsigned long)(32+legacyCode),(unsigned long)x,(unsigned long)y]];
+    else if(_utf8Mouse){uint8_t header[]={27,'[','M'};NSMutableData *sequence=[NSMutableData dataWithBytes:header length:sizeof(header)];uint32_t values[]={(uint32_t)(32+legacyCode),(uint32_t)(32+x),(uint32_t)(32+y)};for(NSUInteger i=0;i<3;i++){uint32_t value=MIN(values[i],(uint32_t)0x7FF);uint8_t encoded[2];if(value<0x80){encoded[0]=(uint8_t)value;[sequence appendBytes:encoded length:1];}else{encoded[0]=(uint8_t)(0xC0|(value>>6));encoded[1]=(uint8_t)(0x80|(value&0x3F));[sequence appendBytes:encoded length:2];}}[self sendBytes:sequence.bytes length:sequence.length];}
+    else{uint8_t sequence[]={27,'[','M',(uint8_t)MIN(255,32+legacyCode),(uint8_t)MIN(255,32+x),(uint8_t)MIN(255,32+y)};[self sendBytes:sequence length:sizeof(sequence)];}}
 }
 - (NSMenu *)menuForEvent:(NSEvent *)event {
     NSMenu *menu=[NSMenu new];
@@ -2060,25 +2089,34 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 - (void)mouseDown:(NSEvent *)event {
     if(self.focused)self.focused();
     if(!self.tiledRendering)[self.window makeFirstResponder:self];
-    if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:NO motion:NO];return;}
+    if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){_applicationMouseButtonDown=YES;_applicationMouseButton=0;[self sendMouseButton:0 event:event release:NO motion:NO];return;}
     NSPoint local=[self convertPoint:event.locationInWindow fromView:nil];
     NSPoint cell=[self cellForPoint:local];if(self.config.oscIntegration&&_historyOffset==0&&(event.modifierFlags&NSEventModifierFlagCommand)){NSString *link=_linksByCell[[self linkKeyForX:(NSUInteger)cell.x y:(NSUInteger)cell.y]];NSURL *url=link.length?[NSURL URLWithString:link]:nil;if(url){[NSWorkspace.sharedWorkspace openURL:url];return;}}
     BOOL commandDrag=(event.modifierFlags&NSEventModifierFlagCommand)!=0;
     BOOL paddingDrag=local.y<=MAX(10,self.config.padding+self.topContentInset);
     if(self.tiledRendering&&(commandDrag||paddingDrag)&&self.tileDragBegan){_tileDragging=YES;_selecting=NO;_hasSelection=NO;self.tileDragBegan(self,event);return;}
     if(![self pointIsInSelectableContent:local]){_selecting=NO;_hasSelection=NO;[self setNeedsDisplay:YES];return;}
-    _selectionStart=_selectionEnd=[self cellForPoint:local];_selecting=YES;_hasSelection=NO;[self setNeedsDisplay:YES];
+    NSPoint selectionCell=[self cellForPoint:local];selectionCell.y=[self documentRowForVisibleRow:(NSInteger)selectionCell.y];_selectionStart=_selectionEnd=selectionCell;_selecting=YES;_hasSelection=NO;[self setNeedsDisplay:YES];
 }
 - (BOOL)shouldForwardApplicationMouseWithModifiers:(NSEventModifierFlags)modifiers {return _mouseTrackingMode&&(modifiers&NSEventModifierFlagOption)&&!(modifiers&NSEventModifierFlagShift);}
-- (void)mouseDragged:(NSEvent *)event {if(_mouseTrackingMode>=1002&&[self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:NO motion:YES];return;}if(_tileDragging){if(self.tileDragMoved)self.tileDragMoved(self,event);return;}if(!_selecting)return;_selectionEnd=[self cellForPoint:[self convertPoint:event.locationInWindow fromView:nil]];_hasSelection=YES;[self setNeedsDisplay:YES];}
-- (void)mouseUp:(NSEvent *)event {if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:0 event:event release:YES motion:NO];return;}if(_tileDragging){_tileDragging=NO;if(self.tileDragEnded)self.tileDragEnded(self,event);return;}_selecting=NO;}
+- (void)mouseDragged:(NSEvent *)event {if(_mouseTrackingMode>=1002&&_applicationMouseButtonDown){[self sendMouseButton:_applicationMouseButton event:event release:NO motion:YES];return;}if(_tileDragging){if(self.tileDragMoved)self.tileDragMoved(self,event);return;}if(!_selecting)return;NSPoint cell=[self cellForPoint:[self convertPoint:event.locationInWindow fromView:nil]];cell.y=[self documentRowForVisibleRow:(NSInteger)cell.y];_selectionEnd=cell;_hasSelection=YES;[self setNeedsDisplay:YES];}
+- (void)mouseUp:(NSEvent *)event {if(_applicationMouseButtonDown&&_applicationMouseButton==0){if(_mouseTrackingMode!=9)[self sendMouseButton:0 event:event release:YES motion:NO];_applicationMouseButtonDown=NO;return;}if(_tileDragging){_tileDragging=NO;if(self.tileDragEnded)self.tileDragEnded(self,event);return;}_selecting=NO;}
+- (NSUInteger)terminalButtonForEvent:(NSEvent *)event {if(event.buttonNumber==1)return 2;if(event.type==NSEventTypeOtherMouseDown||event.type==NSEventTypeOtherMouseDragged||event.type==NSEventTypeOtherMouseUp){if(event.buttonNumber<=2)return 1;}NSUInteger extra=(NSUInteger)MAX(0,event.buttonNumber-3);return 128+MIN((NSUInteger)3,extra);}
+- (void)rightMouseDown:(NSEvent *)event {if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){_applicationMouseButtonDown=YES;_applicationMouseButton=2;[self sendMouseButton:2 event:event release:NO motion:NO];return;}[super rightMouseDown:event];}
+- (void)rightMouseDragged:(NSEvent *)event {if(_mouseTrackingMode>=1002&&_applicationMouseButtonDown&&_applicationMouseButton==2){[self sendMouseButton:2 event:event release:NO motion:YES];return;}[super rightMouseDragged:event];}
+- (void)rightMouseUp:(NSEvent *)event {if(_applicationMouseButtonDown&&_applicationMouseButton==2){if(_mouseTrackingMode!=9)[self sendMouseButton:2 event:event release:YES motion:NO];_applicationMouseButtonDown=NO;return;}[super rightMouseUp:event];}
+- (void)otherMouseDown:(NSEvent *)event {if([self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){NSUInteger button=[self terminalButtonForEvent:event];_applicationMouseButtonDown=YES;_applicationMouseButton=button;[self sendMouseButton:button event:event release:NO motion:NO];return;}[super otherMouseDown:event];}
+- (void)otherMouseDragged:(NSEvent *)event {if(_mouseTrackingMode>=1002&&_applicationMouseButtonDown){[self sendMouseButton:_applicationMouseButton event:event release:NO motion:YES];return;}[super otherMouseDragged:event];}
+- (void)otherMouseUp:(NSEvent *)event {if(_applicationMouseButtonDown){if(_mouseTrackingMode!=9)[self sendMouseButton:_applicationMouseButton event:event release:YES motion:NO];_applicationMouseButtonDown=NO;return;}[super otherMouseUp:event];}
+- (void)mouseMoved:(NSEvent *)event {if(_mouseTrackingMode==1003&&[self shouldForwardApplicationMouseWithModifiers:event.modifierFlags]){[self sendMouseButton:3 event:event release:NO motion:YES];return;}[super mouseMoved:event];}
+- (void)updateTrackingAreas {[super updateTrackingAreas];if(_terminalMouseTrackingArea)[self removeTrackingArea:_terminalMouseTrackingArea];_terminalMouseTrackingArea=[[NSTrackingArea alloc]initWithRect:self.bounds options:NSTrackingMouseMoved|NSTrackingActiveInKeyWindow|NSTrackingInVisibleRect owner:self userInfo:nil];[self addTrackingArea:_terminalMouseTrackingArea];}
 - (void)scrollByLines:(NSInteger)lines {
     @synchronized(self) {
-    if(!lines)return;NSInteger previous=_historyOffset;_historyOffset=MAX(0,MIN((NSInteger)_historyCount,_historyOffset+lines));if(previous!=_historyOffset){_hasSelection=NO;[self markAllDamage];TLog(@"scrollback %ld/%lu",(long)_historyOffset,(unsigned long)_historyCount);[self setNeedsDisplay:YES];}
+    if(!lines)return;NSInteger previous=_historyOffset;_historyOffset=MAX(0,MIN((NSInteger)_historyCount,_historyOffset+lines));if(previous!=_historyOffset){[self markAllDamage];TLog(@"scrollback %ld/%lu",(long)_historyOffset,(unsigned long)_historyCount);[self setNeedsDisplay:YES];}
     }
 }
 - (void)jumpToPromptDirection:(NSInteger)direction {
-    @synchronized(self){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_historyCount-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,(NSInteger)_historyCount-target));_hasSelection=NO;[self markAllDamage];[self setNeedsDisplay:YES];}}
+    @synchronized(self){if(!_commandMarks.count)return;NSInteger current=(NSInteger)_historyCount-_historyOffset,target=NSNotFound;if(direction<0){for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row<current&&(target==NSNotFound||row>target))target=row;}}else{for(NSDictionary *mark in _commandMarks){if(![mark[@"mark"] isEqual:@"A"])continue;NSInteger row=[mark[@"row"] integerValue];if(row>current&&(target==NSNotFound||row<target))target=row;}}if(target!=NSNotFound){_historyOffset=MAX(0,MIN((NSInteger)_historyCount,(NSInteger)_historyCount-target));[self markAllDamage];[self setNeedsDisplay:YES];}}
 }
 - (void)routeWheelLines:(NSInteger)lines event:(NSEvent *)event modifierFlags:(NSEventModifierFlags)modifiers {
     BOOL shift=(modifiers&NSEventModifierFlagShift)!=0;
@@ -2086,7 +2124,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     // Codex can remain on the primary screen and still require button 64/65 wheel
     // reports. Keep ordinary clicks native, but forward wheels whenever the child
     // explicitly enabled a mouse mode. Shift-wheel is the local-history escape hatch.
-    if(_mouseTrackingMode&&!shift){
+    if(_mouseTrackingMode>=1000&&!shift){
         NSUInteger button=lines>0?64:65,events=MIN((NSInteger)8,labs(lines));
         for(NSUInteger i=0;i<events;i++)[self sendMouseButton:button event:event release:NO motion:NO];
         return;
@@ -2113,7 +2151,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 }
 - (NSString *)selectedText {
     @synchronized(self) {
-    if(!_hasSelection)return @"";NSInteger a=(NSInteger)_selectionStart.y*(NSInteger)_cols+(NSInteger)_selectionStart.x,b=(NSInteger)_selectionEnd.y*(NSInteger)_cols+(NSInteger)_selectionEnd.x;if(a>b){NSInteger t=a;a=b;b=t;}NSMutableString *s=[NSMutableString string];NSInteger firstRow=a/(NSInteger)_cols,lastRow=b/(NSInteger)_cols;for(NSInteger y=firstRow;y<=lastRow;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:y temporary:&hold];NSInteger x0=y==firstRow?a%(NSInteger)_cols:0,x1=y==lastRow?b%(NSInteger)_cols:(NSInteger)_cols-1;NSMutableString *row=[NSMutableString string];for(NSInteger x=x0;x<=x1;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[s appendString:row];if(y<lastRow)[s appendString:@"\n"];}return s;
+    if(!_hasSelection)return @"";NSInteger a=(NSInteger)_selectionStart.y*(NSInteger)_cols+(NSInteger)_selectionStart.x,b=(NSInteger)_selectionEnd.y*(NSInteger)_cols+(NSInteger)_selectionEnd.x;if(a>b){NSInteger t=a;a=b;b=t;}NSMutableString *s=[NSMutableString string];NSInteger firstRow=a/(NSInteger)_cols,lastRow=b/(NSInteger)_cols;for(NSInteger y=firstRow;y<=lastRow;y++){NSData *hold=nil;const TCell *line=[self lineAtDocumentIndex:y temporary:&hold];NSInteger x0=y==firstRow?a%(NSInteger)_cols:0,x1=y==lastRow?b%(NSInteger)_cols:(NSInteger)_cols-1;NSMutableString *row=[NSMutableString string];for(NSInteger x=x0;x<=x1;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[s appendString:row];if(y<lastRow)[s appendString:@"\n"];}return s;
     }
 }
 - (NSString *)visibleText {@synchronized(self){NSMutableArray *lines=[NSMutableArray array];for(NSUInteger y=0;y<_rows;y++){NSData *hold=nil;const TCell *line=[self lineAtVisibleIndex:(NSInteger)y temporary:&hold];NSMutableString *row=[NSMutableString string];for(NSUInteger x=0;x<_cols;x++)if(!line||!(line[x].flags&TContinuation))[row appendString:[self stringForCodepoint:line?line[x].ch:' ']];while([row hasSuffix:@" "])[row deleteCharactersInRange:NSMakeRange(row.length-1,1)];[lines addObject:row];}while(lines.count&&[lines.lastObject length]==0)[lines removeLastObject];return [lines componentsJoinedByString:@"\n"];}}
@@ -2123,7 +2161,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
     if(self.config.pasteProtection&&unsafe){NSAlert *alert=[NSAlert new];alert.messageText=@"Paste commands into the terminal?";alert.informativeText=[NSString stringWithFormat:@"This paste contains %lu characters and can execute more than one line.",(unsigned long)s.length];[alert addButtonWithTitle:@"Paste"];[alert addButtonWithTitle:@"Cancel"];alert.alertStyle=NSAlertStyleWarning;if([alert runModal]!=NSAlertFirstButtonReturn)return;}
     if(_bracketedPaste)[self sendString:[NSString stringWithFormat:@"\033[200~%@\033[201~",s]];else[self sendString:s];
 }
-- (void)selectAll:(id)sender {_selectionStart=NSMakePoint(0,0);_selectionEnd=NSMakePoint(_cols-1,_rows-1);_hasSelection=YES;[self setNeedsDisplay:YES];}
+- (void)selectAll:(id)sender {_selectionStart=NSMakePoint(0,[self documentRowForVisibleRow:0]);_selectionEnd=NSMakePoint(_cols-1,[self documentRowForVisibleRow:(NSInteger)_rows-1]);_hasSelection=YES;[self setNeedsDisplay:YES];}
 - (uint32_t)firstScalar:(NSString *)value {if(!value.length)return 0;NSData *data=[value dataUsingEncoding:NSUTF32LittleEndianStringEncoding];uint32_t scalar=0;if(data.length>=4)memcpy(&scalar,data.bytes,4);return scalar;}
 - (uint32_t)kittyCodeForKey:(unsigned short)key {
     switch(key){case 53:return 27;case 36:case 76:return 13;case 48:return 9;case 51:return 127;case 114:return 57348;case 117:return 57349;case 123:return 57350;case 124:return 57351;case 126:return 57352;case 125:return 57353;case 116:return 57354;case 121:return 57355;case 115:return 57356;case 119:return 57357;case 122:return 57364;case 120:return 57365;case 99:return 57366;case 118:return 57367;case 96:return 57368;case 97:return 57369;case 98:return 57370;case 100:return 57371;case 101:return 57372;case 109:return 57373;case 103:return 57374;case 111:return 57375;default:return 0;}
@@ -2938,6 +2976,7 @@ static int TRunTerminalSelfTest(void) {
     [terminal scrollByLines:-100000];if([terminal.diagnosticState[@"offset"] integerValue]!=0)return 4;
     CGEventRef wheelEvent=CGEventCreateScrollWheelEvent(NULL,kCGScrollEventUnitLine,1,3);CGEventSetFlags(wheelEvent,0);NSEvent *wheel=[NSEvent eventWithCGEvent:wheelEvent];CFRelease(wheelEvent);[terminal routeWheelLines:3 event:wheel modifierFlags:0];
     if([terminal.diagnosticState[@"offset"] integerValue]<=0)return 5;[terminal scrollByLines:-100000];
+    TTerminalView *selectionTerminal=[[TTerminalView alloc]initWithFrame:NSMakeRect(0,0,800,500) config:config];NSMutableString *selectionLines=[NSMutableString string];for(NSUInteger i=0;i<120;i++)[selectionLines appendFormat:@"select-line-%03lu\r\n",(unsigned long)i];[selectionTerminal consumeData:[selectionLines dataUsingEncoding:NSUTF8StringEncoding]];[selectionTerminal scrollByLines:15];TRenderSnapshot *selectionSnapshot=selectionTerminal.renderSnapshot;NSUInteger selectionRow=5;CGFloat selectionLeft=[selectionSnapshot.style[@"left"] doubleValue],selectionTop=[selectionSnapshot.style[@"top"] doubleValue],selectionLocalY=selectionTop+(selectionRow+0.5)*selectionSnapshot.metrics.cellHeight,selectionWindowY=NSHeight(selectionTerminal.bounds)-selectionLocalY;NSEvent *selectionDown=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(selectionLeft+0.5*selectionSnapshot.metrics.cellWidth,selectionWindowY) modifierFlags:0 timestamp:0 windowNumber:0 context:nil eventNumber:10 clickCount:1 pressure:1];NSEvent *selectionDrag=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:NSMakePoint(selectionLeft+14.5*selectionSnapshot.metrics.cellWidth,selectionWindowY) modifierFlags:0 timestamp:0 windowNumber:0 context:nil eventNumber:11 clickCount:1 pressure:1];NSEvent *selectionUp=[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:NSMakePoint(selectionLeft+14.5*selectionSnapshot.metrics.cellWidth,selectionWindowY) modifierFlags:0 timestamp:0 windowNumber:0 context:nil eventNumber:12 clickCount:1 pressure:0];[selectionTerminal mouseDown:selectionDown];[selectionTerminal mouseDragged:selectionDrag];[selectionTerminal mouseUp:selectionUp];NSString *anchoredSelection=[selectionTerminal selectedText];selectionSnapshot=selectionTerminal.renderSnapshot;const uint8_t *selectionMask=selectionSnapshot.selectionMask.bytes;if(!anchoredSelection.length||!selectionMask[selectionRow*selectionSnapshot.metrics.columns]){fprintf(stderr,"selection anchor setup failed text='%s' row=%lu selected=%d state=%s\n",anchoredSelection.UTF8String,(unsigned long)selectionRow,selectionMask[selectionRow*selectionSnapshot.metrics.columns],selectionTerminal.diagnosticState.description.UTF8String);return 81;}[selectionTerminal scrollByLines:3];TRenderSnapshot *scrolledSelectionSnapshot=selectionTerminal.renderSnapshot;const uint8_t *scrolledSelectionMask=scrolledSelectionSnapshot.selectionMask.bytes;if(![[selectionTerminal selectedText] isEqual:anchoredSelection]||!scrolledSelectionMask[(selectionRow+3)*scrolledSelectionSnapshot.metrics.columns]||scrolledSelectionMask[selectionRow*scrolledSelectionSnapshot.metrics.columns]){fprintf(stderr,"selection scroll anchor failed before='%s' after='%s' old-row=%d shifted-row=%d\n",anchoredSelection.UTF8String,[selectionTerminal selectedText].UTF8String,scrolledSelectionMask[selectionRow*scrolledSelectionSnapshot.metrics.columns],scrolledSelectionMask[(selectionRow+3)*scrolledSelectionSnapshot.metrics.columns]);return 82;}
     NSUInteger primaryHistory=[terminal.diagnosticState[@"history"] unsignedIntegerValue];
     NSMutableString *alternateLines=[NSMutableString stringWithString:@"PRIMARY-MARKER\033[?1049hALTERNATE-MARKER\r\n"];
     for(NSUInteger i=0;i<120;i++)[alternateLines appendFormat:@"alternate-line-%03lu\r\n",(unsigned long)i];
@@ -3003,6 +3042,12 @@ static int TRunTerminalSelfTest(void) {
     [terminal scrollByLines:-100000];[terminal startDiagnosticInputCapture];[terminal routeWheelLines:3 event:wheel modifierFlags:NSEventModifierFlagShift];
     if([terminal finishDiagnosticInputCapture].length||[terminal.diagnosticState[@"offset"] integerValue]<=0)return 15;
     [terminal scrollByLines:-100000];
+    NSEventModifierFlags option=NSEventModifierFlagOption;NSPoint mousePoint=NSMakePoint(160,120),mousePoint2=NSMakePoint(200,145);NSEvent *leftOptionDown=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:mousePoint modifierFlags:option timestamp:1 windowNumber:0 context:nil eventNumber:20 clickCount:1 pressure:1],*leftOptionUp=[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:mousePoint modifierFlags:option timestamp:2 windowNumber:0 context:nil eventNumber:21 clickCount:1 pressure:0],*rightOptionDown=[NSEvent mouseEventWithType:NSEventTypeRightMouseDown location:mousePoint modifierFlags:option timestamp:3 windowNumber:0 context:nil eventNumber:22 clickCount:1 pressure:1],*rightOptionUp=[NSEvent mouseEventWithType:NSEventTypeRightMouseUp location:mousePoint modifierFlags:option timestamp:4 windowNumber:0 context:nil eventNumber:23 clickCount:1 pressure:0],*middleOptionDown=[NSEvent mouseEventWithType:NSEventTypeOtherMouseDown location:mousePoint modifierFlags:option timestamp:5 windowNumber:0 context:nil eventNumber:24 clickCount:1 pressure:1],*middleOptionUp=[NSEvent mouseEventWithType:NSEventTypeOtherMouseUp location:mousePoint modifierFlags:option timestamp:6 windowNumber:0 context:nil eventNumber:25 clickCount:1 pressure:0];
+    [terminal startDiagnosticInputCapture];[terminal mouseDown:leftOptionDown];[terminal mouseUp:leftOptionUp];[terminal rightMouseDown:rightOptionDown];[terminal rightMouseUp:rightOptionUp];[terminal otherMouseDown:middleOptionDown];[terminal otherMouseUp:middleOptionUp];NSString *buttonReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![buttonReport containsString:@"\033[<8;"]||![buttonReport containsString:@"m\033[<10;"]||![buttonReport containsString:@"m\033[<9;"]||![buttonReport hasSuffix:@"m"]){fprintf(stderr,"mouse button report mismatch: %s\n",buttonReport.UTF8String);return 83;}
+    [terminal consumeData:[@"\033[?1002h" dataUsingEncoding:NSUTF8StringEncoding]];NSEvent *rightOptionDrag=[NSEvent mouseEventWithType:NSEventTypeRightMouseDragged location:mousePoint2 modifierFlags:option timestamp:7 windowNumber:0 context:nil eventNumber:26 clickCount:1 pressure:1];[terminal startDiagnosticInputCapture];[terminal rightMouseDown:rightOptionDown];[terminal rightMouseDragged:rightOptionDrag];[terminal rightMouseDragged:rightOptionDrag];[terminal rightMouseUp:rightOptionUp];NSString *dragReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![dragReport containsString:@"\033[<10;"]||!([dragReport componentsSeparatedByString:@"\033[<42;"].count==2)||![dragReport hasSuffix:@"m"])return 84;
+    [terminal consumeData:[@"\033[?1003h" dataUsingEncoding:NSUTF8StringEncoding]];NSEvent *optionMove=[NSEvent mouseEventWithType:NSEventTypeMouseMoved location:mousePoint2 modifierFlags:option timestamp:8 windowNumber:0 context:nil eventNumber:27 clickCount:0 pressure:0];[terminal startDiagnosticInputCapture];[terminal mouseMoved:optionMove];[terminal mouseMoved:optionMove];NSString *motionReport=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![motionReport hasPrefix:@"\033[<43;"]||[motionReport componentsSeparatedByString:@"\033[<"].count!=2)return 85;
+    [terminal consumeData:[@"\033[?1003l\033[?1000h\033[?1006l" dataUsingEncoding:NSUTF8StringEncoding]];[terminal startDiagnosticInputCapture];[terminal mouseDown:leftOptionDown];[terminal mouseUp:leftOptionUp];NSData *legacyReport=[terminal finishDiagnosticInputCapture];const uint8_t *legacyBytes=legacyReport.bytes;if(legacyReport.length!=12||legacyBytes[3]!=(uint8_t)(32+8)||legacyBytes[9]!=(uint8_t)(32+8+3))return 86;
+    [terminal consumeData:[@"\033[?1000l\033[?9h" dataUsingEncoding:NSUTF8StringEncoding]];[terminal startDiagnosticInputCapture];[terminal mouseDown:leftOptionDown];[terminal mouseUp:leftOptionUp];if([terminal finishDiagnosticInputCapture].length!=6)return 87;[terminal consumeData:[@"\033[?9l" dataUsingEncoding:NSUTF8StringEncoding]];
     [terminal startDiagnosticInputCapture];[terminal consumeData:[@"\033]10;?\a" dataUsingEncoding:NSUTF8StringEncoding]];NSString *colorReply=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![colorReply containsString:@"\033]10;rgb:"])return 16;
     [terminal startDiagnosticInputCapture];[terminal consumeData:[@"\033[>c\033[c" dataUsingEncoding:NSUTF8StringEncoding]];NSString *deviceReplies=[[NSString alloc]initWithData:[terminal finishDiagnosticInputCapture] encoding:NSUTF8StringEncoding];if(![deviceReplies isEqual:@"\033[>0;120;0c\033[?1;2c"])return 43;
     [terminal clearTerminal];[terminal consumeData:[@"\033(0lqkx m j\033(B ASCII \033)0\016lqk\017" dataUsingEncoding:NSUTF8StringEncoding]];NSString *graphicsText=[terminal visibleText];if(![graphicsText containsString:@"┌─┐│ └ ┘ ASCII ┌─┐"]||[graphicsText containsString:@"lqk"])return 44;
@@ -3048,7 +3093,7 @@ static int TRunTerminalSelfTest(void) {
     for(TTerminalView *tile in tiles.terminals){TTerminalView *cursor=tile;NSUInteger depth=0;while(cursor.splitAnchor&&[tiles.terminals containsObject:cursor.splitAnchor]){cursor=cursor.splitAnchor;if(++depth>tiles.terminals.count)return 54;}}
     for(TTerminalView *tile in tiles.terminals)if([tiles terminalAtRootPoint:NSMakePoint(NSMidX(tile.frame),NSMidY(tile.frame))]!=tile)return 55;
     for(TTerminalView *tile in tiles.terminals)[tile stopShellTerminating:YES];[tiles.window close];
-    fprintf(stdout,"terminal-self-test ok history=%lu rows=%lu columns=%lu keyboard=kitty+legacy mouse=native-click+tui-wheel wheel=normal+hyprland tabs=surface-stable layout=arbitrary-slot-swap\n",(unsigned long)[initial[@"history"] unsignedIntegerValue],(unsigned long)[initial[@"rows"] unsignedIntegerValue],(unsigned long)[initial[@"columns"] unsignedIntegerValue]);
+    fprintf(stdout,"terminal-self-test ok history=%lu rows=%lu columns=%lu keyboard=kitty+legacy mouse=native-selection+buttons+drag+motion+tui-wheel selection=document-anchored wheel=normal+hyprland tabs=surface-stable layout=arbitrary-slot-swap\n",(unsigned long)[initial[@"history"] unsignedIntegerValue],(unsigned long)[initial[@"rows"] unsignedIntegerValue],(unsigned long)[initial[@"columns"] unsignedIntegerValue]);
     return 0;
 }
 
