@@ -100,7 +100,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.3$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.4$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -137,7 +137,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh remove production; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh-ui" expect -c 'set timeout 5; spawn $(SHORTCLI) ssh; expect "TERMATICA / SSH MANAGER"; send "q"; expect eof' >/dev/null; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.3'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.4'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -190,11 +190,14 @@ check: release $(BENCH)
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = ON; \
 	  grep -Eq '"hidden-path"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
 	  ! grep -Eq ':[[:space:]]*(true|false)([,}])' "$$tmp/config.json"; \
+	  mkdir -p "$$tmp/extensions/custom-tool"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'CREATED + CURRENT.*dev.json'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.renderer)" = appkit; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get theme)" = terminal-default; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = OFF; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.custom-tool)" = OFF; \
+	  for section in appearance colors window tabs terminalUI motion system updates keybindings plugins; do plutil -extract "$$section" json -o /dev/null "$$tmp/configs/dev.json"; done; \
 	  test "$$(plutil -extract fontSize raw "$$tmp/configs/dev.json")" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -c 'dev')" = 1; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config list | grep -q '^current[[:space:]]dev.json$$'; \
@@ -273,8 +276,10 @@ check: release $(BENCH)
 	  TERM_COMPLETION_DIR="$$tmp/completions" FPATH="$$tmp/completions:/usr/local/share/zsh/site-functions:/usr/share/zsh/site-functions:/usr/share/zsh/5.9/functions" zsh -flic 'source "$$TERM_COMPLETION_DIR/termatica.zsh"; test "$${_comps[termatica]}" = _termatica; test "$${_comps[t]}" = _termatica'; \
 	  grep -Fq 'canBecomeKeyWindow {return YES;}' src/main.m; \
 	  grep -Fq 'terminal.topContentInset=self.config.topBar?0:6' src/main.m; \
-	  grep -Fq 'BOOL animateWindow=self.window.isVisible&&self.config.tabAnimations' src/main.m; \
-	  grep -Fq 'BOOL animateTerminal=tile&&animate' src/main.m; \
+	  grep -Fq 'BOOL animateWindow=self.window.isVisible&&[self animationsEnabled]' src/main.m; \
+	  grep -Fq 'BOOL animateTerminal=shown&&tile&&animate' src/main.m; \
+	  grep -Fq 'CATransform3DMakeTranslation(dx,dy,0)' src/main.m; \
+	  ! grep -Fq 'CATransform3DMakeScale' src/main.m; \
 	  grep -Fq 'termatica.tab.add.fade' src/main.m; \
 	  ! grep -Fq 'termatica.tab.slide.in' src/main.m; \
 	  ! grep -Fq 'termatica.rail.unfold' src/main.m; \
@@ -284,7 +289,7 @@ check: release $(BENCH)
 	  ! grep -Fq 'scale.fromValue=@0.965' src/main.m; \
 	  ! grep -Fq '[view.layer addAnimation:fade' src/main.m; \
 	  grep -Fq 'CGPathAddRoundedRect(path,NULL,NSRectToCGRect(terminal.frame),self.config->tileCornerRadius,self.config->tileCornerRadius)' src/main.m; \
-	  grep -Fq 'terminal.layer.cornerRadius=tile?self.config->tileCornerRadius:0' src/main.m; \
+	  grep -Fq 'terminal.layer.cornerRadius=shown&&tile?self.config->tileCornerRadius:0' src/main.m; \
 	  grep -Fq 'poll(&descriptor,1,60)' src/main.m; \
 	  grep -Fq '@"window.tileCornerRadius"' src/main.m; \
 	  grep -Fq '@"terminalUI.cursorThickness"' src/main.m; \
@@ -328,7 +333,7 @@ check: release $(BENCH)
 	  test -f $(APP)/Contents/Resources/ShellIntegration/share/fish/vendor_conf.d/termatica.fish; \
 	  zsh -n Resources/ShellIntegration/zsh/.zshenv Resources/ShellIntegration/termatica.zsh; \
 	  bash -n Resources/ShellIntegration/termatica.bash; \
-	  grep -Fq 'terminal.wantsLayer=tile||animateTerminal||[terminal usesMetalRenderer]' src/main.m; \
+	  grep -Fq 'terminal.wantsLayer=(shown&&tile)||animateTerminal||[terminal usesMetalRenderer]' src/main.m; \
 	  grep -Fq '_scrollAccumulator' src/main.m; \
 	  grep -Fq '_alternateScroll' src/main.m; \
 	  grep -Fq 'poll(&descriptor,1,20)' src/main.m; \
@@ -382,7 +387,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.13.3 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.13.4 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

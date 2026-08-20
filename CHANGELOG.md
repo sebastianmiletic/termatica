@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.13.4
+
+- Complete horizontal, vertical, and mixed-direction splits in ordinary non-Hyprland mode while keeping each ordinary tab's pane group independent.
+- Prevent unrelated tabs from becoming tiled or visible when another tab contains splits, and keep split navigation inside the visible group.
+- Replace live glyph scaling with translation-only pane movement plus clip-only entry reveals, respecting the macOS Reduce Motion preference.
+- Bound the auto-hiding tab rail to the available window height so tab labels and controls never overlap at small sizes or high tab counts.
+- Keep newly discovered optional plugins disabled in complete new config profiles instead of silently enabling them during normalization.
+- Extend native regression coverage across ordinary tabs, mixed splits, hiding, constrained rail layout, clean pane motion, and existing Hyprland drag/swap behavior.
+
 ## 1.13.3
 
 - Split the bare `t` and `termatica` command output into Remote & System, Configuration, Tools, and Maintenance sections so the command surface is immediately scannable.

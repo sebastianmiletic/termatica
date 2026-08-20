@@ -32,7 +32,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 
 - Motion uses Core Animation only, has no continuous frame loop, and scales with `tabs.animationSpeed`.
 - App and terminal entry use a clip-only center-to-edge reveal with a short 160–300 ms ease-out. The window frame settles before launch motion begins, and glyph layers are never scaled or faded. Adding a Hyprland tile animates only the new terminal; existing tiles settle immediately into their new frames.
-- Ordinary tabs switch terminal surfaces immediately and animate only the compact tab control with a short fade and three-point slide. Hyprland tiles snap directly between computed frames.
+- Ordinary tabs switch terminal surfaces immediately and animate only the compact tab control with a short fade and three-point slide. Split and Hyprland pane sizes reflow immediately; affected panes may translate from their prior centers, but live glyph layers are never scaled.
 - No decorative bounce, long easing tail, or animation that delays keyboard focus.
 
 ## Interaction
@@ -43,7 +43,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 - A child that enables terminal mouse tracking owns unmodified wheel gestures on both primary and alternate screens. Shift-wheel is the explicit local-scrollback override. Clicks remain native unless Option is held.
 - Scrollback remains anchored when background output arrives, returns to live output when typing, and exposes a minimal position thumb without permanent chrome.
 - Ordinary clicks only focus or begin native text selection. Application mouse coordinates require an explicit Option-click so mouse-aware TUIs cannot unexpectedly reposition their own cursor.
-- Command-T creates a terminal; Command-Shift-T splits below the focused terminal.
+- Command-T creates an independent ordinary tab; Command-Shift-T splits below the focused terminal. Horizontal and vertical split groups remain attached to that ordinary tab in every window mode.
 - Command-1 through Command-9 selects terminals.
 - `termatica config` is the only interactive settings surface. It uses arrows or J/K, Enter for action, and Escape or Q to return or close.
 - Toggle rows always show `ON` or `OFF`; Enter and Left/Right toggle them directly. Their JSON values are the matching readable strings `"on"` and `"off"`.

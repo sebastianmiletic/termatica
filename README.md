@@ -97,10 +97,10 @@ are not closed or replaced.
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
-- Native numbered tabs and optional Hyprland-style terminal tiling, with animated movement between arbitrary quarter, half, horizontal, vertical, and mixed-size slots
+- Native numbered tabs with independent horizontal, vertical, and mixed split groups in ordinary mode, plus optional Hyprland-style tiling and clean pane movement between arbitrary slots
 - Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
 - Exact cursor ownership across tabs and splits: focus changes redraw the old and new cursor cells so Command-T cannot leave cursor ghosts in other terminals
-- An overlay tab rail that never changes the terminal grid or moves shell text sideways
+- A bounded, auto-hiding overlay tab rail that never changes the terminal grid, overlaps labels, or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
 - Flat `TCell*` ring scrollback with no per-line allocations, precomputed 256-colour palette, batched ASCII cell writes, an LRU-bumped style attribute cache, no-copy style-run string construction, adaptive ProMotion-aware refresh cadence, interactive parser scheduling, and bounded PTY backpressure
 - A guaranteed fresh start: every launch opens one new blank terminal and never restores terminal output, processes, tabs, layouts, paths, or window state

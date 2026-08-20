@@ -223,17 +223,12 @@ history. It is not a current parity claim.
 **Files to change**: `src/main.m` (CLI listener), new `docs/REMOTE_CONTROL.md`
 **Estimated effort**: 1 week
 
-### P2-6: Window splits beyond Hyprland
+### P2-6: Window splits beyond Hyprland (completed in 1.13.4)
 
-**Current**: Tile splitting only in Hyprland mode.
-**Target`: `Cmd+Shift+Enter` splits the current pane vertically/horizontally in any mode.
-
-**Approach**:
-1. Generalize `addTabWithVerticalSplit:` to work without Hyprland
-2. Add split management in non-tiled mode: split state per terminal, `Cmd+]` / `Cmd+[` to navigate
-
-**Files to change**: `src/main.m` (TWindowController, layoutTabs)
-**Estimated effort**: 3-5 days
+Horizontal, vertical, and mixed-direction splits now work in ordinary mode.
+Each ordinary tab owns an independent pane group, `Cmd+]` / `Cmd+[` cycles
+inside the visible group, and selecting another ordinary tab hides the complete
+previous group without changing its PTYs or layout.
 
 ### P2-7: Notarized builds
 

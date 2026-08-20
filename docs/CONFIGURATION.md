@@ -4,7 +4,7 @@ Each config is a plain JSON file in `~/.config/termatica/configs/`. The filename
 
 Every config is a complete, self-contained schema rather than a partial overlay. Switching changes the selector and reloads that one file; it never copies or merges values from another config. Existing partial configs are upgraded atomically to schema version 2 while preserving their explicit values. Config files and the selector use user-only `0600` permissions. Termatica watches the whole config directory, including repeated direct edits, renames, new files, deletion, and selection changes. Run `t r` for an explicit reload if needed.
 
-Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. The newly created complete profile becomes current and can then be customized independently.
+Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. Installed custom plugins discovered during normalization also remain off. The newly created complete profile becomes current and can then be customized independently.
 
 Run `termatica config` for the interactive editor. Use Up/Down to select any setting and Left/Right (or Enter) to cycle through validated values. Press Escape or Q to go back from every Termatica menu. The settings editor never asks you to type a custom value; config-file names remain the only text-entry operation.
 
@@ -249,7 +249,7 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
-When Hyprland tiling is enabled, Command-drag any terminal or drag it from its top padding to exchange it with another slot. This works across quarter, half, horizontal, vertical, and mixed-size layouts; the terminal adopts its destination geometry and every affected tile settles with the configured animation speed.
+Horizontal and vertical split commands work in ordinary mode and remain grouped under the ordinary tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, Command-drag any terminal or drag it from its top padding to exchange it with another slot. This works across quarter, half, horizontal, vertical, and mixed-size layouts; the terminal adopts its destination geometry and affected panes move without scaling their text.
 
 ### Tabs (nested under `"tabs"`)
 
@@ -258,7 +258,7 @@ When Hyprland tiling is enabled, Command-drag any terminal or drag it from its t
 | `railWidth` | integer | `34` | Tab rail width in points |
 | `animations` | toggle | `"on"` | Enable tab and window animations |
 | `animationSpeed` | float | `1.35` | Animation speed multiplier |
-| `autoHide` | toggle | `"on"` | Auto-hide the tab rail when only one tab is open |
+| `autoHide` | toggle | `"on"` | Auto-hide the tab rail after the configured delay |
 | `hideDelay` | integer | `5` | Seconds before auto-hiding the tab rail |
 | `tileGap` | integer | `10` | Gap between Hyprland tiles in points |
 | `screenInset` | integer | `18` | Edge inset for Hyprland tiles in points |
