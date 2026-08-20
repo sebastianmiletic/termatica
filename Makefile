@@ -100,7 +100,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.4$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.5$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -137,7 +137,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh remove production; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh-ui" expect -c 'set timeout 5; spawn $(SHORTCLI) ssh; expect "TERMATICA / SSH MANAGER"; send "q"; expect eof' >/dev/null; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.4'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.5'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -387,7 +387,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.13.4 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.13.5 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

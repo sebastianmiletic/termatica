@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.5
+
+- Make the layout-motion regression gate honor macOS Reduce Motion, requiring translation-only transforms when motion is available and zero pane transforms when the system suppresses animation.
+- Publish the completed non-Hyprland split, tab-rail, overlap, hiding, motion, and default-config repairs through a clean-runner-verified release.
+
 ## 1.13.4
 
 - Complete horizontal, vertical, and mixed-direction splits in ordinary non-Hyprland mode while keeping each ordinary tab's pane group independent.
