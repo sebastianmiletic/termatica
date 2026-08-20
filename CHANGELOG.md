@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.0
+
+- Expand the owner-only local automation socket with request/reply operations for windows, tabs, splits, focus, commands, literal input, named keys, activation, and privacy-safe topology.
+- Add a native macOS AppleScript dictionary backed by the same validated automation implementation.
+- Add explicitly launched, mode-`0600` named SSH layout recipes that contain only profile names and split direction.
+- Keep the fresh-start contract intact: no terminal content, scrollback, processes, layouts, paths, or recipes are automatically restored.
+- Add isolated real-socket, recipe-permission, scripting-definition, completion, and privacy regression coverage.
+
 ## 1.13.6
 
 - Remove intermittent Codex-style text overlap by preserving valid double-width cell pairs during overwrite, erase, insert, and delete operations.

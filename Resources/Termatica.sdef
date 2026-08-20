@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE dictionary SYSTEM "file://localhost/System/Library/DTDs/sdef.dtd">
+<dictionary title="Termatica">
+  <suite name="Termatica Automation Suite" code="Trma" description="Terminal-native automation without terminal-content restoration.">
+    <command name="termaticastatus" code="TrmaStat" description="Return privacy-safe window, tab, and pane topology as JSON."><cocoa class="TAutomationStatusScriptCommand"/><result type="text"/></command>
+    <command name="newterminaltab" code="TrmaNTab" description="Open a tab and optionally run the direct-parameter command."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text" optional="yes"/><result type="boolean"/></command>
+    <command name="newterminalwindow" code="TrmaNWin" description="Open a window and optionally run the direct-parameter command."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text" optional="yes"/><result type="boolean"/></command>
+    <command name="splitterminal" code="TrmaSplH" description="Create a horizontal split and optionally run the direct-parameter command."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text" optional="yes"/><result type="boolean"/></command>
+    <command name="splitterminalvertically" code="TrmaSplV" description="Create a vertical split and optionally run the direct-parameter command."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text" optional="yes"/><result type="boolean"/></command>
+    <command name="focusterminal" code="TrmaFocs" description="Focus next, previous, tab N, or pane N using a direct parameter such as pane 2."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text"/><result type="boolean"/></command>
+    <command name="sendterminaltext" code="TrmaSend" description="Send literal text without Return to the focused terminal."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text"/><result type="boolean"/></command>
+    <command name="runterminalcommand" code="TrmaExec" description="Send a command followed by Return to the focused terminal."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text"/><result type="boolean"/></command>
+    <command name="pressterminalkey" code="TrmaKeys" description="Send a named key such as enter, escape, up, or ctrl-c."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text"/><result type="boolean"/></command>
+    <command name="launchsshrecipe" code="TrmaRcpe" description="Explicitly launch a saved SSH layout recipe."><cocoa class="TOneWordAutomationScriptCommand"/><direct-parameter type="text"/><result type="boolean"/></command>
+  </suite>
+</dictionary>

@@ -22,10 +22,13 @@ other terminals provide. Performance results are reported separately in
   transmit/query/delete and placement behavior.
 - Scrollback, search, prompt navigation, numbered terminals, native splits,
   optional Hyprland-style tiling, JSON themes/configuration, named configs,
-  shell integration, and a local control socket.
+  shell integration, an owner-only local automation socket, and a native
+  AppleScript dictionary for windows, tabs, splits, focus, commands, and input.
 - Password-free SSH profile management backed by the system OpenSSH client,
   including config-alias discovery, identities, fingerprints, ProxyJump,
   forwarding, connection checks, and multi-host split/tile launch commands.
+- Explicit named SSH launch recipes that create fresh layouts on demand and
+  never save or automatically restore terminal content or processes.
 - Single cursor ownership across tabs and visible splits, including immediate
   invalidation of the previously focused pane after Command-T or focus changes.
 - A non-destructive `t benchmark` command that measures the running app with
@@ -40,7 +43,7 @@ other terminals provide. Performance results are reported separately in
 | Product | Capability absent or materially narrower in Termatica | Evidence |
 |---|---|---|
 | Kitty | Seven managed layouts, session files, event-driven Python watchers, encrypted remote control over a network, arbitrary copy/paste buffers, per-Unicode-range font selection, and mature kitten extensions | [Kitty overview](https://sw.kovidgoyal.net/kitty/overview/) |
-| Ghostty | Native tabs/splits, Quick Terminal, AppleScript control of windows/tabs/splits/input, Quick Look, proxy icons, automatic system light/dark theme switching, and native window-state recovery | [Ghostty features](https://ghostty.org/docs/features/), [AppleScript](https://ghostty.org/docs/features/applescript) |
+| Ghostty | Quick Terminal, Quick Look, proxy icons, automatic system light/dark theme switching, and native window-state recovery | [Ghostty features](https://ghostty.org/docs/features/) |
 | WezTerm | Local/SSH/TLS multiplexer domains, reconnectable remote sessions, remote panes/tabs, Lua automation, pane introspection, SSH-config discovery, and predictive local echo for high-latency multiplexed sessions | [WezTerm multiplexing](https://wezterm.org/multiplexing.html), [Pane API](https://wezterm.org/config/lua/pane/index.html) |
 | macOS Terminal | Window groups, profile import/export, marks and named bookmarks, AppleScript automation, configurable legacy character encodings, East Asian ambiguous-width policy, and system-native profile management | [Apple profiles](https://support.apple.com/guide/terminal/profiles-change-terminal-windows-trml107/mac), [marks and bookmarks](https://support.apple.com/guide/terminal/trml135fbc26/mac), [advanced settings](https://support.apple.com/guide/terminal/change-profiles-advanced-settings-trmladvn/mac) |
 | Alacritty | Cross-platform macOS/Linux/BSD/Windows availability and a deliberately smaller feature surface maintained as a mature standalone project | [Alacritty project](https://github.com/alacritty/alacritty) |
@@ -55,8 +58,8 @@ other terminals provide. Performance results are reported separately in
   local echo.
 - No Kitty-style session files/watchers/network remote control or WezTerm-style
   Lua object model.
-- No Ghostty Quick Terminal, AppleScript dictionary, Quick Look integration,
-  proxy icon, or native window restoration.
+- No Ghostty Quick Terminal, Quick Look integration, proxy icon, or native
+  window restoration.
 - No macOS Terminal window groups, named output bookmarks, or non-UTF-8 encoding
   selection.
 - Font fallback is delegated to CoreText; there is no user mapping from Unicode

@@ -373,16 +373,11 @@ t v                    # Print version
 t h                    # Help
 ```
 
-## Remote control
+## Local automation
 
-Send JSON commands via the CLI socket:
-
-```sh
-echo '{"command":"newTab"}' | nc -U /tmp/termatica-501-*.sock
-echo '{"command":"sendText","text":"ls\n"}' | nc -U /tmp/termatica-501-*.sock
-echo '{"command":"splitHorizontal"}' | nc -U /tmp/termatica-501-*.sock
-echo '{"command":"search"}' | nc -U /tmp/termatica-501-*.sock
-echo '{"command":"getStats"}' | nc -U /tmp/termatica-501-*.sock
-```
-
-Supported commands: `newTab`, `newWindow`, `splitHorizontal`, `splitVertical`, `sendText`, `search`, `getStats`, `reload`, `run`.
+Use `termatica automation` (or `t a`) for request/reply control of windows,
+tabs, splits, focus, commands, input, and named SSH launch recipes. The socket
+is a user-owned, mode-`0600` local Unix datagram endpoint; there is no TCP
+listener. AppleScript uses the same validated app-side implementation. See the
+[complete automation guide](AUTOMATION.md), including the fresh-start and
+privacy boundaries.

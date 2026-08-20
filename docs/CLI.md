@@ -10,6 +10,7 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 |---|---|
 | `t ssh` | Open the terminal-native SSH manager |
 | `t ssh tile <names...>` | Start saved SSH profiles across split panes |
+| `t a ...` | `termatica automation ...` |
 | `t b` | `termatica benchmark` |
 | `t sm` | `termatica system-monitor` |
 | `t c` | `termatica config` |
@@ -37,6 +38,13 @@ remain available and are documented here for discoverability.
 | `termatica ssh split <name> [vertical]` | Open a profile in a new split |
 | `termatica ssh tile [--vertical] <names...>` | Start multiple profiles across independent panes |
 | `termatica ssh keys\|keygen` | Inspect fingerprints or create an OpenSSH identity |
+| `termatica automation status` | Print privacy-safe window, tab, pane, and focus topology as JSON |
+| `termatica automation new-tab\|new-window [--cwd PATH] [--command TEXT]` | Open a fresh terminal surface |
+| `termatica automation split [horizontal\|vertical] [--cwd PATH] [--command TEXT]` | Split the focused terminal |
+| `termatica automation focus <tab\|pane> N` | Focus a numbered tab or visible pane |
+| `termatica automation send\|run TEXT` | Send literal input or a command followed by Return |
+| `termatica automation key NAME` | Send a bounded named key such as `enter`, `escape`, or `ctrl-c` |
+| `termatica automation recipe ...` | Save, inspect, run, or remove explicit SSH layout recipes |
 | `termatica config` | Open the categorized terminal config UI |
 | `termatica config list` | Print the current config first, then every other saved config |
 | `termatica config get <path>` | Print a dot-separated setting |
@@ -82,6 +90,13 @@ identity files, ProxyJump, local/remote/dynamic forwarding, and custom OpenSSH
 options. They can be inspected without connecting, checked against the real
 network, opened normally, or launched directly into independent split panes.
 See the [complete SSH guide](SSH.md) for every command and security boundary.
+
+## Automation
+
+`t a` controls the running app through its user-owned local socket. The native
+AppleScript dictionary exposes the same app-side operations. Named SSH recipes
+store only profile names and split direction, stay inert until explicitly run,
+and never restore terminal state. See [Terminal-native automation](AUTOMATION.md).
 
 ## Config UI
 

@@ -18,17 +18,25 @@
     <string>Termatica</string>
     <key>CFBundlePackageType</key>
     <string>APPL</string>
+    <key>CFBundleSignature</key>
+    <string>Trma</string>
     <key>CFBundleShortVersionString</key>
-	<string>1.13.6</string>
+	<string>1.14.0</string>
     <key>CFBundleVersion</key>
-	<string>72</string>
+	<string>73</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>
     <true/>
+    <key>NSPrincipalClass</key>
+    <string>TApplication</string>
     <key>NSSupportsAutomaticGraphicsSwitching</key>
     <true/>
     <key>NSRequiresAquaSystemAppearance</key>
     <false/>
+    <key>NSAppleScriptEnabled</key>
+    <true/>
+    <key>OSAScriptingDefinition</key>
+    <string>Termatica</string>
 </dict>
 </plist>

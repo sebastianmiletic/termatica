@@ -29,7 +29,7 @@ horizontal, vertical, quarter, half, and mixed-size panes can run local shells,
 AI coding agents, monitors, editors, and independent remote hosts side by side—
 without bundling a browser engine or JavaScript runtime.
 
-The current local universal bundle is **1,441.7 KiB (1,476,306 bytes)**—well
+The current local universal bundle is **1,493.0 KiB (1,528,880 bytes)**—well
 under 2 MB—and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
@@ -99,6 +99,8 @@ are not closed or replaced.
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
 - Native numbered tabs with independent horizontal, vertical, and mixed split groups in ordinary mode, plus optional Hyprland-style tiling and clean pane movement between arbitrary slots
 - Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
+- Terminal-native automation through `t a`, an owner-only `0600` local socket, and a native AppleScript dictionary for windows, tabs, splits, focus, commands, literal input, named keys, and privacy-safe topology
+- Explicit named SSH launch recipes for repeatable split layouts, stored without passwords or terminal content and never launched or restored automatically
 - Exact cursor ownership across tabs and splits: focus changes redraw the old and new cursor cells so Command-T cannot leave cursor ghosts in other terminals
 - A bounded, auto-hiding overlay tab rail that never changes the terminal grid, overlaps labels, or moves shell text sideways
 - Configurable theme, font, foreground, cursor, ANSI palette, transparency, blur, effects, tabs, animation, plugins, shell, updates, font features, bell style, and every keybinding
@@ -151,6 +153,7 @@ Termatica puts its own command in `PATH` for every shell it opens.
 
 ```sh
 t c
+t a status
 t sm
 t cf
 t cf path
@@ -158,7 +161,7 @@ t u check
 t u
 ```
 
-`t` is the fast command. Common commands include `ssh` (SSH manager), `sm` (system monitor), `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
+`t` is the fast command. Common commands include `ssh` (SSH manager), `a` (automation), `sm` (system monitor), `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
 
 Running bare `t` or `termatica` prints the full public commands in four compact
 sections: Remote & System, Configuration, Tools, and Maintenance. Quick aliases
@@ -168,6 +171,9 @@ stay documented here instead of being repeated in that output.
 |---|---|
 | `t ssh` | Open the terminal-native SSH profile manager |
 | `t ssh tile <names...>` | Start multiple remote hosts across independent split panes |
+| `t a status` | Print privacy-safe window, tab, pane, and focus topology as JSON |
+| `t a new-tab\|new-window\|split ...` | Create and control fresh terminal surfaces |
+| `t a recipe run <name>` | Explicitly launch a saved SSH split layout |
 | `t c` | Open the interactive categorized config UI |
 | `t sm` | Open the live terminal-native system monitor |
 | `t b` | Benchmark Termatica now and compare with saved competitor runs |

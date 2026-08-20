@@ -12,6 +12,7 @@ SHELL_INTEGRATION := $(shell find Resources/ShellIntegration -type f)
 SHELL_INTEGRATION_RESOURCES := $(patsubst Resources/ShellIntegration/%,$(APP)/Contents/Resources/ShellIntegration/%,$(SHELL_INTEGRATION))
 BENCHMARK_RESOURCES := $(APP)/Contents/Resources/Benchmarks/benchmark-live-matrix.sh
 SYSTEM_MONITOR_RESOURCE := $(APP)/Contents/Resources/SystemMonitor/system-monitor.zsh
+SCRIPTING_DEFINITION := $(APP)/Contents/Resources/Termatica.sdef
 SOURCES := $(wildcard src/*.m)
 SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
@@ -21,7 +22,7 @@ COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroo
 
 all: release
 
-release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES) $(SYSTEM_MONITOR_RESOURCE)
+release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES) $(SYSTEM_MONITOR_RESOURCE) $(SCRIPTING_DEFINITION)
 	codesign --force --sign - $(APP)
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
 	  test "$$bytes" -le 1572864 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
@@ -72,6 +73,10 @@ $(APP)/Contents/Resources/SystemMonitor/system-monitor.zsh: Resources/SystemMoni
 	cp $< $@
 	chmod 755 $@
 
+$(APP)/Contents/Resources/Termatica.sdef: Resources/Termatica.sdef
+	@mkdir -p $(dir $@)
+	cp $< $@
+
 run: release
 	open $(APP)
 
@@ -99,8 +104,8 @@ install: release
 
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
-	  trap 'rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.13.6$$'; \
+	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.0$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -119,6 +124,7 @@ check: release $(BENCH)
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) --version >/dev/null 2>&1; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'system-monitor'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'known-hosts'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'new-tab'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) sm --once | grep -q 'TERMATICA / SYSTEM MONITOR'; \
 	  grep -Fq 'paint_changed_rows' Resources/SystemMonitor/system-monitor.zsh; \
 	  grep -Fq '[[ "$$next" == "$$previous" ]] && continue' Resources/SystemMonitor/system-monitor.zsh; \
@@ -133,11 +139,32 @@ check: release $(BENCH)
 	  test "$$(stat -f %Lp "$$tmp/ssh/ssh-hosts.json")" = 600; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh rename prod production; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh show production | grep -q 'localForwards'; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh add backup backup.example.com --user deploy; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) automation recipe save operations --vertical production backup; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) automation recipe show operations | grep -q 'ssh-layout'; \
+	  test "$$(stat -f %Lp "$$tmp/ssh/launch-recipes.json")" = 600; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh add unsafe 'bad host'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh" $(SHORTCLI) ssh remove production; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ssh-ui" expect -c 'set timeout 5; spawn $(SHORTCLI) ssh; expect "TERMATICA / SSH MANAGER"; send "q"; expect eof' >/dev/null; \
+	  xmllint --noout --dtdvalid /System/Library/DTDs/sdef.dtd Resources/Termatica.sdef; \
+	  test "$$(plutil -extract OSAScriptingDefinition raw Resources/Info.plist)" = Termatica; \
+	  grep -q 'newterminaltab' Resources/Termatica.sdef; \
+	  automation_root="$$tmp/automation-live"; mkdir -p "$$automation_root"; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" TERMATICA_NO_BLUR=1 $(BIN) >"$$automation_root/app.log" 2>&1 & automation_pid=$$!; \
+	  ready=0; for attempt in $$(jot 50); do if TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation status >"$$automation_root/status.json" 2>/dev/null; then ready=1; break; fi; sleep 0.1; done; test "$$ready" = 1; \
+	  test "$$(plutil -extract privacy.terminalContentIncluded raw "$$automation_root/status.json")" = false; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation new-tab --cwd /tmp --command 'printf automation-tab'; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation split vertical --command 'printf automation-split'; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation focus tab 2; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation focus pane 2; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation send literal-input; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation key ctrl-c; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation status >"$$automation_root/status-final.json"; \
+	  test "$$(plutil -extract windows.0.tabs raw "$$automation_root/status-final.json")" = 2; \
+	  test "$$(plutil -extract windows.0.panes raw "$$automation_root/status-final.json")" = 2; \
+	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.13.6'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.0'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -391,7 +418,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.13.6 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.0 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
