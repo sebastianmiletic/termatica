@@ -6,6 +6,11 @@ Every config is a complete, self-contained schema rather than a partial overlay.
 
 Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. Installed custom plugins discovered during normalization also remain off. The newly created complete profile becomes current and can then be customized independently.
 
+The current profile is always the first entry in both `termatica config` and
+`termatica config list`. Every other profile remains case-insensitively sorted,
+so switching profiles changes one intentional top entry without randomizing the
+rest of the list.
+
 Run `termatica config` for the interactive editor. Use Up/Down to select any setting and Left/Right (or Enter) to cycle through validated values. Press Escape or Q to go back from every Termatica menu. The settings editor never asks you to type a custom value; config-file names remain the only text-entry operation.
 
 ## Full config reference

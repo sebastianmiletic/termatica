@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.13.6
+
+- Remove intermittent Codex-style text overlap by preserving valid double-width cell pairs during overwrite, erase, insert, and delete operations.
+- Clip AppKit glyph and glow painting to each fixed terminal row so incremental redraws cannot leave fragments in adjacent rows.
+- Honor the active config's ligature setting instead of forcing ligatures into the benchmark-tuned default profile.
+- Put the active config first in both the interactive config-file screen and `termatica config list`, with the remaining profiles sorted deterministically.
+- Add synchronized Codex redraw, wide-cell cleanup, renderer-boundary, and active-first config regressions to the release gate.
+
 ## 1.13.5
 
 - Make the layout-motion regression gate honor macOS Reduce Motion, requiring translation-only transforms when motion is available and zero pane transforms when the system suppresses animation.

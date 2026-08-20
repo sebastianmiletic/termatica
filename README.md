@@ -177,7 +177,7 @@ stay documented here instead of being repeated in that output.
 | `t r` | Reload the running app |
 | `t e <name> [files]` | Run a terminal editor |
 | `termatica config` | Open the interactive categorized config UI |
-| `termatica config list` | List the current config and other saved configs |
+| `termatica config list` | List the current config first, followed by other saved configs |
 | `termatica config get <path>` | Read one setting |
 | `termatica config set <path> <value>` | Change one setting and reload the app |
 | `termatica config create <name>` | Create a benchmark-tuned default config and make it current |

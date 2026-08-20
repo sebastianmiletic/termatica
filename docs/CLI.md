@@ -38,7 +38,7 @@ remain available and are documented here for discoverability.
 | `termatica ssh tile [--vertical] <names...>` | Start multiple profiles across independent panes |
 | `termatica ssh keys\|keygen` | Inspect fingerprints or create an OpenSSH identity |
 | `termatica config` | Open the categorized terminal config UI |
-| `termatica config list` | Print the current config and every other saved config |
+| `termatica config list` | Print the current config first, then every other saved config |
 | `termatica config get <path>` | Print a dot-separated setting |
 | `termatica config set <path> <value>` | Set a JSON value or string and reload |
 | `termatica config create <name>` | Create a benchmark-tuned default config and make it current |
