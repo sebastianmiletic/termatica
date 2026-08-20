@@ -20,9 +20,10 @@ Use `t` instead of typing `termatica`. The common paths are deliberately short:
 | `t x <name> [text]` | `termatica run <name> [text]` |
 | `t h` / `t v` | Help / version |
 
-Running `t` or `termatica` by itself prints the clean public command list. It
-does not repeat the quick aliases, flags, or internal renderer diagnostics.
-The aliases remain available and are documented here for discoverability.
+Running `t` or `termatica` by itself groups the clean public command list into
+Remote & System, Configuration, Tools, and Maintenance sections. It does not
+repeat the quick aliases, flags, or internal renderer diagnostics. The aliases
+remain available and are documented here for discoverability.
 
 ## Public commands
 

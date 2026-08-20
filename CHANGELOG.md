@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.13.3
+
+- Split the bare `t` and `termatica` command output into Remote & System, Configuration, Tools, and Maintenance sections so the command surface is immediately scannable.
+- Keep the short output free of duplicate aliases and internal renderer diagnostics while verifying that `t` and `termatica` render the same categorized guide.
+
 ## 1.13.2
 
 - Anchor selections to terminal document rows so highlighted text and copied content remain attached to the original scrollback cells while the viewport moves.

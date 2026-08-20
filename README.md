@@ -160,8 +160,9 @@ t u
 
 `t` is the fast command. Common commands include `ssh` (SSH manager), `sm` (system monitor), `c` (config), `cf` (config file), `u` (update), `r` (reload), `e` (editor), and `x` (extension command). The full `termatica` commands remain available. In every Termatica terminal UI, use the arrow keys and Enter to edit or open items, and Escape or Q to go back.
 
-Running bare `t` or `termatica` prints one concise list of full public commands.
-Quick aliases stay documented here instead of being repeated in that output.
+Running bare `t` or `termatica` prints the full public commands in four compact
+sections: Remote & System, Configuration, Tools, and Maintenance. Quick aliases
+stay documented here instead of being repeated in that output.
 
 | Command | Purpose |
 |---|---|
