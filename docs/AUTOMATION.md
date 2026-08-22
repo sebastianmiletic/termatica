@@ -1,6 +1,6 @@
 # Terminal-native automation
 
-Termatica 1.14.0 exposes one local automation model through the `termatica`
+Termatica 1.14.1 exposes one local automation model through the `termatica`
 CLI, its owner-only Unix datagram socket, and the native macOS AppleScript
 dictionary. It controls windows, tabs, splits, focus, commands, literal input,
 named keys, and explicitly launched SSH layouts.
@@ -13,6 +13,9 @@ t a new-tab --cwd ~/Coding --command 'nvim .'
 t a new-window --cwd /tmp
 t a split horizontal --command 'btop'
 t a split vertical
+t a close pane
+t a close tab
+t a close window
 t a focus tab 2
 t a focus pane 1
 t a focus next
@@ -27,6 +30,10 @@ not expose terminal text, scrollback, or command history. Text and commands are
 bounded to 4,096 characters. `--cwd` must resolve to an existing directory.
 Supported named keys are `enter`, `return`, `escape`, `tab`, arrows, `home`,
 `end`, `page-up`, `page-down`, `ctrl-c`, and `ctrl-d`.
+
+`close` accepts `pane`, `tab`, or `window`. It refuses to close the final
+terminal, which prevents an unattended automation sequence from terminating
+the app.
 
 ## Named SSH launch recipes
 
@@ -76,8 +83,8 @@ refuses to replace a socket it does not own, binds an `AF_UNIX` datagram socket,
 and sets mode `0600`. There is no TCP listener or network remote control.
 
 Requests are JSON objects with `"command":"automation"` and an `action` such
-as `status`, `new-tab`, `new-window`, `split`, `focus`, `send`, `run`, `key`,
-`activate`, or `recipe`. The CLI creates a private reply socket for every public
+as `status`, `new-tab`, `new-window`, `close`, `split`, `focus`, `send`, `run`,
+`key`, `activate`, or `recipe`. The CLI creates a private reply socket for every public
 automation request, so success and validation failures are observable.
 
 ## Fresh-start boundary

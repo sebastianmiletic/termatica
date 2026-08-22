@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.1
+
+- Prevent a named-config change from applying twice when the direct CLI notification and filesystem watcher observe the same saved content, eliminating the rapid duplicate renderer/font/resize cycle that could leave Codex text doubled after a config round trip.
+- Add working terminal-native close automation for the focused pane, active tab group, or active window, while refusing to close the final terminal through unattended automation.
+- Add transparent long-to-short redraw pixel coverage and stricter config-watcher deduplication regression checks.
+- Add a deterministic real-PTY app-control campaign that repeatedly opens and closes windows, tabs, and splits; changes focus, size, renderer, font, and padding; and exercises Codex, tmux, SSH, Vim, Unicode, synchronized output, and high-throughput terminal activity.
+- Run the 300-action campaign as part of the local release gate and document reproducible longer seeded runs.
+
 ## 1.14.0
 
 - Expand the owner-only local automation socket with request/reply operations for windows, tabs, splits, focus, commands, literal input, named keys, activation, and privacy-safe topology.

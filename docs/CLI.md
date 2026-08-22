@@ -40,6 +40,7 @@ remain available and are documented here for discoverability.
 | `termatica ssh keys\|keygen` | Inspect fingerprints or create an OpenSSH identity |
 | `termatica automation status` | Print privacy-safe window, tab, pane, and focus topology as JSON |
 | `termatica automation new-tab\|new-window [--cwd PATH] [--command TEXT]` | Open a fresh terminal surface |
+| `termatica automation close <pane\|tab\|window>` | Close a surface while protecting the final terminal |
 | `termatica automation split [horizontal\|vertical] [--cwd PATH] [--command TEXT]` | Split the focused terminal |
 | `termatica automation focus <tab\|pane> N` | Focus a numbered tab or visible pane |
 | `termatica automation send\|run TEXT` | Send literal input or a command followed by Return |
@@ -114,7 +115,10 @@ The next screen contains Appearance, Performance, Tabs & Tiling, Window, Termina
 | D | Delete the selected config after confirmation |
 | Escape or Q | Return to Config Files, or quit from Config Files |
 
-Changes are saved and sent to the running app immediately. Config names may contain letters, numbers, dots, dashes, and underscores.
+Changes are saved and sent to the running app immediately. Config-triggered
+reloads are content-addressed, so the explicit CLI notification and filesystem
+watcher cannot apply the same renderer/font/layout change twice. Config names
+may contain letters, numbers, dots, dashes, and underscores.
 
 Configs are independent, complete files under `~/.config/termatica/configs/`, and their filenames are their identities. `~/.config/termatica/current` selects one filename; `config.json` is a compatibility symlink to that file. Switching never shallow-merges one config into another. Older partial configs are normalized to schema version 2 on first use without discarding their explicit values.
 

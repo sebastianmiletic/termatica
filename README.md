@@ -99,7 +99,7 @@ are not closed or replaced.
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
 - Native numbered tabs with independent horizontal, vertical, and mixed split groups in ordinary mode, plus optional Hyprland-style tiling and clean pane movement between arbitrary slots
 - Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
-- Terminal-native automation through `t a`, an owner-only `0600` local socket, and a native AppleScript dictionary for windows, tabs, splits, focus, commands, literal input, named keys, and privacy-safe topology
+- Terminal-native automation through `t a`, an owner-only `0600` local socket, and a native AppleScript dictionary for windows, tabs, splits, focus, commands, literal input, named keys, and privacy-safe topology; CLI automation can also close panes, tab groups, and windows while protecting the final terminal
 - Explicit named SSH launch recipes for repeatable split layouts, stored without passwords or terminal content and never launched or restored automatically
 - Exact cursor ownership across tabs and splits: focus changes redraw the old and new cursor cells so Command-T cannot leave cursor ghosts in other terminals
 - A bounded, auto-hiding overlay tab rail that never changes the terminal grid, overlaps labels, or moves shell text sideways
@@ -287,7 +287,7 @@ make benchmark
 make package
 ```
 
-`make check` builds both architectures, validates commands and completions, exercises scrollback and alternate-screen state, checks terminal performance invariants, and performs a complete updater install against a locally signed mock GitHub release. `make benchmark` runs the reproducible Termatica, Kitty, Ghostty, Alacritty, WezTerm, and Rio comparison when those apps are present. `make package` produces the DMG, ZIP, and `SHA256SUMS` published by the release workflow.
+`make check` builds both architectures, validates commands and completions, exercises scrollback and alternate-screen state, runs the seeded real-PTY app-control campaign, checks terminal performance invariants, and performs a complete updater install against a locally signed mock GitHub release. `make benchmark` runs the reproducible Termatica, Kitty, Ghostty, Alacritty, WezTerm, and Rio comparison when those apps are present. `make package` produces the DMG, ZIP, and `SHA256SUMS` published by the release workflow.
 
 See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, commands, limitations, and measured results.
 

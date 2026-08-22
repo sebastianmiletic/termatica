@@ -105,7 +105,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.0$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.1$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -162,9 +162,15 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation status >"$$automation_root/status-final.json"; \
 	  test "$$(plutil -extract windows.0.tabs raw "$$automation_root/status-final.json")" = 2; \
 	  test "$$(plutil -extract windows.0.panes raw "$$automation_root/status-final.json")" = 2; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close pane; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close tab; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation status >"$$automation_root/status-closed.json"; \
+	  test "$$(plutil -extract windows.0.tabs raw "$$automation_root/status-closed.json")" = 1; \
+	  test "$$(plutil -extract windows.0.panes raw "$$automation_root/status-closed.json")" = 1; \
+	  ! TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close window; \
 	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.0'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.1'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -396,6 +402,7 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/phase9-field-test" $(BENCH) --phase9-field-self-test | grep -q '^phase9-field-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/phase10-campaign-test" $(BENCH) --phase10-campaign-self-test | grep -q '^phase10-campaign-self-test ok'; \
 	  TERMATICA_CONFIG_DIR="$$tmp/config-watcher-test" $(BENCH) --config-watcher-self-test | grep -q '^config-watcher-self-test ok'; \
+	  if [ -z "$${CI:-}" ]; then TERMATICA_CONFIG_DIR="$$tmp/app-control-campaign" $(BENCH) --app-control-campaign 300 0x5445524d | grep -q '^app-control-campaign ok'; fi; \
 	  if [ -z "$${CI:-}" ]; then TERMATICA_CONFIG_DIR="$$tmp/tui-compat-test" $(BENCH) --tui-compat-self-test | grep -q '^tui-compat-self-test ok'; fi; \
 	  TERMATICA_CONFIG_DIR="$$tmp/renderer-comparison" $(BENCH) --benchmark-experience 30 0.5 >"$$tmp/renderer-comparison.json"; \
 	  test "$$(stat -f '%z' "$$tmp/renderer-comparison.json")" -gt 4096; \
@@ -418,7 +425,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.14.0 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.1 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
