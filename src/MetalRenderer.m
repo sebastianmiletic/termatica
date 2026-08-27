@@ -456,7 +456,7 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
 
 - (void)presentSnapshot:(TRenderSnapshot *)snapshot {
     if(!snapshot.isValid||_stopped)return;
-    BOOL immediate=NO;@synchronized(_stateLock){if(snapshot.generation<=_lastAcceptedGeneration)return;_lastAcceptedGeneration=snapshot.generation;if(_pendingSnapshot)_coalescedSnapshotCount++;_pendingSnapshot=snapshot;_pendingSnapshotTime=CFAbsoluteTimeGetCurrent();immediate=_forceImmediatePresentation||!_displayLink;_forceImmediatePresentation=NO;if(!immediate||_renderScheduled)return;_renderScheduled=YES;}
+    BOOL immediate=NO;@synchronized(_stateLock){if(snapshot.generation<=_lastAcceptedGeneration)return;_lastAcceptedGeneration=snapshot.generation;if(_pendingSnapshot)_coalescedSnapshotCount++;_pendingSnapshot=snapshot;_pendingSnapshotTime=CFAbsoluteTimeGetCurrent();BOOL displayLinkRunning=_displayLink&&CVDisplayLinkIsRunning(_displayLink);immediate=_forceImmediatePresentation||!displayLinkRunning;_forceImmediatePresentation=NO;if(!immediate||_renderScheduled)return;_renderScheduled=YES;}
     dispatch_async(_renderQueue,^{[self drainSnapshots];});
 }
 

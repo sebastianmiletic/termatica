@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.2
+
+- Forward ordinary left, middle, and right clicks to terminal applications whenever they explicitly enable mouse tracking, so buttons, links, lists, and panes work without holding Option.
+- Preserve Shift-click and Shift-drag for local text selection, Shift-right-click for Termatica's context menu, Command-click for links, and Command-drag for tiled panes.
+- Cover default clicks, releases, button dragging, pointer motion, wheel events, legacy encodings, modifier escape hatches, and duplicate-motion suppression in the terminal regression gate.
+- Harden Unicode, wide-cell, resize, AppKit, and Metal redraw paths so rapidly updating AI CLIs and TUIs do not lose, overlap, squeeze, or clip terminal text.
+
 ## 1.14.1
 
 - Prevent a named-config change from applying twice when the direct CLI notification and filesystem watcher observe the same saved content, eliminating the rapid duplicate renderer/font/resize cycle that could leave Codex text doubled after a config round trip.

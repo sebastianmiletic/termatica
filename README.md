@@ -249,9 +249,9 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Action | Shortcut |
 |---|---|
 | Copy / paste | Command-C / Command-V |
-| Focus or begin text selection | Click / drag |
-| Forward a click to mouse-aware terminal software | Option-click |
-| Forward middle/right clicks or pointer motion requested by mouse-aware software | Option-middle/right/move |
+| Click buttons, links, lists, and panes in mouse-aware terminal software | Click / middle-click / right-click |
+| Select terminal text while mouse-aware software is active | Shift-click / Shift-drag |
+| Open Termatica's context menu while mouse-aware software is active | Shift-right-click |
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |
