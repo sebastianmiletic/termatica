@@ -75,6 +75,18 @@ FOUNDATION_EXPORT BOOL TUnicodeRegional(uint32_t codepoint);
 FOUNDATION_EXPORT BOOL TUnicodeWide(uint32_t codepoint);
 
 typedef struct {
+    double x;
+    double y;
+    double width;
+    double height;
+} TBlockElementRect;
+
+// Returns normalized, top-left-origin rectangles for solid Unicode block and
+// quadrant elements. Rendering these as geometry avoids font-antialiasing seams
+// in multi-row terminal artwork such as the Claude Code logo.
+FOUNDATION_EXPORT NSUInteger TBlockElementRects(uint32_t codepoint,TBlockElementRect rectangles[2]);
+
+typedef struct {
     int state;
     int parameters[20];
     NSUInteger parameterIndex;

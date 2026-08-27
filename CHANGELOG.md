@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.3
+
+- Render Unicode block and quadrant elements as pixel-aligned geometry in AppKit and Metal, removing the black row seams through Claude Code's logo and other block-art interfaces.
+- Remove the unintended scanline overlay from Ghost Glass while keeping CRT scanlines available in the dedicated Amber CRT and Green Screen themes.
+- Balance every visible terminal directly in Hyprland mode instead of recursively halving split-anchor descendants, preventing deeply nested panes from collapsing into distorted slivers.
+- Recompute pixel-aligned Hyprland frames and PTY grids after every close so surviving panes immediately expand to their full new size without text scaling.
+- Add Claude-logo renderer-parity coverage and a 16-pane mixed-split open/close regression that verifies non-overlap, valid snapshots, preserved content, and four-pane expansion.
+
 ## 1.14.2
 
 - Forward ordinary left, middle, and right clicks to terminal applications whenever they explicitly enable mouse tracking, so buttons, links, lists, and panes work without holding Option.

@@ -57,6 +57,29 @@ BOOL TUnicodeWide(uint32_t cp) {
     return cp!=0x303F&&TUnicodeInRanges(cp,ranges,sizeof(ranges)/sizeof(ranges[0]));
 }
 
+NSUInteger TBlockElementRects(uint32_t cp,TBlockElementRect rectangles[2]) {
+    if(!rectangles)return 0;
+    if(cp==0x2580){rectangles[0]=(TBlockElementRect){0,0,1,0.5};return 1;}
+    if(cp>=0x2581&&cp<=0x2588){double fraction=(double)(cp-0x2580)/8.0;rectangles[0]=(TBlockElementRect){0,1-fraction,1,fraction};return 1;}
+    if(cp>=0x2589&&cp<=0x258F){double fraction=(double)(0x2590-cp)/8.0;rectangles[0]=(TBlockElementRect){0,0,fraction,1};return 1;}
+    if(cp==0x2590){rectangles[0]=(TBlockElementRect){0.5,0,0.5,1};return 1;}
+    if(cp==0x2594){rectangles[0]=(TBlockElementRect){0,0,1,0.125};return 1;}
+    if(cp==0x2595){rectangles[0]=(TBlockElementRect){0.875,0,0.125,1};return 1;}
+    switch(cp){
+        case 0x2596: rectangles[0]=(TBlockElementRect){0,0.5,0.5,0.5};return 1;
+        case 0x2597: rectangles[0]=(TBlockElementRect){0.5,0.5,0.5,0.5};return 1;
+        case 0x2598: rectangles[0]=(TBlockElementRect){0,0,0.5,0.5};return 1;
+        case 0x2599: rectangles[0]=(TBlockElementRect){0,0,0.5,1};rectangles[1]=(TBlockElementRect){0.5,0.5,0.5,0.5};return 2;
+        case 0x259A: rectangles[0]=(TBlockElementRect){0,0,0.5,0.5};rectangles[1]=(TBlockElementRect){0.5,0.5,0.5,0.5};return 2;
+        case 0x259B: rectangles[0]=(TBlockElementRect){0,0,1,0.5};rectangles[1]=(TBlockElementRect){0,0.5,0.5,0.5};return 2;
+        case 0x259C: rectangles[0]=(TBlockElementRect){0,0,1,0.5};rectangles[1]=(TBlockElementRect){0.5,0.5,0.5,0.5};return 2;
+        case 0x259D: rectangles[0]=(TBlockElementRect){0.5,0,0.5,0.5};return 1;
+        case 0x259E: rectangles[0]=(TBlockElementRect){0.5,0,0.5,0.5};rectangles[1]=(TBlockElementRect){0,0.5,0.5,0.5};return 2;
+        case 0x259F: rectangles[0]=(TBlockElementRect){0.5,0,0.5,1};rectangles[1]=(TBlockElementRect){0,0.5,0.5,0.5};return 2;
+        default:return 0;
+    }
+}
+
 void TDecoderInit(TDecoderState *decoder) {
     if(!decoder)return;
     memset(decoder,0,sizeof(*decoder));

@@ -97,7 +97,7 @@ are not closed or replaced.
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
-- Native numbered tabs with independent horizontal, vertical, and mixed split groups in ordinary mode, plus optional Hyprland-style tiling and clean pane movement between arbitrary slots
+- Native numbered tabs with independent horizontal, vertical, and mixed split groups in ordinary mode, plus pixel-aligned balanced Hyprland tiling that expands every survivor after panes close and supports clean movement between arbitrary slots
 - Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
 - Terminal-native automation through `t a`, an owner-only `0600` local socket, and a native AppleScript dictionary for windows, tabs, splits, focus, commands, literal input, named keys, and privacy-safe topology; CLI automation can also close panes, tab groups, and windows while protecting the final terminal
 - Explicit named SSH launch recipes for repeatable split layouts, stored without passwords or terminal content and never launched or restored automatically

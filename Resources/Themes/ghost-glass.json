@@ -14,7 +14,7 @@
     "blurMaterial": "under-window",
     "hyprlandBlur": "on",
     "glow": 0.06,
-    "scanlines": 0.03,
+    "scanlines": 0,
     "vignette": 0.08,
     "cursorStyle": "bar",
     "ribbonHeight": 38

@@ -59,7 +59,7 @@ User-level `colors.background`, `colors.foreground`, `colors.cursor`, `colors.ac
 
 - Solid with the least compositor work: `backgroundOpacity: 1`, `windowOpacity: 1`, `blur: "off"`.
 - Dark glass: `backgroundOpacity: 0.55`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "hud"`.
-- Ghost Glass: `backgroundOpacity: 0.28`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "under-window"`.
+- Ghost Glass: `backgroundOpacity: 0.28`, `windowOpacity: 1`, `blur: "on"`, `blurMaterial: "under-window"`, and no scanline overlay so block-art TUIs remain seamless.
 - Stronger background separation: lower `backgroundOpacity`, keep `windowOpacity: 1`, and use `blurMaterial: "under-window"`.
 
 macOS accessibility settings can reduce transparency system-wide. A theme should remain readable when blur is unavailable. Set `scanlines`, `glow`, and `vignette` to `0` for a clean pixel-terminal look.

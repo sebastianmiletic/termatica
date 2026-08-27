@@ -254,7 +254,7 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
-Horizontal and vertical split commands work in ordinary mode and remain grouped under the ordinary tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, Command-drag any terminal or drag it from its top padding to exchange it with another slot. This works across quarter, half, horizontal, vertical, and mixed-size layouts; the terminal adopts its destination geometry and affected panes move without scaling their text.
+Horizontal and vertical split commands work in ordinary mode and remain grouped under the ordinary tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, every terminal occupies a pixel-aligned slot in a balanced grid. Opening panes rebalances the grid, closing panes expands every survivor with a freshly sized PTY, and Command-drag exchanges terminals between slots without scaling their text.
 
 ### Tabs (nested under `"tabs"`)
 

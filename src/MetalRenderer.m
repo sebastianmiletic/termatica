@@ -53,6 +53,17 @@ static void TMetalAppendQuad(NSMutableData *data,float x,float y,float width,flo
     [data appendBytes:&instance length:sizeof(instance)];
 }
 
+static CGFloat TMetalPixelAlign(CGFloat value,CGFloat scale) {return round(value*MAX((CGFloat)1,scale))/MAX((CGFloat)1,scale);}
+
+static BOOL TMetalAppendBlockElement(NSMutableData *data,uint32_t codepoint,CGFloat x,CGFloat y,CGFloat width,CGFloat height,CGFloat scale,uint32_t color) {
+    TBlockElementRect rectangles[2];NSUInteger count=TBlockElementRects(codepoint,rectangles);if(!count)return NO;
+    for(NSUInteger index=0;index<count;index++){
+        TBlockElementRect part=rectangles[index];CGFloat x0=TMetalPixelAlign(x+part.x*width,scale),x1=TMetalPixelAlign(x+(part.x+part.width)*width,scale),y0=TMetalPixelAlign(y+part.y*height,scale),y1=TMetalPixelAlign(y+(part.y+part.height)*height,scale);
+        TMetalAppendQuad(data,x0,y0,x1-x0,y1-y0,0,0,0,0,color,0);
+    }
+    return YES;
+}
+
 static void TMetalAppendUnderline(NSMutableData *data,CGFloat x,CGFloat y,CGFloat width,CGFloat baseThickness,uint8_t style,uint32_t color) {
     CGFloat thickness=MAX(baseThickness,0.5)*(style==2?2:1);if(style<=2){TMetalAppendQuad(data,x,y-thickness,width,thickness,0,0,0,0,color,0);return;}
     CGFloat position=0;while(position<width){CGFloat length=style==4?1:(style==5&&fmod(position,9)>=6?1:4);length=MIN(length,width-position);TMetalAppendQuad(data,x+position,y-thickness,length,thickness,0,0,0,0,color,0);position+=style==4?3:(style==5?(length==1?3:6):6);}
@@ -344,10 +355,11 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
             if(selection[index])bg=selectionColor;
             if(selection[index]||search[index]||cell.bg!=TMetalDefaultColor||inverse)TMetalAppendQuad(instances,left+x*cellWidth,top+y*cellHeight,cellWidth,cellHeight,0,0,0,0,TMetalRGBA(bg,1),0);
             if(cell.flags&TMetalContinuation)continue;
-            NSString *text=TMetalCellString(snapshot,cell.ch);if(!text.length||[text isEqual:@" "])continue;
             NSUInteger fontSlot=(cell.flags&TMetalBold)?1:((cell.flags&TMetalItalic)?2:0);NSFont *font=fontSlot==1?style[@"boldFont"]:(fontSlot==2?style[@"italicFont"]:style[@"font"]);if(!font)font=[NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
+            CGFloat cellX=left+x*cellWidth;if(TMetalAppendBlockElement(instances,cell.ch,cellX,top+y*cellHeight,cellWidth,cellHeight,scale,TMetalRGBA(fg,1))){if((cell.flags&TMetalUnderline)||links[index])TMetalAppendUnderline(instances,cellX,top+y*cellHeight+font.ascender-font.underlinePosition,cellWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));continue;}
+            NSString *text=TMetalCellString(snapshot,cell.ch);if(!text.length||[text isEqual:@" "])continue;
             NSUInteger span=(cell.flags&TMetalWide)?2:1;NSValue *glyph=[self glyphForText:text font:font width:(NSUInteger)ceil(cellWidth*span) height:(NSUInteger)ceil(cellHeight) scale:scale slot:fontSlot];if(!glyph)return NO;
-            TMetalGlyph glyphInfo={0};[glyph getValue:&glyphInfo size:sizeof(glyphInfo)];CGRect uv=glyphInfo.uv;CGFloat cellX=left+x*cellWidth,glyphX=cellX+glyphInfo.offsetX,glyphY=top+y*cellHeight+glyphInfo.offsetY,glyphWidth=cellWidth*span;
+            TMetalGlyph glyphInfo={0};[glyph getValue:&glyphInfo size:sizeof(glyphInfo)];CGRect uv=glyphInfo.uv;CGFloat glyphX=cellX+glyphInfo.offsetX,glyphY=top+y*cellHeight+glyphInfo.offsetY,glyphWidth=cellWidth*span;
             uint32_t glyphKind=glyphInfo.kind|(glyphInfo.page<<16);
             if(glow>0&&glyphInfo.kind==1){uint32_t glowColor=TMetalRGBA(accent,MIN(0.45,glow*0.32));for(NSInteger oy=-1;oy<=1;oy++)for(NSInteger ox=-1;ox<=1;ox++)if(ox||oy)TMetalAppendQuad(instances,glyphX+ox,glyphY+oy,glyphInfo.width,glyphInfo.height,uv.origin.x,uv.origin.y,CGRectGetMaxX(uv),CGRectGetMaxY(uv),glowColor,glyphKind);}
 #if TERMATICA_BENCHMARKS
