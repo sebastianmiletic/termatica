@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.8
+
+- Replace the fixed 580 by 350 launch window with screen-relative initial geometry that grows to a useful proportion of large external displays.
+- Scale normal-window coverage when moving between monitors, clamp every frame to the destination display's visible area, support negative display coordinates, and respect the menu bar, Dock, configured inset, minimum size, and backing scale.
+- Refit Hyprland immediately after monitor moves, resolution changes, display connection or removal, and restore ordinary geometry safely when leaving Hyprland.
+- Add deterministic laptop, large external monitor, negative-origin, round-trip scaling, visible-bounds, and exact Hyprland-fit regression coverage.
+
 ## 1.14.7
 
 - Make Hyprland mode balance independent root tabs instead of flattening every split pane into one global grid.

@@ -97,6 +97,7 @@ are not closed or replaced.
 
 - C incremental decoder with span-based ASCII dispatch and chunk-boundary regression coverage
 - Immutable render snapshots, an opt-in Metal backend, automatic AppKit fallback, and state-preserving recovery after display, scale, occlusion, and wake changes
+- Adaptive multi-monitor geometry that opens at a useful proportion of any display, scales window coverage when moving between small and large monitors, respects menu-bar and Dock bounds, and keeps Hyprland fitted to the current screen
 - Sixel image rendering with scaling, alpha compositing, and transparency
 - Kitty graphics protocol with image query/delete, placement offsets, destination sizing, GIF animation, and virtual placements
 - Scrollback search with regex, match counter, case-sensitive toggle, and theme-aware overlay UI

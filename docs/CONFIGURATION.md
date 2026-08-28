@@ -209,7 +209,7 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `initialWidth` / `initialHeight` | number | `580` / `350` | New-window dimensions |
+| `initialWidth` / `initialHeight` | number | `580` / `350` | Minimum preferred new-window dimensions; Termatica expands proportionally on larger displays |
 | `minimumWidth` / `minimumHeight` | number | `480` / `280` | Smallest allowed window dimensions |
 | `cornerRadius` | number | `14` | Main window corner radius |
 | `tileCornerRadius` | number | `14` | Split/tiled terminal corner radius |
@@ -266,7 +266,7 @@ Horizontal and vertical split commands remain grouped under the root tab where t
 | `autoHide` | toggle | `"on"` | Auto-hide the tab rail after the configured delay |
 | `hideDelay` | integer | `5` | Seconds before auto-hiding the tab rail |
 | `tileGap` | integer | `10` | Gap between Hyprland tiles in points |
-| `screenInset` | integer | `18` | Edge inset for Hyprland tiles in points |
+| `screenInset` | integer | `18` | Safe edge inset for adaptive windows and Hyprland tiles in points |
 | `hyprlandBlur` | toggle | `"off"` | Enable blur for Hyprland tiles |
 | `railMargin` | number | `8` | Outer tab-rail margin |
 | `railCornerRadius` | number | `11` | Tab-rail corner radius |
