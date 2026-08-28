@@ -37,7 +37,7 @@ footprint instead of presenting one host snapshot as a fixed requirement.
 ## Start here
 
 1. [Download the DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg), drag Termatica into Applications, and open it.
-2. Use Command-T or Command-Shift-T for a new tab directly below the selected tab. Use Command-D and Command-Shift-D only when you want horizontal or vertical splits.
+2. Use Command-T to split only the focused tab vertically into side-by-side panes. Use Command-Shift-T to split only the focused tab horizontally into stacked panes. Command-D and Command-Shift-D remain equivalent split shortcuts.
 3. Run `t` to see every public command, `t c` to configure the app, `t ssh` for remote hosts, `t sm` for the system monitor, `t b` for live benchmarks, and `t u` to update.
 4. Click controls in mouse-aware terminal apps normally. Hold Shift while clicking or dragging when you want Termatica's local text selection instead.
 
@@ -265,7 +265,8 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |
-| New tab directly below selected tab | Command-T / Command-Shift-T |
+| Split focused tab vertically (side by side) | Command-T |
+| Split focused tab horizontally (stacked) | Command-Shift-T |
 | Move any tiled terminal | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |
 | Select terminal | Command-1 through Command-9 |

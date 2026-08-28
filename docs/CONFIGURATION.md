@@ -310,8 +310,8 @@ Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
 |---|---|---|
 | `openConfig` | `cmd+,` | Open the config UI |
 | `newWindow` | `cmd+n` | New terminal window |
-| `newTab` | `cmd+t` | New tab directly below the selected tab |
-| `newVerticalTab` | `cmd+shift+t` | New tab directly below the selected tab (compatibility key name) |
+| `newTab` | `cmd+t` | Split the focused tab vertically into side-by-side panes (compatibility key name) |
+| `newVerticalTab` | `cmd+shift+t` | Split the focused tab horizontally into stacked panes (compatibility key name) |
 | `closeTab` | `cmd+w` | Close current tab |
 | `clearTerminal` | `cmd+k` | Clear terminal and scrollback |
 | `searchScrollback` | `cmd+shift+h` | Search scrollback (regex) |

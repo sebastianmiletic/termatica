@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.5
+
+- Make Command-T split only the currently focused tab vertically into side-by-side panes.
+- Make Command-Shift-T split only the currently focused tab horizontally into stacked panes.
+- Keep inactive tab groups hidden and unchanged while a shortcut splits the selected pane, with two-tab isolation, orientation, visibility, frame, and non-overlap regression coverage.
+
 ## 1.14.4
 
 - Make Command-T and Command-Shift-T create an ordinary tab directly below the selected tab instead of appending above it or turning Command-Shift-T into a whole-window split.
