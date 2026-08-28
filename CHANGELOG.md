@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.7
+
+- Make Hyprland mode balance independent root tabs instead of flattening every split pane into one global grid.
+- Preserve the split tree inside each Hyprland root so Command-T followed by Command-Shift-T produces one untouched half and two quarters only inside the selected half.
+- Add the exact mixed-shortcut Hyprland regression and retain dense 16-root reflow, close expansion, focus, drag-swap, renderer, and non-overlap coverage.
+
 ## 1.14.6
 
 - Insert a new split after the focused pane's complete descendant subtree so repeatedly splitting a pane subdivides only that pane's current rectangle.

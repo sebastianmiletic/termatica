@@ -70,8 +70,9 @@ t ssh tile --vertical production staging
 `split` creates one horizontal or vertical split and starts the selected SSH
 profile in it. `tile` starts the first host in the active pane, creates another
 split for every remaining host, and starts each connection independently. With
-Hyprland layout enabled, the panes use Termatica's quarter, half, mixed,
-drag-to-reorder, and animated tile geometry. Each pane is a separate PTY, so
+Hyprland layout enabled, independent SSH root tabs use the balanced outer grid
+while split sessions retain quarter, half, mixed, drag-to-reorder, and animated
+tile geometry inside their root slot. Each pane is a separate PTY, so
 one remote session cannot consume another pane's keyboard, mouse, scrollback,
 cursor, process, or renderer state.
 
