@@ -1,6 +1,6 @@
 # Terminal-native automation
 
-Termatica 1.14.8 exposes one local automation model through the `termatica`
+Termatica 1.14.9 exposes one local automation model through the `termatica`
 CLI, its owner-only Unix datagram socket, and the native macOS AppleScript
 dictionary. It controls windows, tabs, splits, focus, commands, literal input,
 named keys, and explicitly launched SSH layouts.

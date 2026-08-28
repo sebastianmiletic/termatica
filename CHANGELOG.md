@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.9
+
+- Replace identity-swapping tile drag with position-only movement: terminal sessions, content, tab order, split anchors, and pane dimensions remain attached to their original tiles.
+- Reorder complete Hyprland root groups when moving between outer grid positions, preserving nested half-and-quarter layouts instead of transferring split-tree roles between terminals.
+- Let directly split halves reverse their spatial order without rewriting the split tree, so either half can move to the opposite side or row with its shape and contents intact.
+- Add ordinary split, two-half Hyprland, and mixed half-plus-quarters regressions for stable identity, content, topology, dimensions, position, focus, animation, and hit testing.
+
 ## 1.14.8
 
 - Replace the fixed 580 by 350 launch window with screen-relative initial geometry that grows to a useful proportion of large external displays.

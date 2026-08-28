@@ -254,7 +254,7 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
-Horizontal and vertical split commands remain grouped under the root tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, independent root tabs occupy pixel-aligned slots in a balanced grid, while Command-T and Command-Shift-T recursively split only the focused pane inside its root slot. Opening or closing roots rebalances the outer grid, and Command-drag exchanges terminals between slots without scaling their text.
+Horizontal and vertical split commands remain grouped under the root tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, independent root tabs occupy pixel-aligned slots in a balanced grid, while Command-T and Command-Shift-T recursively split only the focused pane inside its root slot. Opening or closing roots rebalances the outer grid. Command-drag moves a tile or complete split group to a new position while preserving its terminal identity, content, split tree, and dimensions.
 
 ### Tabs (nested under `"tabs"`)
 

@@ -268,7 +268,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | New window | Command-N |
 | Split only the focused pane vertically (side by side) | Command-T |
 | Split only the focused pane horizontally (stacked) | Command-Shift-T |
-| Move any tiled terminal | Command-drag, or drag from its top padding |
+| Move a tile without changing its content or shape | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |
 | Select terminal | Command-1 through Command-9 |
 | Open config UI | Command-, |
