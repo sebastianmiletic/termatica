@@ -19,15 +19,14 @@ jobs:
           SIGNING_PASSWORD: ${{ secrets.TERMATICA_SIGNING_PASSWORD }}
         run: |
           keychain="$RUNNER_TEMP/termatica-release.keychain-db"
-          certificate="$RUNNER_TEMP/termatica-release.cer"
           printf '%s' "$SIGNING_P12" | /usr/bin/base64 -D > "$RUNNER_TEMP/termatica-release.p12"
           security create-keychain -p "$SIGNING_PASSWORD" "$keychain"
           security set-keychain-settings -lut 21600 "$keychain"
           security unlock-keychain -p "$SIGNING_PASSWORD" "$keychain"
           security import "$RUNNER_TEMP/termatica-release.p12" -k "$keychain" -P "$SIGNING_PASSWORD" -T /usr/bin/codesign
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$SIGNING_PASSWORD" "$keychain"
-          security find-certificate -c "Termatica Release Signing" -p "$keychain" > "$certificate"
-          security add-trusted-cert -d -r trustRoot -k "$keychain" "$certificate"
+          security find-certificate -c "Termatica Release Signing" -Z "$keychain" |
+            grep -F 'SHA-1 hash: F95605C333732A3AA6C9FCD24E1170B03B19DCE7'
           security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
           echo "CODESIGN_IDENTITY=Termatica Release Signing" >> "$GITHUB_ENV"
       - name: Build, test, and package
