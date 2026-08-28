@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.6
+
+- Insert a new split after the focused pane's complete descendant subtree so repeatedly splitting a pane subdivides only that pane's current rectangle.
+- Preserve every existing sibling pane's exact frame when Command-Shift-T horizontally splits a focused half-terminal again.
+- Add a nested-half regression that checks the sibling frame is byte-for-byte unchanged, the new panes remain inside the previously focused half, and no panes overlap.
+
 ## 1.14.5
 
 - Make Command-T split only the currently focused tab vertically into side-by-side panes.
