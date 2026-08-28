@@ -1,5 +1,16 @@
 # Changelog
 
+## 1.14.4
+
+- Make Command-T and Command-Shift-T create an ordinary tab directly below the selected tab instead of appending above it or turning Command-Shift-T into a whole-window split.
+- Display the numbered tab rail from top to bottom, animate the actual inserted tab, and preserve insertion order in ordinary and Hyprland layouts.
+- Keep horizontal and vertical splits exclusively on Command-D and Command-Shift-D, with regression coverage for tab ordering, visual position, and split-free Command-Shift-T behavior.
+
+- Give release builds a stable certificate-backed designated requirement so macOS preserves protected-folder and other privacy decisions across application updates instead of identifying every build by a new ad-hoc code hash.
+- Require public updater downloads to satisfy that exact release-signing identity in addition to the existing GitHub digest, bundle identifier, version, archive-safety, and strict signature checks.
+- Clear the complete neighboring wide-cell pair when a variation selector or joined grapheme expands a narrow cell to two columns, and repair orphaned wide-cell metadata before every immutable render snapshot.
+- Clip AppKit glyph painting and Metal atlas sampling to each character's allocated one- or two-cell span, preventing fallback fonts, emoji, italic overhang, or cached glyph padding from drawing over adjacent Codex and TUI text.
+
 ## 1.14.3
 
 - Render Unicode block and quadrant elements as pixel-aligned geometry in AppKit and Metal, removing the black row seams through Claude Code's logo and other block-art interfaces.

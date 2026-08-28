@@ -4,7 +4,7 @@
 
 <h1 align="center">Termatica</h1>
 
-<p align="center"><strong>A sub-2 MB native macOS terminal with SSH management, split tiling, AI/TUI compatibility, system monitoring, AppKit, and optional Metal rendering.</strong></p>
+<p align="center"><strong>The under-2 MB native macOS terminal—ranked #1 for measured aggregate throughput and memory footprint in Termatica's reproducible six-terminal macOS comparison.</strong></p>
 
 <p align="center">
   <a href="https://github.com/sebastianmiletic/termatica/actions/workflows/ci.yml"><img alt="Build" src="https://img.shields.io/github/actions/workflow/status/sebastianmiletic/termatica/ci.yml?branch=main&style=flat-square&label=build"></a>
@@ -20,7 +20,7 @@
 
 **Download:** use the [latest DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg) (recommended), drag `Termatica.app` to Applications, and open it there. A [ZIP build](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.zip) and checksum file are also available. See [Download and install](#download-and-install) for Gatekeeper and verification instructions.
 
-Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit.
+Termatica is a real PTY-backed terminal written in Objective-C and AppKit. It has no web view, JavaScript runtime, bundled shell, package manager, toolbar, marketplace, or graphical settings window. The shell is the interface. Its opt-in Metal GPU renderer sits behind an immutable snapshot boundary and automatically falls back to AppKit. Release builds keep one certificate-backed macOS identity across updates so protected-folder permission choices persist after the one-time transition from older ad-hoc builds.
 
 It combines a full terminal emulator with a password-free SSH profile manager,
 OpenSSH config discovery, connection diagnostics, key fingerprints, forwarding,
@@ -29,11 +29,19 @@ horizontal, vertical, quarter, half, and mixed-size panes can run local shells,
 AI coding agents, monitors, editors, and independent remote hosts side by side—
 without bundling a browser engine or JavaScript runtime.
 
-The current local universal bundle is **1,493.0 KiB (1,528,880 bytes)**—well
-under 2 MB—and runs natively on
+The universal app is under **2 MB** and runs natively on
 Apple Silicon and Intel Macs. Process memory depends on the renderer, config,
 scrollback, images, and workload; `t b` reports the running app's current
 footprint instead of presenting one host snapshot as a fixed requirement.
+
+## Start here
+
+1. [Download the DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg), drag Termatica into Applications, and open it.
+2. Use Command-T or Command-Shift-T for a new tab directly below the selected tab. Use Command-D and Command-Shift-D only when you want horizontal or vertical splits.
+3. Run `t` to see every public command, `t c` to configure the app, `t ssh` for remote hosts, `t sm` for the system monitor, `t b` for live benchmarks, and `t u` to update.
+4. Click controls in mouse-aware terminal apps normally. Hold Shift while clicking or dragging when you want Termatica's local text selection instead.
+
+Complete guides: [CLI](docs/CLI.md), [configuration](docs/CONFIGURATION.md), [SSH](docs/SSH.md), [automation](docs/AUTOMATION.md), and [benchmarks](docs/BENCHMARKS.md).
 
 ## Measured performance
 
@@ -130,10 +138,12 @@ runs natively on Apple Silicon and Intel Macs.
 2. Double-click the ZIP to extract `Termatica.app`.
 3. Move `Termatica.app` into `/Applications`, then open it there.
 
-Public builds are ad-hoc signed and are not currently Apple-notarized. On the
-first launch, macOS may require you to Control-click `Termatica.app`, choose
-**Open**, and confirm. This is a one-time Gatekeeper confirmation for that
-installed build.
+Public builds use one stable certificate-backed application identity so macOS
+can preserve protected-folder and other privacy choices across later Termatica
+updates. They are not currently Apple-notarized. On the first launch, macOS may
+require you to Control-click `Termatica.app`, choose **Open**, and confirm. The
+first stable-identity update from an older ad-hoc build can require one final
+permission confirmation; later correctly signed updates keep the same identity.
 
 To verify downloads, place
 [`SHA256SUMS`](https://github.com/sebastianmiletic/termatica/releases/latest/download/SHA256SUMS)
@@ -255,8 +265,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |
-| New terminal | Command-T |
-| Split focused terminal downward | Command-Shift-T |
+| New tab directly below selected tab | Command-T / Command-Shift-T |
 | Move any tiled terminal | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |
 | Select terminal | Command-1 through Command-9 |
@@ -294,8 +303,8 @@ See [Terminal benchmarks](docs/BENCHMARKS.md) for the exact hardware, versions, 
 ## Size and memory
 
 The fresh comparison table above records app allocation and one-tab physical
-footprint for every terminal. Termatica's logical universal bundle size is
-1,337.9 KiB; the comparison harness reports its 1,376 KiB filesystem allocation.
+footprint for every terminal. Release builds are held to an under-2 MB bundle
+limit by the build gate; exact size can change as terminal capabilities grow.
 Built-in capability plugins use no persistent helper processes, and terminal
 history cells are 12 bytes each. Memory samples are not hard ceilings: fonts,
 renderer, effects, window size, scrollback, images, editors, shells, and child

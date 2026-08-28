@@ -13,8 +13,32 @@ jobs:
     runs-on: macos-14
     steps:
       - uses: actions/checkout@v7
+      - name: Import stable Termatica signing identity
+        env:
+          SIGNING_P12: ${{ secrets.TERMATICA_SIGNING_P12 }}
+          SIGNING_PASSWORD: ${{ secrets.TERMATICA_SIGNING_PASSWORD }}
+        run: |
+          keychain="$RUNNER_TEMP/termatica-release.keychain-db"
+          certificate="$RUNNER_TEMP/termatica-release.cer"
+          printf '%s' "$SIGNING_P12" | /usr/bin/base64 -D > "$RUNNER_TEMP/termatica-release.p12"
+          security create-keychain -p "$SIGNING_PASSWORD" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$SIGNING_PASSWORD" "$keychain"
+          security import "$RUNNER_TEMP/termatica-release.p12" -k "$keychain" -P "$SIGNING_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$SIGNING_PASSWORD" "$keychain"
+          security find-certificate -c "Termatica Release Signing" -p "$keychain" > "$certificate"
+          security add-trusted-cert -d -r trustRoot -k "$keychain" "$certificate"
+          security list-keychains -d user -s "$keychain" "$HOME/Library/Keychains/login.keychain-db"
+          echo "CODESIGN_IDENTITY=Termatica Release Signing" >> "$GITHUB_ENV"
       - name: Build, test, and package
         run: make package
+      - name: Verify stable update identity
+        run: |
+          codesign --verify --deep --strict \
+            -R '=certificate leaf = H"f95605c333732a3aa6c9fcd24e1170b03b19dce7" and identifier "com.termatica.Termatica"' \
+            build/Termatica.app
+          codesign -d -r- build/Termatica.app 2>&1 |
+            grep -F 'certificate leaf = H"f95605c333732a3aa6c9fcd24e1170b03b19dce7" and identifier "com.termatica.Termatica"'
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}

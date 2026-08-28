@@ -321,7 +321,7 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
     CGContextSetTextMatrix(context,CGAffineTransformIdentity);CGContextScaleCTM(context,scale,scale);CGFloat inset=(CGFloat)padding/scale,baseline=inset*3-font.descender;CGContextSetTextPosition(context,inset,baseline);CTLineDraw(line,context);CFRelease(line);CGContextRelease(context);
     MTLRegion region=MTLRegionMake2D(*atlasX,*atlasY,pixelWidth,pixelHeight);
     [(colorGlyph?_colorAtlasTexture:_atlasTexture) replaceRegion:region mipmapLevel:0 slice:page withBytes:glyph bytesPerRow:bytesPerRow bytesPerImage:bytesPerRow*pixelHeight];free(glyph);
-    TMetalGlyph glyphInfo={.uv=CGRectMake((CGFloat)*atlasX/atlasSize,(CGFloat)*atlasY/atlasSize,(CGFloat)pixelWidth/atlasSize,(CGFloat)pixelHeight/atlasSize),.offsetX=-(float)padding/(float)scale,.offsetY=-(float)padding/(float)scale,.width=(float)width+(float)(padding*2)/(float)scale,.height=(float)height+(float)(padding*2)/(float)scale,.kind=colorGlyph?3u:1u,.page=(uint32_t)page};
+    NSUInteger croppedWidth=MIN(contentWidth,pixelWidth>padding*2?pixelWidth-padding*2:pixelWidth),croppedHeight=MIN(contentHeight,pixelHeight>padding*2?pixelHeight-padding*2:pixelHeight);TMetalGlyph glyphInfo={.uv=CGRectMake((CGFloat)(*atlasX+padding)/atlasSize,(CGFloat)(*atlasY+padding)/atlasSize,(CGFloat)croppedWidth/atlasSize,(CGFloat)croppedHeight/atlasSize),.offsetX=0,.offsetY=0,.width=(float)width,.height=(float)height,.kind=colorGlyph?3u:1u,.page=(uint32_t)page};
 #if TERMATICA_BENCHMARKS
     glyphInfo.fallback=fallbackGlyph;
 #endif

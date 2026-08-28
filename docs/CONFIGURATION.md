@@ -310,8 +310,8 @@ Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
 |---|---|---|
 | `openConfig` | `cmd+,` | Open the config UI |
 | `newWindow` | `cmd+n` | New terminal window |
-| `newTab` | `cmd+t` | New terminal tab |
-| `newVerticalTab` | `cmd+shift+t` | New vertical split tab |
+| `newTab` | `cmd+t` | New tab directly below the selected tab |
+| `newVerticalTab` | `cmd+shift+t` | New tab directly below the selected tab (compatibility key name) |
 | `closeTab` | `cmd+w` | Close current tab |
 | `clearTerminal` | `cmd+k` | Clear terminal and scrollback |
 | `searchScrollback` | `cmd+shift+h` | Search scrollback (regex) |
@@ -372,6 +372,12 @@ t e <name> [files]     # Run terminal editor
 t v                    # Print version
 t h                    # Help
 ```
+
+Public update builds use one certificate-backed macOS designated requirement.
+The first build that moves from the older ad-hoc identity may require one final
+privacy confirmation; later signed updates retain the same protected-folder
+and service permissions. The updater also rejects a public ZIP unless it
+matches that exact signing identity and the SHA-256 digest published by GitHub.
 
 ## Local automation
 
