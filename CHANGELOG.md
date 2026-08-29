@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.10
+
+- Restore the pre-1.14.5 Command-T behavior: create and select an independent tab directly after the currently selected tab instead of vertically splitting its pane.
+- Make Command-T create an independent root tile in Hyprland mode so repeated presses participate in the balanced outer grid rather than recursively subdividing one terminal.
+- Keep Command-Shift-T as the focused horizontal split and retain Command-D / Command-Shift-D as the explicit split shortcuts.
+- Add exact ordinary-mode insertion/isolation and Hyprland root-tile balancing regressions through the real application shortcut actions.
+
 ## 1.14.9
 
 - Replace identity-swapping tile drag with position-only movement: terminal sessions, content, tab order, split anchors, and pane dimensions remain attached to their original tiles.

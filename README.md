@@ -37,7 +37,7 @@ footprint instead of presenting one host snapshot as a fixed requirement.
 ## Start here
 
 1. [Download the DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg), drag Termatica into Applications, and open it.
-2. Use Command-T to split only the focused pane vertically into side-by-side panes. Use Command-Shift-T to split only the focused pane horizontally into stacked panes. Repeating either shortcut subdivides that pane again without resizing its sibling panes. Command-D and Command-Shift-D remain equivalent split shortcuts.
+2. Use Command-T to open an independent tab directly after the selected tab; in Hyprland mode it appears as a new balanced tile. Use Command-Shift-T to split only the focused pane horizontally into stacked panes. Command-D and Command-Shift-D remain the horizontal and vertical split shortcuts.
 3. Run `t` to see every public command, `t c` to configure the app, `t ssh` for remote hosts, `t sm` for the system monitor, `t b` for live benchmarks, and `t u` to update.
 4. Click controls in mouse-aware terminal apps normally. Hold Shift while clicking or dragging when you want Termatica's local text selection instead.
 
@@ -266,7 +266,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |
-| Split only the focused pane vertically (side by side) | Command-T |
+| New independent tab / Hyprland tile | Command-T |
 | Split only the focused pane horizontally (stacked) | Command-Shift-T |
 | Move a tile without changing its content or shape | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |

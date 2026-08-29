@@ -254,7 +254,7 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
-Horizontal and vertical split commands remain grouped under the root tab where they were created. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. When Hyprland tiling is enabled, independent root tabs occupy pixel-aligned slots in a balanced grid, while Command-T and Command-Shift-T recursively split only the focused pane inside its root slot. Opening or closing roots rebalances the outer grid. Command-drag moves a tile or complete split group to a new position while preserving its terminal identity, content, split tree, and dimensions.
+Horizontal and vertical split commands remain grouped under the root tab where they were created. Command-T creates an independent root tab directly after the selected tab; in Hyprland mode that root becomes a new balanced tile. Command-Shift-T recursively splits only the focused pane horizontally inside its current root. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. Opening or closing Hyprland roots rebalances the outer grid. Command-drag moves a tile or complete split group to a new position while preserving its terminal identity, content, split tree, and dimensions.
 
 ### Tabs (nested under `"tabs"`)
 
@@ -310,7 +310,7 @@ Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
 |---|---|---|
 | `openConfig` | `cmd+,` | Open the config UI |
 | `newWindow` | `cmd+n` | New terminal window |
-| `newTab` | `cmd+t` | Split only the focused pane vertically into side-by-side panes (compatibility key name) |
+| `newTab` | `cmd+t` | Create an independent tab directly after the selected tab; creates a balanced root tile in Hyprland mode |
 | `newVerticalTab` | `cmd+shift+t` | Split only the focused pane horizontally into stacked panes (compatibility key name) |
 | `closeTab` | `cmd+w` | Close current tab |
 | `clearTerminal` | `cmd+k` | Clear terminal and scrollback |
