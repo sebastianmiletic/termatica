@@ -21,9 +21,9 @@
     <key>CFBundleSignature</key>
     <string>Trma</string>
     <key>CFBundleShortVersionString</key>
-	<string>1.14.10</string>
+	<string>1.14.11</string>
     <key>CFBundleVersion</key>
-	<string>83</string>
+	<string>84</string>
     <key>LSMinimumSystemVersion</key>
     <string>13.0</string>
     <key>NSHighResolutionCapable</key>

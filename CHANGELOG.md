@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.11
+
+- Give every visible tile one window-owned background surface so all panes use the exact same configured color and opacity.
+- Stop AppKit and Metal panes from independently compositing translucent default backgrounds, preventing an active or frequently redrawn terminal from becoming darker than its siblings.
+- Refresh renderer snapshots whenever a pane enters or leaves a tiled layout so tab, split, focus, resize, movement, and renderer-fallback transitions cannot retain stale tint state.
+- Add a nested three-pane regression at 37% opacity that verifies the shared RGBA surface and renderer-independent transparent pane backgrounds.
+
 ## 1.14.10
 
 - Restore the pre-1.14.5 Command-T behavior: create and select an independent tab directly after the currently selected tab instead of vertically splitting its pane.
