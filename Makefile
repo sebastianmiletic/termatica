@@ -38,8 +38,8 @@ release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOU
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
 	@mkdir -p $(ARCH_DIR)
-	xcrun clang $(COMMON) -O3 -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
-	xcrun clang $(COMMON) -O3 -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
+	xcrun clang $(COMMON) -O2 -arch arm64 -o $(ARCH_DIR)/Termatica-arm64 $(SOURCES)
+	xcrun clang $(COMMON) -O2 -arch x86_64 -o $(ARCH_DIR)/Termatica-x86_64 $(SOURCES)
 	strip -x $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64
 	rm -f $@
 	lipo -create -segalign x86_64 0x1000 -segalign arm64 0x4000 $(ARCH_DIR)/Termatica-arm64 $(ARCH_DIR)/Termatica-x86_64 -output $@
@@ -47,7 +47,7 @@ $(BIN): $(SOURCES)
 
 $(BENCH): $(SOURCES)
 	@mkdir -p $(dir $@)
-	xcrun clang $(COMMON) -O3 -DTERMATICA_BENCHMARKS=1 -arch $$(uname -m) -o $@ $(SOURCES)
+	xcrun clang $(COMMON) -O2 -DTERMATICA_BENCHMARKS=1 -arch $$(uname -m) -o $@ $(SOURCES)
 	strip -x $@
 
 benchmark-harness: $(BENCH)
@@ -113,7 +113,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.11$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.12$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -178,7 +178,7 @@ check: release $(BENCH)
 	  ! TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close window; \
 	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.11'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.12'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -439,7 +439,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.14.11 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.12 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

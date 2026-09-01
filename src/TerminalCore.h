@@ -10,6 +10,10 @@ typedef struct {
 
 _Static_assert(sizeof(TCell)==12,"terminal cells must remain compact");
 
+NS_INLINE BOOL TRenderShouldPaintCellBackground(uint32_t cellBackground,uint32_t defaultSentinel,BOOL inverse,uint32_t resolvedBackground,uint32_t terminalBackground) {
+    return inverse||(cellBackground!=defaultSentinel&&resolvedBackground!=terminalBackground);
+}
+
 typedef struct {
     NSUInteger rows;
     NSUInteger columns;

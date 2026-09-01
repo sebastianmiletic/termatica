@@ -353,7 +353,8 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
             if(inverse){uint32_t swap=fg;fg=bg;bg=swap;}
             if(search[index]){bg=accent;fg=background;}
             if(selection[index])bg=selectionColor;
-            if(selection[index]||search[index]||cell.bg!=TMetalDefaultColor||inverse)TMetalAppendQuad(instances,left+x*cellWidth,top+y*cellHeight,cellWidth,cellHeight,0,0,0,0,TMetalRGBA(bg,1),0);
+            BOOL paintsBackground=TRenderShouldPaintCellBackground(cell.bg,TMetalDefaultColor,inverse,bg,background);
+            if(selection[index]||search[index]||paintsBackground)TMetalAppendQuad(instances,left+x*cellWidth,top+y*cellHeight,cellWidth,cellHeight,0,0,0,0,TMetalRGBA(bg,1),0);
             if(cell.flags&TMetalContinuation)continue;
             NSUInteger fontSlot=(cell.flags&TMetalBold)?1:((cell.flags&TMetalItalic)?2:0);NSFont *font=fontSlot==1?style[@"boldFont"]:(fontSlot==2?style[@"italicFont"]:style[@"font"]);if(!font)font=[NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
             CGFloat cellX=left+x*cellWidth;if(TMetalAppendBlockElement(instances,cell.ch,cellX,top+y*cellHeight,cellWidth,cellHeight,scale,TMetalRGBA(fg,1))){if((cell.flags&TMetalUnderline)||links[index])TMetalAppendUnderline(instances,cellX,top+y*cellHeight+font.ascender-font.underlinePosition,cellWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));continue;}

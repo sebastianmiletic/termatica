@@ -95,7 +95,7 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
     "hideDelay": 5,
     "tileGap": 10,
     "screenInset": 18,
-    "hyprlandBlur": "off",
+    "hyprlandBlur": "theme",
     "railMargin": 8,
     "railCornerRadius": 11,
     "buttonCornerRadius": 8,
@@ -267,7 +267,7 @@ Horizontal and vertical split commands remain grouped under the root tab where t
 | `hideDelay` | integer | `5` | Seconds before auto-hiding the tab rail |
 | `tileGap` | integer | `10` | Gap between Hyprland tiles in points |
 | `screenInset` | integer | `18` | Safe edge inset for adaptive windows and Hyprland tiles in points |
-| `hyprlandBlur` | toggle | `"off"` | Enable blur for Hyprland tiles |
+| `hyprlandBlur` | toggle or `"theme"` | `"theme"` | Inherit the theme's tile blur preference, or explicitly enable/disable it |
 | `railMargin` | number | `8` | Outer tab-rail margin |
 | `railCornerRadius` | number | `11` | Tab-rail corner radius |
 | `buttonCornerRadius` | number | `8` | Tab-button corner radius |
