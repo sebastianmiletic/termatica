@@ -1,7 +1,6 @@
 #import "MetalRenderer.h"
 #import <Metal/Metal.h>
 #import <CoreText/CoreText.h>
-#import <CoreVideo/CoreVideo.h>
 #import <simd/simd.h>
 
 enum { TMetalAtlasSize = 1024, TMetalColorAtlasSize = 1024, TMetalMaxAtlasPages = 4 };
@@ -100,7 +99,6 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
 @end
 
 @implementation TMetalRenderBackend {
-    __weak NSView *_hostView;
     CAMetalLayer *_metalLayer;
     id<MTLDevice> _device;
     id<MTLCommandQueue> _commandQueue;
@@ -115,8 +113,6 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     TRenderSnapshot *_pendingSnapshot;
     CFAbsoluteTime _pendingSnapshotTime;
     BOOL _renderScheduled;
-    BOOL _displayTickQueued;
-    BOOL _forceImmediatePresentation;
     BOOL _stopped;
     TRenderMetrics _metrics;
     NSMutableDictionary<NSString *,NSValue *> *_glyphs;
@@ -147,7 +143,6 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     NSFont *_slotFonts[3];
     id<MTLCommandBuffer> _lastCommandBuffer;
     dispatch_semaphore_t _inFlightSemaphore;
-    CVDisplayLinkRef _displayLink;
     uint64_t _lastAcceptedGeneration;
     uint64_t _lastSubmittedGeneration;
     NSUInteger _submittedFrameCount;
@@ -159,25 +154,18 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     dispatch_source_t _memoryPressureSource;
 }
 
-static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVTimeStamp *now,const CVTimeStamp *outputTime,CVOptionFlags flagsIn,CVOptionFlags *flagsOut,void *context) {
-    (void)displayLink;(void)now;(void)outputTime;(void)flagsIn;(void)flagsOut;
-    TMetalRenderBackend *backend=(__bridge TMetalRenderBackend *)context;
-    [backend displayLinkTick];
-    return kCVReturnSuccess;
-}
-
 - (NSString *)name {return @"metal";}
 - (CALayer *)presentationLayer {return _metalLayer;}
 #if TERMATICA_BENCHMARKS
 - (NSDictionary *)validationFrameCapture {@synchronized(_stateLock){if(!self.lastFramePixels.length)return @{};return @{@"pixels":self.lastFramePixels,@"width":@(self.lastFramePixelWidth),@"height":@(self.lastFramePixelHeight),@"bytesPerRow":@(self.lastFrameBytesPerRow),@"generation":@(self.lastPresentedGeneration),@"colorGlyphs":@(self.lastFrameColorGlyphCount),@"fallbackGlyphs":@(self.lastFrameFallbackGlyphCount)};}}
 - (NSDictionary *)cacheDiagnostics {__block NSDictionary *result=nil;dispatch_sync(_renderQueue,^{NSUInteger monoGPU=self->_atlasPageCount*TMetalAtlasSize*TMetalAtlasSize,colorGPU=self->_colorAtlasPageCount*TMetalColorAtlasSize*TMetalColorAtlasSize*4;result=@{@"glyphEntries":@(self->_glyphEntryCount),@"imageEntries":@(self->_imageTextures.count),@"imageBytes":@(self->_imageTextureBytes),@"imageBudget":@(TMetalImageCacheBudget),@"monoAtlasPages":@(self->_atlasPageCount),@"colorAtlasPages":@(self->_colorAtlasPageCount),@"monoAtlasGPUBytes":@(monoGPU),@"colorAtlasGPUBytes":@(colorGPU),@"atlasCPUBytes":@0,@"totalCacheBytes":@(monoGPU+colorGPU+self->_imageTextureBytes),@"colorAtlasAllocated":@(self->_colorAtlasTexture!=nil),@"imageEvictions":@(self->_imageEvictionCount),@"atlasResets":@(self->_atlasResetCount),@"memoryPurges":@(self->_memoryPurgeCount)};});return result?:@{};}
-- (NSDictionary *)schedulerDiagnostics {@synchronized(_stateLock){return @{@"displayLinkActive":@(_displayLink&&CVDisplayLinkIsRunning(_displayLink)),@"pendingSnapshots":@(_pendingSnapshot?1:0),@"inFlightFrames":@(_inFlightFrameCount),@"maximumInFlightFrames":@(_maximumInFlightFrameCount),@"submittedFrames":@(_submittedFrameCount),@"coalescedSnapshots":@(_coalescedSnapshotCount),@"generationReversals":@(_generationReversalCount),@"lastAcceptedGeneration":@(_lastAcceptedGeneration),@"lastSubmittedGeneration":@(_lastSubmittedGeneration),@"lastSnapshotWaitMs":@(self.lastSnapshotWaitMilliseconds),@"lastCPUEncodeMs":@(self.lastCPUEncodeMilliseconds),@"lastGPUExecutionMs":@(self.lastGPUExecutionMilliseconds),@"lastGPUCompletionMs":@(self.lastGPUCompletionMilliseconds),@"lastPresentIntervalMs":@(self.lastPresentIntervalMilliseconds)};}}
+- (NSDictionary *)schedulerDiagnostics {@synchronized(_stateLock){return @{@"displayLinkActive":@NO,@"scheduler":@"queue-coalesced",@"pendingSnapshots":@(_pendingSnapshot?1:0),@"inFlightFrames":@(_inFlightFrameCount),@"maximumInFlightFrames":@(_maximumInFlightFrameCount),@"submittedFrames":@(_submittedFrameCount),@"coalescedSnapshots":@(_coalescedSnapshotCount),@"generationReversals":@(_generationReversalCount),@"lastAcceptedGeneration":@(_lastAcceptedGeneration),@"lastSubmittedGeneration":@(_lastSubmittedGeneration),@"lastSnapshotWaitMs":@(self.lastSnapshotWaitMilliseconds),@"lastCPUEncodeMs":@(self.lastCPUEncodeMilliseconds),@"lastGPUExecutionMs":@(self.lastGPUExecutionMilliseconds),@"lastGPUCompletionMs":@(self.lastGPUCompletionMilliseconds),@"lastPresentIntervalMs":@(self.lastPresentIntervalMilliseconds)};}}
 - (void)purgeCachesForValidation {dispatch_sync(_renderQueue,^{[self purgeResourceCachesForMemoryPressure];});}
 #endif
 
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error {
     if(!(self=[super init]))return nil;
-    _hostView=view;_stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];_imageLRU=[NSMutableArray array];_inFlightSemaphore=dispatch_semaphore_create(2);_forceImmediatePresentation=YES;
+    _stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];_imageLRU=[NSMutableArray array];_inFlightSemaphore=dispatch_semaphore_create(2);
     if(getenv("TERMATICA_METAL_FORCE_FAILURE")){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:1 userInfo:@{NSLocalizedDescriptionKey:@"forced Metal initialization failure"}];
         return nil;
@@ -217,16 +205,10 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
     _metalLayer=[CAMetalLayer layer];_metalLayer.device=_device;_metalLayer.pixelFormat=MTLPixelFormatBGRA8Unorm;_metalLayer.framebufferOnly=!_validatePixels;_metalLayer.maximumDrawableCount=2;_metalLayer.allowsNextDrawableTimeout=YES;_metalLayer.opaque=NO;_metalLayer.hidden=YES;
     [view.layer addSublayer:_metalLayer];
     [self resetAtlas];
-    if(CVDisplayLinkCreateWithActiveCGDisplays(&_displayLink)==kCVReturnSuccess&&_displayLink){CVDisplayLinkSetOutputCallback(_displayLink,TMetalDisplayLinkCallback,(__bridge void *)self);if(CVDisplayLinkStart(_displayLink)!=kCVReturnSuccess){CVDisplayLinkRelease(_displayLink);_displayLink=NULL;}}
     return self;
 }
 
-- (void)dealloc {if(_displayLink){CVDisplayLinkStop(_displayLink);CVDisplayLinkRelease(_displayLink);_displayLink=NULL;}if(_memoryPressureSource){dispatch_source_set_event_handler(_memoryPressureSource,^{});dispatch_source_cancel(_memoryPressureSource);}}
-
-- (void)displayLinkTick {
-    @synchronized(_stateLock){if(_stopped||!_pendingSnapshot||_displayTickQueued)return;_displayTickQueued=YES;}
-    dispatch_async(_renderQueue,^{@synchronized(self->_stateLock){self->_displayTickQueued=NO;}[self drainSnapshots];});
-}
+- (void)dealloc {if(_memoryPressureSource){dispatch_source_set_event_handler(_memoryPressureSource,^{});dispatch_source_cancel(_memoryPressureSource);}}
 
 - (void)waitForAtlasSafety {
     id<MTLCommandBuffer> command=nil;@synchronized(_stateLock){command=_lastCommandBuffer;}
@@ -259,22 +241,20 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
 #if TERMATICA_BENCHMARKS
     _memoryPurgeCount++;
 #endif
-    @synchronized(_stateLock){_forceImmediatePresentation=YES;}
     void (^redraw)(void)=self.redrawRequested;if(redraw)dispatch_async(dispatch_get_main_queue(),redraw);
 }
 
 - (void)setPresentationFrame:(CGRect)frame scale:(CGFloat)scale {
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf setPresentationFrame:frame scale:scale];});return;}
-    NSNumber *screenNumber=_hostView.window.screen.deviceDescription[@"NSScreenNumber"];if(_displayLink&&screenNumber)CVDisplayLinkSetCurrentCGDisplay(_displayLink,screenNumber.unsignedIntValue);
     [CATransaction begin];[CATransaction setDisableActions:YES];_metalLayer.frame=frame;_metalLayer.contentsScale=MAX(1,scale);_metalLayer.drawableSize=CGSizeMake(MAX(1,frame.size.width*scale),MAX(1,frame.size.height*scale));[CATransaction commit];
 }
 
-- (void)requestImmediatePresentation {@synchronized(_stateLock){_forceImmediatePresentation=YES;}}
+- (void)requestImmediatePresentation {}
 
 - (BOOL)configureWithMetrics:(TRenderMetrics)metrics error:(NSError **)error {
     if(metrics.rows==0||metrics.columns==0||metrics.viewportWidth<=0||metrics.viewportHeight<=0){if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:5 userInfo:@{NSLocalizedDescriptionKey:@"invalid render metrics"}];return NO;}
     BOOL glyphMetricsChanged=_metrics.cellWidth>0&&(_metrics.cellWidth!=metrics.cellWidth||_metrics.cellHeight!=metrics.cellHeight||_metrics.scale!=metrics.scale);
-    BOOL presentationChanged=_metrics.viewportWidth!=metrics.viewportWidth||_metrics.viewportHeight!=metrics.viewportHeight||_metrics.scale!=metrics.scale;_metrics=metrics;if(presentationChanged)@synchronized(_stateLock){_forceImmediatePresentation=YES;}
+    _metrics=metrics;
     if(glyphMetricsChanged)dispatch_async(_renderQueue,^{[self resetAtlas];[self removeAllImageTextures];});
     void (^applyPresentationFrame)(void)=^{[self setPresentationFrame:CGRectMake(0,0,metrics.viewportWidth,metrics.viewportHeight) scale:metrics.scale];};
     if(NSThread.isMainThread)applyPresentationFrame();else dispatch_async(dispatch_get_main_queue(),applyPresentationFrame);
@@ -282,7 +262,7 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
 }
 
 - (void)invalidateCaches {
-    @synchronized(_stateLock){_forceImmediatePresentation=YES;}dispatch_async(_renderQueue,^{[self resetAtlas];[self removeAllImageTextures];});
+    dispatch_async(_renderQueue,^{[self resetAtlas];[self removeAllImageTextures];});
 }
 
 - (void)fail:(NSString *)message code:(NSInteger)code {
@@ -469,13 +449,12 @@ static CVReturn TMetalDisplayLinkCallback(CVDisplayLinkRef displayLink,const CVT
 
 - (void)presentSnapshot:(TRenderSnapshot *)snapshot {
     if(!snapshot.isValid||_stopped)return;
-    BOOL immediate=NO;@synchronized(_stateLock){if(snapshot.generation<=_lastAcceptedGeneration)return;_lastAcceptedGeneration=snapshot.generation;if(_pendingSnapshot)_coalescedSnapshotCount++;_pendingSnapshot=snapshot;_pendingSnapshotTime=CFAbsoluteTimeGetCurrent();BOOL displayLinkRunning=_displayLink&&CVDisplayLinkIsRunning(_displayLink);immediate=_forceImmediatePresentation||!displayLinkRunning;_forceImmediatePresentation=NO;if(!immediate||_renderScheduled)return;_renderScheduled=YES;}
+    @synchronized(_stateLock){if(snapshot.generation<=_lastAcceptedGeneration)return;_lastAcceptedGeneration=snapshot.generation;if(_pendingSnapshot)_coalescedSnapshotCount++;_pendingSnapshot=snapshot;_pendingSnapshotTime=CFAbsoluteTimeGetCurrent();if(_renderScheduled)return;_renderScheduled=YES;}
     dispatch_async(_renderQueue,^{[self drainSnapshots];});
 }
 
 - (void)shutdown {
     @synchronized(_stateLock){_stopped=YES;_pendingSnapshot=nil;}
-    if(_displayLink){CVDisplayLinkStop(_displayLink);CVDisplayLinkRelease(_displayLink);_displayLink=NULL;}
     void (^drain)(void)=^{[self waitForAtlasSafety];[self removeAllImageTextures];[self resetAtlas];if(self->_memoryPressureSource){dispatch_source_set_event_handler(self->_memoryPressureSource,^{});dispatch_source_cancel(self->_memoryPressureSource);self->_memoryPressureSource=nil;}};
     if(dispatch_get_specific(TMetalRenderQueueKey)==(__bridge void *)self)drain();else dispatch_sync(_renderQueue,drain);
     if(NSThread.isMainThread){_metalLayer.hidden=YES;[_metalLayer removeFromSuperlayer];}else dispatch_async(dispatch_get_main_queue(),^{self->_metalLayer.hidden=YES;[self->_metalLayer removeFromSuperlayer];});

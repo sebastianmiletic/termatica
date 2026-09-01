@@ -1,5 +1,13 @@
 # Changelog
 
+## 1.14.13
+
+- Keep cursor blinking in its dedicated overlay instead of invalidating the full terminal view, eliminating Codex CLI typing pulses and random doubled-looking text.
+- Clear partial AppKit redraws with copy compositing and discard stale layer backing when a terminal enters or leaves a tiled layout, preventing old glyphs, black strips, and per-pane tint from surviving Command-T and Command-Shift-T transitions.
+- Apply atomic configuration edits immediately, acknowledge live reloads, and reduce watcher latency while retaining last-known-good recovery for partial or invalid writes.
+- Replace the deprecated all-active-displays Core Video link with queue-coalesced Metal presentation, removing Termatica's display-enumeration path while retaining ordered, bounded rendering.
+- Add repeated transparent/translucent partial-redraw, inactive cursor, blink-generation, split-transition, scheduler, and sub-350 ms config reload regressions.
+
 ## 1.14.11
 
 - Give every visible tile one window-owned background surface so all panes use the exact same configured color and opacity.
