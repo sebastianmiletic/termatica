@@ -165,7 +165,7 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
 
 - (instancetype)initWithHostView:(NSView *)view error:(NSError **)error {
     if(!(self=[super init]))return nil;
-    _stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];_imageLRU=[NSMutableArray array];_inFlightSemaphore=dispatch_semaphore_create(2);
+    _stateLock=[NSObject new];_glyphs=[NSMutableDictionary dictionary];_imageTextures=[NSMutableDictionary dictionary];_imageLRU=[NSMutableArray array];_inFlightSemaphore=dispatch_semaphore_create(1);
     if(getenv("TERMATICA_METAL_FORCE_FAILURE")){
         if(error)*error=[NSError errorWithDomain:@"TermaticaMetal" code:1 userInfo:@{NSLocalizedDescriptionKey:@"forced Metal initialization failure"}];
         return nil;
@@ -246,7 +246,7 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
 
 - (void)setPresentationFrame:(CGRect)frame scale:(CGFloat)scale {
     if(!NSThread.isMainThread){__weak typeof(self) weakSelf=self;dispatch_async(dispatch_get_main_queue(),^{[weakSelf setPresentationFrame:frame scale:scale];});return;}
-    [CATransaction begin];[CATransaction setDisableActions:YES];_metalLayer.frame=frame;_metalLayer.contentsScale=MAX(1,scale);_metalLayer.drawableSize=CGSizeMake(MAX(1,frame.size.width*scale),MAX(1,frame.size.height*scale));[CATransaction commit];
+    scale=MAX(1,scale);CGSize drawableSize=CGSizeMake(MAX(1,frame.size.width*scale),MAX(1,frame.size.height*scale));BOOL geometryChanged=!CGRectEqualToRect(_metalLayer.frame,frame)||!CGSizeEqualToSize(_metalLayer.drawableSize,drawableSize)||_metalLayer.contentsScale!=scale;[CATransaction begin];[CATransaction setDisableActions:YES];if(geometryChanged)_metalLayer.hidden=YES;_metalLayer.frame=frame;_metalLayer.contentsScale=scale;_metalLayer.drawableSize=drawableSize;[CATransaction commit];
 }
 
 - (void)requestImmediatePresentation {}
@@ -322,7 +322,7 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     CGFloat backgroundAlpha=[style[@"backgroundAlpha"] doubleValue];
     CGFloat glow=[style[@"glow"] doubleValue];
     NSArray<NSNumber *> *plain=style[@"plainPalette"];BOOL colorize=[style[@"colorize"] boolValue]&&plain.count;
-    TMetalAppendQuad(instances,0,0,snapshot.metrics.viewportWidth,snapshot.metrics.viewportHeight,0,0,0,0,TMetalRGBA(background,backgroundAlpha),0);
+    if(backgroundAlpha>0)TMetalAppendQuad(instances,0,0,snapshot.metrics.viewportWidth,snapshot.metrics.viewportHeight,0,0,0,0,TMetalRGBA(background,backgroundAlpha),0);
     for(NSUInteger y=0;y<rows;y++){
         BOOL inToken=NO;NSUInteger token=0;
         for(NSUInteger x=0;x<columns;x++){
@@ -393,6 +393,7 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
 
 - (void)renderSnapshot:(TRenderSnapshot *)snapshot snapshotWaitMilliseconds:(double)snapshotWaitMilliseconds {
     if(_stopped||!snapshot.isValid)return;
+    @synchronized(_stateLock){TRenderMetrics current=_metrics,frame=snapshot.metrics;if(current.rows!=frame.rows||current.columns!=frame.columns||current.viewportWidth!=frame.viewportWidth||current.viewportHeight!=frame.viewportHeight||current.scale!=frame.scale)return;}
     if(getenv("TERMATICA_METAL_FORCE_COMMAND_FAILURE")){[self fail:@"forced Metal command failure" code:12];return;}
     dispatch_semaphore_wait(_inFlightSemaphore,DISPATCH_TIME_FOREVER);
     if(_stopped){dispatch_semaphore_signal(_inFlightSemaphore);return;}
@@ -435,11 +436,11 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
 #endif
         }
         double gpuMilliseconds=completed.GPUEndTime>completed.GPUStartTime?(completed.GPUEndTime-completed.GPUStartTime)*1000.0:0;
-        CFAbsoluteTime completionTime=CFAbsoluteTimeGetCurrent();@synchronized(self->_stateLock){if(generation<self.lastPresentedGeneration)self->_generationReversalCount++;self.lastPresentedGeneration=MAX(self.lastPresentedGeneration,generation);self.lastCPUEncodeMilliseconds=cpuMilliseconds;self.lastGPUExecutionMilliseconds=gpuMilliseconds;self.lastGPUCompletionMilliseconds=(completionTime-commitTime)*1000.0;self.lastPresentIntervalMilliseconds=self->_lastCompletionTime>0?(completionTime-self->_lastCompletionTime)*1000.0:0;self->_lastCompletionTime=completionTime;if(self->_inFlightFrameCount)self->_inFlightFrameCount--;if(self->_lastCommandBuffer==completed)self->_lastCommandBuffer=nil;if(readback){self.lastFrameChecksum=checksum;self.lastFrameVariedPixels=varied;
+        CFAbsoluteTime completionTime=CFAbsoluteTimeGetCurrent();__block BOOL reveal=NO;@synchronized(self->_stateLock){if(generation<self.lastPresentedGeneration)self->_generationReversalCount++;self.lastPresentedGeneration=MAX(self.lastPresentedGeneration,generation);self.lastCPUEncodeMilliseconds=cpuMilliseconds;self.lastGPUExecutionMilliseconds=gpuMilliseconds;self.lastGPUCompletionMilliseconds=(completionTime-commitTime)*1000.0;self.lastPresentIntervalMilliseconds=self->_lastCompletionTime>0?(completionTime-self->_lastCompletionTime)*1000.0:0;self->_lastCompletionTime=completionTime;if(self->_inFlightFrameCount)self->_inFlightFrameCount--;if(self->_lastCommandBuffer==completed)self->_lastCommandBuffer=nil;TRenderMetrics current=self->_metrics,frame=snapshot.metrics;reveal=!self->_stopped&&current.rows==frame.rows&&current.columns==frame.columns&&current.viewportWidth==frame.viewportWidth&&current.viewportHeight==frame.viewportHeight&&current.scale==frame.scale;if(readback){self.lastFrameChecksum=checksum;self.lastFrameVariedPixels=varied;
 #if TERMATICA_BENCHMARKS
             self.lastFramePixels=pixels;self.lastFramePixelWidth=readbackWidth;self.lastFramePixelHeight=readbackHeight;self.lastFrameBytesPerRow=readbackStride;self.lastFrameColorGlyphCount=colorGlyphCount;self.lastFrameFallbackGlyphCount=fallbackGlyphCount;
 #endif
-        }}dispatch_semaphore_signal(self->_inFlightSemaphore);
+        }}if(reveal)dispatch_async(dispatch_get_main_queue(),^{if(!self->_stopped)self->_metalLayer.hidden=NO;});dispatch_semaphore_signal(self->_inFlightSemaphore);
     }];@synchronized(_stateLock){_lastCommandBuffer=command;}[command commit];
 }
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.14
+
+- Use one window-owned configured background surface from initial launch through ordinary tabs, tiled splits, and new windows, preventing layouts from changing tint or compositing the same translucent color twice.
+- Keep AppKit and Metal terminal frames transparent except for explicit ANSI cell backgrounds, so renderer selection, focus, and pane lifecycle never alter the theme color.
+- Hide stale Metal drawables during geometry changes, reject snapshots built for old dimensions, and serialize GPU presentation to one frame in flight, preventing resized glyph layers from overlapping current text.
+- Expand launch, tab, split, window, renderer-parity, stale-frame, and scheduler regressions to enforce stable RGBA ownership and ordered single-frame presentation.
+
 ## 1.14.13
 
 - Keep cursor blinking in its dedicated overlay instead of invalidating the full terminal view, eliminating Codex CLI typing pulses and random doubled-looking text.
