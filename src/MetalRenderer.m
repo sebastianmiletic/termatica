@@ -318,23 +318,26 @@ static BOOL TMetalLineUsesFallbackFont(CTLineRef line,NSFont *requestedFont) {
     const uint8_t *underlines=snapshot.underlineStyles.bytes,*selection=snapshot.selectionMask.bytes,*search=snapshot.searchMask.bytes,*links=snapshot.linkMask.bytes;
     CGFloat scale=snapshot.metrics.scale,cellWidth=snapshot.metrics.cellWidth,cellHeight=snapshot.metrics.cellHeight;
     CGFloat left=[style[@"left"] doubleValue],top=[style[@"top"] doubleValue];
-    uint32_t foreground=[style[@"foreground"] unsignedIntValue],background=[style[@"background"] unsignedIntValue],accent=[style[@"accent"] unsignedIntValue],selectionColor=[style[@"selection"] unsignedIntValue];
+    uint32_t foreground=[style[@"foreground"] unsignedIntValue],background=[style[@"background"] unsignedIntValue],cursorColor=[style[@"cursor"] unsignedIntValue],accent=[style[@"accent"] unsignedIntValue],selectionColor=[style[@"selection"] unsignedIntValue];NSString *cursorStyle=style[@"cursorStyle"]?:@"block";BOOL blockCursor=snapshot.cursorVisible&&[cursorStyle isEqual:@"block"];
     CGFloat backgroundAlpha=[style[@"backgroundAlpha"] doubleValue];
     CGFloat glow=[style[@"glow"] doubleValue];
     NSArray<NSNumber *> *plain=style[@"plainPalette"];BOOL colorize=[style[@"colorize"] boolValue]&&plain.count;
     if(backgroundAlpha>0)TMetalAppendQuad(instances,0,0,snapshot.metrics.viewportWidth,snapshot.metrics.viewportHeight,0,0,0,0,TMetalRGBA(background,backgroundAlpha),0);
+    // Paint each contiguous highlight/background as one quad. Per-cell quads can
+    // expose fractional-pixel seams in inverse-video rows used by modern TUIs.
+    for(NSUInteger y=0;y<rows;y++)for(NSUInteger x=0;x<columns;){NSUInteger index=y*columns+x;TCell cell=cells[index];BOOL inverse=(cell.flags&TMetalInverse)!=0,cursorCell=blockCursor&&y==snapshot.cursorY&&x==snapshot.cursorX;uint32_t bg=cursorCell?cursorColor:(cell.bg==TMetalDefaultColor?background:cell.bg);if(inverse)bg=cell.fg==TMetalDefaultColor?foreground:cell.fg;if(cursorCell)bg=cursorColor;else if(search[index])bg=accent;else if(selection[index])bg=selectionColor;BOOL paints=cursorCell||selection[index]||search[index]||TRenderShouldPaintCellBackground(cell.bg,TMetalDefaultColor,inverse,bg,background);if(!paints){x++;continue;}NSUInteger start=x;x++;while(x<columns){NSUInteger nextIndex=y*columns+x;TCell next=cells[nextIndex];BOOL nextInverse=(next.flags&TMetalInverse)!=0,nextCursor=blockCursor&&y==snapshot.cursorY&&x==snapshot.cursorX;uint32_t nextBG=nextCursor?cursorColor:(next.bg==TMetalDefaultColor?background:next.bg);if(nextInverse)nextBG=next.fg==TMetalDefaultColor?foreground:next.fg;if(nextCursor)nextBG=cursorColor;else if(search[nextIndex])nextBG=accent;else if(selection[nextIndex])nextBG=selectionColor;BOOL nextPaints=nextCursor||selection[nextIndex]||search[nextIndex]||TRenderShouldPaintCellBackground(next.bg,TMetalDefaultColor,nextInverse,nextBG,background);if(!nextPaints||nextBG!=bg)break;x++;}TMetalAppendQuad(instances,left+start*cellWidth,top+y*cellHeight,(x-start)*cellWidth,cellHeight,0,0,0,0,TMetalRGBA(bg,1),0);}
+    if(snapshot.cursorVisible&&!blockCursor){CGFloat width=cellWidth,height=cellHeight,x=left+snapshot.cursorX*cellWidth,y=top+snapshot.cursorY*cellHeight,thickness=MAX((CGFloat)1,[style[@"cursorThickness"] doubleValue]);if([cursorStyle isEqual:@"bar"])width=MIN(cellWidth,thickness);else{height=MIN(cellHeight,thickness);y+=cellHeight-height;}TMetalAppendQuad(instances,x,y,width,height,0,0,0,0,TMetalRGBA(cursorColor,1),0);}
     for(NSUInteger y=0;y<rows;y++){
         BOOL inToken=NO;NSUInteger token=0;
         for(NSUInteger x=0;x<columns;x++){
             NSUInteger index=y*columns+x;TCell cell=cells[index];BOOL whitespace=!cell.ch||cell.ch==' '||cell.ch=='\t';
             if(whitespace)inToken=NO;else if(!inToken){inToken=YES;token++;}
-            BOOL inverse=(cell.flags&TMetalInverse)!=0;uint32_t fg=cell.fg==TMetalDefaultColor?foreground:cell.fg,bg=cell.bg==TMetalDefaultColor?background:cell.bg;
+            BOOL inverse=(cell.flags&TMetalInverse)!=0,cursorCell=blockCursor&&y==snapshot.cursorY&&x==snapshot.cursorX;uint32_t fg=cell.fg==TMetalDefaultColor?foreground:cell.fg,bg=cell.bg==TMetalDefaultColor?background:cell.bg;
             if(colorize&&cell.fg==TMetalDefaultColor&&!inverse&&!whitespace)fg=[plain[(token-1)%plain.count] unsignedIntValue];
             if(inverse){uint32_t swap=fg;fg=bg;bg=swap;}
             if(search[index]){bg=accent;fg=background;}
             if(selection[index])bg=selectionColor;
-            BOOL paintsBackground=TRenderShouldPaintCellBackground(cell.bg,TMetalDefaultColor,inverse,bg,background);
-            if(selection[index]||search[index]||paintsBackground)TMetalAppendQuad(instances,left+x*cellWidth,top+y*cellHeight,cellWidth,cellHeight,0,0,0,0,TMetalRGBA(bg,1),0);
+            if(cursorCell){bg=cursorColor;fg=background;}
             if(cell.flags&TMetalContinuation)continue;
             NSUInteger fontSlot=(cell.flags&TMetalBold)?1:((cell.flags&TMetalItalic)?2:0);NSFont *font=fontSlot==1?style[@"boldFont"]:(fontSlot==2?style[@"italicFont"]:style[@"font"]);if(!font)font=[NSFont monospacedSystemFontOfSize:11 weight:NSFontWeightRegular];
             CGFloat cellX=left+x*cellWidth;if(TMetalAppendBlockElement(instances,cell.ch,cellX,top+y*cellHeight,cellWidth,cellHeight,scale,TMetalRGBA(fg,1))){if((cell.flags&TMetalUnderline)||links[index])TMetalAppendUnderline(instances,cellX,top+y*cellHeight+font.ascender-font.underlinePosition,cellWidth,MAX(1.0/scale,font.underlineThickness),MAX((uint8_t)1,underlines[index]),TMetalRGBA(fg,1));continue;}

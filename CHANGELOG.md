@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.15
+
+- Composite the terminal cursor in the same immutable AppKit or Metal frame as its cell text and background, eliminating the independently flashing duplicate above Codex's prompt and keeping cursor movement atomic with synchronized TUI redraws.
+- Render block-cursor text in terminal-background contrast on a solid cursor cell so the glyph and highlight read as one unit instead of two translucent, disconnected layers.
+- Batch contiguous Metal selection, search, explicit-background, and inverse-video cells into seamless row highlights, preventing fractional-pixel gaps through Codex, Herdr, and other terminal interfaces.
+- Extend the real-PTY compatibility gate with the interactive Codex prompt and isolated Herdr sessions on both AppKit and Metal, while retaining broad shell, editor, monitor, multiplexer, pager, SSH, and AI-CLI coverage.
+
 ## 1.14.14
 
 - Use one window-owned configured background surface from initial launch through ordinary tabs, tiled splits, and new windows, preventing layouts from changing tint or compositing the same translucent color twice.
