@@ -1149,6 +1149,8 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     id<TRenderBackend> _renderBackend;
     TMetalRenderBackend *_metalBackend;
     TRenderSnapshot *_displaySnapshot;
+    NSUInteger _appKitCursorTransitionCount;
+    NSUInteger _appKitCursorLayerResetCount;
     BOOL _metalFailed;
     NSUInteger _metalFailureCount;
     NSUInteger _metalQuarantineBypassCount;
@@ -1216,7 +1218,7 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
     @synchronized(self){[self markDamageX:_cursorX y:_cursorY width:1 height:1];}
     TRenderSnapshot *snapshot=[self renderSnapshot];[self takeDamageRect];if(_metalBackend)[_metalBackend requestImmediatePresentation];[self presentTerminalSnapshot:snapshot];
 }
-- (void)presentTerminalSnapshot:(TRenderSnapshot *)snapshot {if(!snapshot.isValid||!_renderBackend)return;_displaySnapshot=snapshot;[_renderBackend presentSnapshot:snapshot];}
+- (void)presentTerminalSnapshot:(TRenderSnapshot *)snapshot {if(!snapshot.isValid||!_renderBackend)return;if(_metalBackend)_displaySnapshot=snapshot;[_renderBackend presentSnapshot:snapshot];}
 - (void)setActiveTerminal:(BOOL)activeTerminal {
     if(_activeTerminal==activeTerminal)return;
     _activeTerminal=activeTerminal;
@@ -1311,7 +1313,15 @@ static void TTerminalString(void *context,const uint8_t *bytes,size_t length){
         _metalFailed=YES;_metalFailureCount++;_lastMetalFailureStage=@"initialization";_lastMetalFailureAt=CFAbsoluteTimeGetCurrent();TLog(@"Metal renderer unavailable: %@",error.localizedDescription?:@"unknown error");
     }
     __weak typeof(self) weakSelf=self;
-    TAppKitRenderBackend *appkit=[[TAppKitRenderBackend alloc]initWithPresentHandler:^(TRenderSnapshot *snapshot){__strong typeof(weakSelf) self=weakSelf;if(!self)return;self->_displaySnapshot=snapshot;NSRange rows=snapshot.fullDamage?NSMakeRange(0,snapshot.metrics.rows):snapshot.damagedRows;if(!rows.length){[self setNeedsDisplayInRect:self.bounds];return;}CGFloat top=[snapshot.style[@"top"] doubleValue];NSRect damage=NSMakeRect(0,top+rows.location*snapshot.metrics.cellHeight,self.bounds.size.width,rows.length*snapshot.metrics.cellHeight);[self setNeedsDisplayInRect:NSIntersectionRect(NSInsetRect(damage,-1,-1),self.bounds)];}];
+    TAppKitRenderBackend *appkit=[[TAppKitRenderBackend alloc]initWithPresentHandler:^(TRenderSnapshot *snapshot){__strong typeof(weakSelf) self=weakSelf;if(!self)return;TRenderSnapshot *previous=self->_displaySnapshot;BOOL cursorTransition=!previous||previous.cursorVisible!=snapshot.cursorVisible||previous.cursorX!=snapshot.cursorX||previous.cursorY!=snapshot.cursorY||![previous.style[@"cursorStyle"] isEqual:snapshot.style[@"cursorStyle"]];NSRange rows=snapshot.fullDamage?NSMakeRange(0,snapshot.metrics.rows):snapshot.damagedRows;CGFloat top=[snapshot.style[@"top"] doubleValue];NSRect damage=rows.length?NSMakeRect(0,top+rows.location*snapshot.metrics.cellHeight,self.bounds.size.width,rows.length*snapshot.metrics.cellHeight):NSZeroRect;if(previous.cursorVisible)damage=NSUnionRect(damage,NSInsetRect(TCursorRect(previous),-1,-1));if(snapshot.cursorVisible)damage=NSUnionRect(damage,NSInsetRect(TCursorRect(snapshot),-1,-1));self->_displaySnapshot=snapshot;if(cursorTransition)self->_appKitCursorTransitionCount++;
+#if defined(__x86_64__)
+        BOOL resetIntelLayer=cursorTransition&&self.wantsLayer;if(resetIntelLayer){[CATransaction begin];[CATransaction setDisableActions:YES];self.layer.contents=nil;[CATransaction commit];self->_appKitCursorLayerResetCount++;damage=self.bounds;}
+#endif
+        if(NSIsEmptyRect(damage))damage=self.bounds;[self setNeedsDisplayInRect:NSIntersectionRect(damage,self.bounds)];
+#if defined(__x86_64__)
+        if(resetIntelLayer)[self displayIfNeeded];
+#endif
+    }];
     NSError *error=nil;[appkit configureWithMetrics:metrics error:&error];_renderBackend=appkit;self.wantsLayer=self.tiledRendering;[self markAllDamage];[self refreshTextView];TLog(@"renderer selected: appkit");
 }
 - (void)fallbackToAppKitForError:(NSError *)error {
@@ -2305,7 +2315,7 @@ static inline NSUInteger TCachedUnicodeWidth(uint32_t cp,uint32_t *keys,uint8_t 
 - (NSDictionary *)diagnosticState {
     @synchronized(self){return @{
       @"history":@(_historyCount),@"offset":@(_historyOffset),@"cursorX":@(_cursorX),@"cursorY":@(_cursorY),
-      @"activeTerminal":@(self.activeTerminal),@"firstResponder":@(self.window.firstResponder==self),@"displayCursorVisible":@(_displaySnapshot.cursorVisible),@"cursorBlinkPhase":@(_cursorBlinkVisible),@"compositedCursorVisible":@(_displaySnapshot.cursorVisible),@"compositedCursorFrame":NSStringFromRect(TCursorRect(_displaySnapshot)),
+      @"activeTerminal":@(self.activeTerminal),@"firstResponder":@(self.window.firstResponder==self),@"displayCursorVisible":@(_displaySnapshot.cursorVisible),@"cursorBlinkPhase":@(_cursorBlinkVisible),@"compositedCursorVisible":@(_displaySnapshot.cursorVisible),@"compositedCursorFrame":NSStringFromRect(TCursorRect(_displaySnapshot)),@"appKitCursorTransitions":@(_appKitCursorTransitionCount),@"appKitCursorLayerResets":@(_appKitCursorLayerResetCount),
       @"alternate":@(_alternateScreen),@"inlineViewport":@(_inlineViewportMode),@"inlineViewportTop":@(_inlineViewportTop),@"synchronizedUpdates":@(_synchronizedUpdates),
       @"selecting":@(_selecting),@"selection":@(_hasSelection),@"rows":@(_rows),@"columns":@(_cols),@"mouseMode":@(_mouseTrackingMode),
       @"mouseEncoding":_pixelMouse?@"pixel-sgr":(_sgrMouse?@"sgr":(_urxvtMouse?@"urxvt":(_utf8Mouse?@"utf8":@"legacy"))),
@@ -3262,6 +3272,9 @@ static int TRunTerminalSelfTest(void) {
         for(TTerminalView *tile in tiles.terminals){if(tile.activeTerminal)activeCount++;if(tile.renderSnapshot.cursorVisible)visibleCursorCount++;if([tile.diagnosticState[@"displayCursorVisible"] boolValue])displayCursorCount++;if([tile.diagnosticState[@"compositedCursorVisible"] boolValue])compositedCursorCount++;}
         if(tiles.terminal!=focusTarget||tiles.window.firstResponder!=focusTarget||activeCount!=1||visibleCursorCount!=expectedCursorCount||displayCursorCount!=expectedCursorCount||compositedCursorCount!=expectedCursorCount)return 68;
     }
+#if defined(__x86_64__)
+    NSUInteger intelCursorLayerResets=0;for(TTerminalView *tile in tiles.terminals)intelCursorLayerResets+=[tile.diagnosticState[@"appKitCursorLayerResets"] unsignedIntegerValue];if(!intelCursorLayerResets)return 219;
+#endif
     [tiles focusTerminal:quarter];[quarter consumeData:[@"\033[5 q" dataUsingEncoding:NSUTF8StringEncoding]];NSDate *blinkSettle=[NSDate dateWithTimeIntervalSinceNow:0.10];while(blinkSettle.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];uint64_t generationBeforeBlink=[quarter.diagnosticState[@"renderGeneration"] unsignedLongLongValue];BOOL phaseBeforeBlink=[quarter.diagnosticState[@"cursorBlinkPhase"] boolValue],phaseChanged=NO,frameChanged=NO;NSDate *blinkDeadline=[NSDate dateWithTimeIntervalSinceNow:0.90];while(blinkDeadline.timeIntervalSinceNow>0){[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.005]];NSDictionary *state=quarter.diagnosticState;if([state[@"renderGeneration"] unsignedLongLongValue]>generationBeforeBlink)frameChanged=YES;if([state[@"cursorBlinkPhase"] boolValue]!=phaseBeforeBlink){phaseChanged=YES;break;}}if(!phaseChanged||!frameChanged)return 217;[quarter consumeData:[@"\033[6 q" dataUsingEncoding:NSUTF8StringEncoding]];
     TConfig *otherWindowConfig=[TConfig new];otherWindowConfig.renderer=@"appkit";otherWindowConfig.shell=@"/usr/bin/true";otherWindowConfig.shellArguments=@[];TWindowController *otherWindow=[[TWindowController alloc]initWithConfig:otherWindowConfig extensions:nil];[otherWindow.window orderFront:nil];[otherWindow.window makeKeyWindow];NSDate *keyTransferDeadline=[NSDate dateWithTimeIntervalSinceNow:0.04];while(keyTransferDeadline.timeIntervalSinceNow>0)[NSRunLoop.currentRunLoop runMode:NSDefaultRunLoopMode beforeDate:[NSDate dateWithTimeIntervalSinceNow:0.002]];NSUInteger oldWindowCursors=0,newWindowCursors=0;for(TTerminalView *tile in tiles.terminals)oldWindowCursors+=tile.renderSnapshot.cursorVisible;for(TTerminalView *tile in otherWindow.terminals)newWindowCursors+=tile.renderSnapshot.cursorVisible;if(oldWindowCursors!=(tiles.window.isKeyWindow?1:0)||newWindowCursors!=(otherWindow.window.isKeyWindow?1:0)||(oldWindowCursors+newWindowCursors)>1)return 69;[otherWindow.terminal stopShellTerminating:YES];[otherWindow.window close];[tiles.window makeKeyWindow];[tiles focusTerminal:quarter];
     tiledConfig.tabAnimations=YES;NSRect quarterSlot=quarter.frame,rootQuarterSlot=leftRoot.frame,halfSlot=rightRoot.frame;NSArray<TTerminalView *> *mixedIdentityOrder=[tiles.terminals copy];TTerminalView *quarterAnchor=quarter.splitAnchor;NSEvent *dragDown=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDown location:NSMakePoint(NSMidX(quarterSlot),NSMidY(quarterSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:1 windowNumber:tiles.window.windowNumber context:nil eventNumber:1 clickCount:1 pressure:1];NSEvent *dragMove=[NSEvent mouseEventWithType:NSEventTypeLeftMouseDragged location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:2 windowNumber:tiles.window.windowNumber context:nil eventNumber:2 clickCount:1 pressure:1];NSEvent *dragUp=[NSEvent mouseEventWithType:NSEventTypeLeftMouseUp location:NSMakePoint(NSMidX(halfSlot),NSMidY(halfSlot)) modifierFlags:NSEventModifierFlagCommand timestamp:3 windowNumber:tiles.window.windowNumber context:nil eventNumber:3 clickCount:1 pressure:0];[quarter mouseDown:dragDown];[quarter mouseDragged:dragMove];[quarter mouseUp:dragUp];

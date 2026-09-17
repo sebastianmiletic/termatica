@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.17
+
+- Clear and synchronously repaint Intel AppKit tile backing stores whenever the cursor moves, blinks, changes style, or transfers focus, eliminating retained cursor bars before and after the hidden-path semicolon.
+- Include both the previously displayed and current cursor cells in every AppKit damage region so tab, split, and window transitions cannot leave an earlier cursor position behind.
+- Add an x86_64 regression path that exercises layered Hyprland panes, repeated focus transfers, cursor movement, and cursor blinking under Rosetta.
+
 ## 1.14.16
 
 - Match every fresh installation and newly created config to the maintained daily-use profile: Ghost Glass, SF Mono 11, AppKit rendering, HUD blur, 90% window opacity, 60,000 lines of scrollback, and the enabled Hyprland, hidden-path, Unicode, OSC, and borderless integrations.
