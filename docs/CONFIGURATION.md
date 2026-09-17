@@ -4,7 +4,7 @@ Each config is a plain JSON file in `~/.config/termatica/configs/`. The filename
 
 Every config is a complete, self-contained schema rather than a partial overlay. Switching changes the selector and reloads that one file; it never copies or merges values from another config. Existing partial configs are upgraded atomically to schema version 2 while preserving their explicit values. Config files and the selector use user-only `0600` permissions. Termatica watches the whole config directory, including repeated direct edits, renames, new files, deletion, and selection changes. Run `t r` for an explicit reload if needed.
 
-Creating a config starts from the same benchmark-tuned defaults used by the release benchmark harness rather than copying the currently selected profile. That baseline uses Monaco 11, the opaque `terminal-default` theme, AppKit rendering, disabled blur/glow/scanlines/vignette, a 2,000-line scrollback, and default-off optional plugins. Installed custom plugins discovered during normalization also remain off. The newly created complete profile becomes current and can then be customized independently.
+Creating a config starts from the same defaults as a fresh installation rather than copying the currently selected profile. That baseline mirrors Termatica's maintained daily-use setup: SF Mono 11, the translucent `ghost-glass` theme, AppKit rendering, HUD blur, 90% window opacity, a 60,000-line scrollback, Hyprland layout, hidden path, full Unicode, OSC integration, and borderless-window plugins. Those five built-in plugins are installed automatically on first app launch; discovered custom plugins remain off. The newly created complete profile becomes current and can then be customized independently.
 
 The current profile is always the first entry in both `termatica config` and
 `termatica config list`. Every other profile remains case-insensitively sorted,
@@ -20,34 +20,33 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
   "schemaVersion": 2,
   "shell": "/bin/zsh",
   "shellArguments": ["-l"],
-  "scrollback": 2000,
-  "theme": "terminal-default",
-  "themeOptions": ["terminal-default", "amber-crt", "ghost-glass", "green-screen"],
+  "scrollback": 60000,
+  "theme": "ghost-glass",
+  "themeOptions": ["ghost-glass", "green-screen", "terminal-default", "amber-crt"],
   "textColorMode": "ansi",
-  "fontName": "Monaco",
+  "fontName": "SF Mono",
   "fontSize": 11,
   "padding": 12,
-  "fontFeatures": ["calt", "liga"],
+  "fontFeatures": [],
   "colors": {
-    "background": "#101216",
-    "foreground": "#D8DEE9",
-    "cursor": "#EEF1F5",
-    "accent": "#7AA2F7",
-    "panel": "#151820",
-    "muted": "#6B7280",
-    "selection": "#2B3445",
-    "palette": ["#1B1D23", "#E06C75", "#98C379", "#E5C07B", "#61AFEF", "#C678DD", "#56B6C2", "#D7DAE0", "#5C6370", "#F07178", "#AAD94C", "#FFB454", "#59C2FF", "#D2A6FF", "#95E6CB", "#EEF1F5"],
-    "plainTextPalette": ["#7CE38B", "#7DD3FC", "#FFE083", "#FF8787", "#DDB2F4", "#67B7F7"]
+    "background": "theme",
+    "foreground": "theme",
+    "cursor": "theme",
+    "accent": "theme",
+    "panel": "theme",
+    "muted": "theme",
+    "selection": "theme",
+    "palette": "theme"
   },
   "appearance": {
-    "backgroundOpacity": 1.0,
-    "windowOpacity": 1.0,
-    "blur": "off",
+    "backgroundOpacity": "theme",
+    "windowOpacity": 0.9,
+    "blur": "on",
     "blurMaterial": "hud",
-    "glow": 0,
-    "scanlines": 0,
-    "vignette": 0,
-    "cursorStyle": "block",
+    "glow": "theme",
+    "scanlines": "theme",
+    "vignette": "theme",
+    "cursorStyle": "theme",
     "renderer": "appkit"
   },
   "window": {
@@ -81,11 +80,11 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
     "nano-control": "off",
     "micro-control": "off",
     "helix-control": "off",
-    "hidden-path": "off",
-    "hyprland-layout": "off",
-    "unicode-rendering": "off",
-    "osc-integration": "off",
-    "borderless-window": "off"
+    "hidden-path": "on",
+    "hyprland-layout": "on",
+    "unicode-rendering": "on",
+    "osc-integration": "on",
+    "borderless-window": "on"
   },
   "tabs": {
     "railWidth": 34,
@@ -163,16 +162,16 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
 |---|---|---|---|
 | `shell` | string | `/bin/zsh` | Absolute path to shell executable |
 | `shellArguments` | array | `["-l"]` | Arguments passed to the shell; `["-l"]` starts a login shell |
-| `scrollback` | integer | `2000` | Maximum history lines (100–100000) |
+| `scrollback` | integer | `60000` | Maximum history lines (100–100000) |
 
 ### Text & Colour
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `theme` | string | `"terminal-default"` | Active theme name |
+| `theme` | string | `"ghost-glass"` | Active theme name |
 | `themeOptions` | array | 4 themes | Available theme names |
 | `textColorMode` | string | `"ansi"` | `"ansi"` for standard colors, `"spectrum"` for per-token plain-text coloring |
-| `fontName` | string | `"Monaco"` | Font family name |
+| `fontName` | string | `"SF Mono"` | Font family name |
 | `fontSize` | integer | `11` | Font size in points (8–48) |
 | `padding` | integer | `12` | Terminal content padding in points (0–40) |
 | `fontFeatures` | array | `[]` | OpenType features: `"liga"`, `"calt"`, `"ss01"`, `"ss02"`, `"zero"` |
@@ -181,28 +180,28 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `background` | hex | `#101216` | Terminal and window background |
-| `foreground` | hex | `#D8DEE9` | Default text color |
-| `cursor` | hex | `#EEF1F5` | Cursor color |
-| `accent` | hex | `#7AA2F7` | UI accent color (borders, highlights) |
-| `panel` | hex | `#151820` | Panel/overlay background |
-| `muted` | hex | `#6B7280` | Muted text color (e.g., search counter) |
-| `selection` | hex | `#2B3445` | Text selection background |
-| `palette` | array | 16 ANSI | 16 ANSI colors as hex strings. Omit to use theme palette. |
+| `background` | hex or `"theme"` | `"theme"` | Terminal and window background |
+| `foreground` | hex or `"theme"` | `"theme"` | Default text color |
+| `cursor` | hex or `"theme"` | `"theme"` | Cursor color |
+| `accent` | hex or `"theme"` | `"theme"` | UI accent color (borders, highlights) |
+| `panel` | hex or `"theme"` | `"theme"` | Panel/overlay background |
+| `muted` | hex or `"theme"` | `"theme"` | Muted text color (e.g., search counter) |
+| `selection` | hex or `"theme"` | `"theme"` | Text selection background |
+| `palette` | array or `"theme"` | `"theme"` | 16 ANSI colors as hex strings. Omit to use theme palette. |
 | `plainTextPalette` | array | 6 colors | Colors for `"spectrum"` text color mode |
 
 ### Appearance (nested under `"appearance"`)
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `backgroundOpacity` | float | `1.0` | Terminal background opacity (0.0–1.0) |
-| `windowOpacity` | float | `1.0` | Window opacity (0.0–1.0) |
-| `blur` | toggle | `"off"` | Enable macOS vibrancy blur |
+| `backgroundOpacity` | float or `"theme"` | `"theme"` | Terminal background opacity (0.0–1.0) |
+| `windowOpacity` | float or `"theme"` | `0.9` | Window opacity (0.0–1.0) |
+| `blur` | toggle | `"on"` | Enable macOS vibrancy blur |
 | `blurMaterial` | string | `"hud"` | Vibrancy material: `hud`, `popover`, `sidebar`, `menu`, or `under-window` |
-| `glow` | float | `0` | Phosphor glow intensity (0.0–1.0) |
-| `scanlines` | float | `0` | CRT scanline intensity (0.0–1.0) |
-| `vignette` | float | `0` | Edge vignette intensity (0.0–1.0) |
-| `cursorStyle` | string | `"block"` | Cursor style: `"block"`, `"bar"`, or `"underline"` |
+| `glow` | float or `"theme"` | `"theme"` | Phosphor glow intensity (0.0–1.0) |
+| `scanlines` | float or `"theme"` | `"theme"` | CRT scanline intensity (0.0–1.0) |
+| `vignette` | float or `"theme"` | `"theme"` | Edge vignette intensity (0.0–1.0) |
+| `cursorStyle` | string or `"theme"` | `"theme"` | Cursor style: `"block"`, `"bar"`, or `"underline"` |
 | `renderer` | string | `"appkit"` | Rendering backend: `"appkit"` or opt-in `"metal"` |
 
 ### Window & Surfaces (nested under `"window"`)
@@ -239,11 +238,11 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 
 | Key | Default | Description |
 |---|---|---|
-| `hidden-path` | `"off"` | Replace the prompt with a short path indicator (`Coding/Project ;`) |
-| `hyprland-layout` | `"off"` | Enable Hyprland-style terminal tiling |
-| `unicode-rendering` | `"off"` | Full Unicode: wide glyphs, emoji, composed grapheme clusters |
-| `osc-integration` | `"off"` | OSC 7 cwd, OSC 8 hyperlinks, OSC 133 command marks |
-| `borderless-window` | `"off"` | Remove titlebar and traffic lights, keep rounded corners |
+| `hidden-path` | `"on"` | Replace the prompt with a short path indicator (`Coding/Project ;`) |
+| `hyprland-layout` | `"on"` | Enable Hyprland-style terminal tiling |
+| `unicode-rendering` | `"on"` | Full Unicode: wide glyphs, emoji, composed grapheme clusters |
+| `osc-integration` | `"on"` | OSC 7 cwd, OSC 8 hyperlinks, OSC 133 command marks |
+| `borderless-window` | `"on"` | Remove titlebar and traffic lights, keep rounded corners |
 | `hello` | `"off"` | Example plugin |
 | `pi-bridge` | `"off"` | Raspberry Pi bridge plugin |
 | `editor-deck` | `"off"` | Editor deck plugin |

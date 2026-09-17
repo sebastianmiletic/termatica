@@ -113,7 +113,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.15$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.16$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -158,6 +158,7 @@ check: release $(BENCH)
 	  test "$$(plutil -extract OSAScriptingDefinition raw Resources/Info.plist)" = Termatica; \
 	  grep -q 'newterminaltab' Resources/Termatica.sdef; \
 	  automation_root="$$tmp/automation-live"; mkdir -p "$$automation_root"; \
+	  TERMATICA_CONFIG_DIR="$$automation_root" $(CLI) config set plugins.hyprland-layout off >/dev/null; \
 	  TERMATICA_CONFIG_DIR="$$automation_root" TERMATICA_NO_BLUR=1 $(BIN) >"$$automation_root/app.log" 2>&1 & automation_pid=$$!; \
 	  ready=0; for attempt in $$(jot 50); do if TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation status >"$$automation_root/status.json" 2>/dev/null; then ready=1; break; fi; sleep 0.1; done; test "$$ready" = 1; \
 	  test "$$(plutil -extract privacy.terminalContentIncluded raw "$$automation_root/status.json")" = false; \
@@ -178,7 +179,7 @@ check: release $(BENCH)
 	  ! TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close window; \
 	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.15'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.16'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -188,8 +189,8 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp/ui" expect -c 'set timeout 5; spawn $(CLI) config; expect "TERMATICA CONFIG / CONFIG FILES"; expect "current default.json"; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; expect "APPEARANCE"; expect "PERFORMANCE"; expect "TABS & TILING"; expect "WINDOW"; expect "TERMINAL & INPUT"; expect "MOTION"; expect "EXTENSIONS"; expect "UPDATES"; expect "KEYBINDINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ui-performance" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\r"; expect "TERMATICA CONFIG / PERFORMANCE"; expect -re "Renderer +appkit"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-performance" $(CLI) config get appearance.renderer)" = metal; \
-	  TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\r"; expect "TERMATICA CONFIG / TABS & TILING"; expect -re "Hyprland layout +OFF"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" $(CLI) config get plugins.hyprland-layout)" = ON; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\r"; expect "TERMATICA CONFIG / TABS & TILING"; expect -re "Hyprland layout +ON"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" $(CLI) config get plugins.hyprland-layout)" = OFF; \
 	  mkdir -p "$$tmp/migrate"; \
 	  mkdir -p "$$tmp/migrate/screens"; \
 	  printf '%s\n' '{"plugins":{"hidden-path":true},"skeleterm":0,"system":{"restoreSession":true,"pasteProtection":false}}' >"$$tmp/migrate/config.json"; \
@@ -208,7 +209,7 @@ check: release $(BENCH)
 	  test "$$config_path" = "$$tmp/configs/default.json"; \
 	  grep -Eq '"textColorMode"[[:space:]]*:[[:space:]]*"ansi"' "$$tmp/config.json"; \
 	  grep -Eq '"backgroundOpacity"[[:space:]]*:[[:space:]]*"theme"' "$$tmp/config.json"; \
-	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*"off"' "$$tmp/config.json"; \
+	  grep -Eq '"borderless-window"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
 	  grep -Eq '"checkOnLaunch"[[:space:]]*:[[:space:]]*"on"' "$$tmp/config.json"; \
 	  grep -Eq '"pasteProtection"[[:space:]]*:[[:space:]]*"off"' "$$tmp/config.json"; \
 	  ! grep -q '"restoreSession"' "$$tmp/config.json"; \
@@ -235,8 +236,8 @@ check: release $(BENCH)
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config create dev | grep -q 'CREATED + CURRENT.*dev.json'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get fontSize)" = 11; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get appearance.renderer)" = appkit; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get theme)" = terminal-default; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = OFF; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get theme)" = ghost-glass; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.hidden-path)" = ON; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(CLI) config get plugins.custom-tool)" = OFF; \
 	  for section in appearance colors window tabs terminalUI motion system updates keybindings plugins; do plutil -extract "$$section" json -o /dev/null "$$tmp/configs/dev.json"; done; \
 	  test "$$(plutil -extract fontSize raw "$$tmp/configs/dev.json")" = 11; \
@@ -439,7 +440,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.14.15 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.16 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

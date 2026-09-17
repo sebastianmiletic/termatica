@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.16
+
+- Match every fresh installation and newly created config to the maintained daily-use profile: Ghost Glass, SF Mono 11, AppKit rendering, HUD blur, 90% window opacity, 60,000 lines of scrollback, and the enabled Hyprland, hidden-path, Unicode, OSC, and borderless integrations.
+- Automatically install those enabled built-in integrations on first launch so their configured behavior is active immediately without a separate module setup step.
+- Inset every ICNS representation into Apple's standard icon design area, preventing legacy Intel macOS Dock and Finder renderers from displaying Termatica larger than neighboring application icons.
+
 ## 1.14.15
 
 - Composite the terminal cursor in the same immutable AppKit or Metal frame as its cell text and background, eliminating the independently flashing duplicate above Codex's prompt and keeping cursor movement atomic with synchronized TUI redraws.
