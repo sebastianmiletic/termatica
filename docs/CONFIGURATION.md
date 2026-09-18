@@ -133,7 +133,6 @@ Run `termatica config` for the interactive editor. Use Up/Down to select any set
     "openConfig": "cmd+,",
     "newWindow": "cmd+n",
     "newTab": "cmd+t",
-    "newVerticalTab": "cmd+shift+t",
     "closeTab": "cmd+w",
     "clearTerminal": "cmd+k",
     "searchScrollback": "cmd+shift+h",
@@ -253,7 +252,7 @@ Built-in helper-free plugins. Each uses an `"on"` or `"off"` toggle.
 | `micro-control` | `"off"` | Micro control integration |
 | `helix-control` | `"off"` | Helix control integration |
 
-Horizontal and vertical split commands remain grouped under the root tab where they were created. Command-T creates an independent root tab directly after the selected tab; in Hyprland mode that root becomes a new balanced tile. Command-Shift-T recursively splits only the focused pane horizontally inside its current root. Selecting an unrelated ordinary tab hides the complete prior split group. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. Opening or closing Hyprland roots rebalances the outer grid. Command-drag moves a tile or complete split group to a new position while preserving its terminal identity, content, split tree, and dimensions.
+Horizontal and vertical split commands remain grouped under the root tab where they were created. Command-T is the only terminal-creation shortcut. With Hyprland enabled, its first press splits the focused pane vertically and focuses the new right pane. Each later press splits that focused pane locally, alternating horizontal and vertical directions down the nested branch. Outside Hyprland mode, Command-T creates an independent tab directly after the selected tab. The rail keeps labels at a legible height in compact windows; scroll over it to reach tabs outside the visible subset. Command-drag moves a tile or complete split group while preserving its terminal identity and content.
 
 ### Tabs (nested under `"tabs"`)
 
@@ -309,8 +308,7 @@ Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
 |---|---|---|
 | `openConfig` | `cmd+,` | Open the config UI |
 | `newWindow` | `cmd+n` | New terminal window |
-| `newTab` | `cmd+t` | Create an independent tab directly after the selected tab; creates a balanced root tile in Hyprland mode |
-| `newVerticalTab` | `cmd+shift+t` | Split only the focused pane horizontally into stacked panes (compatibility key name) |
+| `newTab` | `cmd+t` | Create an independent tab, or alternate a pane-local vertical/horizontal split in Hyprland mode |
 | `closeTab` | `cmd+w` | Close current tab |
 | `clearTerminal` | `cmd+k` | Clear terminal and scrollback |
 | `searchScrollback` | `cmd+shift+h` | Search scrollback (regex) |

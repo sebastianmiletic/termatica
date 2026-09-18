@@ -43,7 +43,7 @@ Termatica is a terminal, not an application dashboard. The shell owns the surfac
 - A child that enables terminal mouse tracking owns unmodified wheel gestures on both primary and alternate screens. Shift-wheel is the explicit local-scrollback override. Clicks remain native unless Option is held.
 - Scrollback remains anchored when background output arrives, returns to live output when typing, and exposes a minimal position thumb without permanent chrome.
 - Ordinary clicks only focus or begin native text selection. Application mouse coordinates require an explicit Option-click so mouse-aware TUIs cannot unexpectedly reposition their own cursor.
-- Command-T creates an independent ordinary tab; Command-Shift-T splits below the focused terminal. Horizontal and vertical split groups remain attached to that ordinary tab in every window mode.
+- Command-T is the single terminal-creation shortcut. In Hyprland mode it splits the focused pane locally, alternating vertical then horizontal at each nested level and focusing the new pane. Outside Hyprland mode it creates an independent ordinary tab.
 - Command-1 through Command-9 selects terminals.
 - `termatica config` is the only interactive settings surface. It uses arrows or J/K, Enter for action, and Escape or Q to return or close.
 - Toggle rows always show `ON` or `OFF`; Enter and Left/Right toggle them directly. Their JSON values are the matching readable strings `"on"` and `"off"`.

@@ -37,7 +37,7 @@ footprint instead of presenting one host snapshot as a fixed requirement.
 ## Start here
 
 1. [Download the DMG](https://github.com/sebastianmiletic/termatica/releases/latest/download/Termatica-macOS-universal.dmg), drag Termatica into Applications, and open it.
-2. Use Command-T to open an independent tab directly after the selected tab; in Hyprland mode it appears as a new balanced tile. Use Command-Shift-T to split only the focused pane horizontally into stacked panes. Command-D and Command-Shift-D remain the horizontal and vertical split shortcuts.
+2. Use Command-T to create terminals. In Hyprland mode the first press splits the focused pane vertically, focuses the new right pane, and later presses alternate horizontal and vertical splits inside each newly focused pane. Outside Hyprland mode, Command-T opens an independent tab. Command-D and Command-Shift-D remain explicit horizontal and vertical split shortcuts.
 3. Run `t` to see every public command, `t c` to configure the app, `t ssh` for remote hosts, `t sm` for the system monitor, `t b` for live benchmarks, and `t u` to update.
 4. Click controls in mouse-aware terminal apps normally. Hold Shift while clicking or dragging when you want Termatica's local text selection instead.
 
@@ -106,7 +106,7 @@ are not closed or replaced.
 - One terminal-native configuration interface instead of separate plugin, theme, profile, marketplace, or settings menus; every app-facing UI token is arrow-editable, including corner radii, rail geometry, overlays, cursor, scrollbar, effects, and motion
 - Plain JSON settings with readable `on`/`off` toggles that remain user- and AI-editable after installation
 - Independent, universal named configs that can be copied, created, switched, renamed, and deleted without leaking settings between profiles
-- Native numbered tabs with independent horizontal, vertical, and mixed split groups, plus pixel-aligned Hyprland tiling that balances independent root tabs while preserving pane-local nested splits, expands survivors after roots close, and supports clean movement between arbitrary slots
+- Native numbered tabs with independent horizontal, vertical, and mixed split groups, plus pixel-aligned Hyprland tiling that recursively splits the focused pane in an alternating vertical/horizontal pattern, expands survivors after panes close, and preserves terminal identity during movement
 - Terminal-native SSH manager with `0600` password-free profiles, OpenSSH config discovery, identities and fingerprints, ProxyJump, custom options, local/remote/dynamic forwarding, real connection checks, and direct launch into one or many split panes
 - Terminal-native automation through `t a`, an owner-only `0600` local socket, and a native AppleScript dictionary for windows, tabs, splits, focus, commands, literal input, named keys, and privacy-safe topology; CLI automation can also close panes, tab groups, and windows while protecting the final terminal
 - Explicit named SSH launch recipes for repeatable split layouts, stored without passwords or terminal content and never launched or restored automatically
@@ -266,8 +266,7 @@ Update checks can be disabled with `updates.checkOnLaunch` in config.
 | Move one word backward / forward | Option-Left / Option-Right |
 | Delete the previous word | Option-Delete |
 | New window | Command-N |
-| New independent tab / Hyprland tile | Command-T |
-| Split only the focused pane horizontally (stacked) | Command-Shift-T |
+| New tab / next focused Hyprland split | Command-T |
 | Move a tile without changing its content or shape | Command-drag, or drag from its top padding |
 | Close terminal | Command-W |
 | Select terminal | Command-1 through Command-9 |

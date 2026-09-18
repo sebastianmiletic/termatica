@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.14.18
+
+- Move the Intel AppKit cursor into a dedicated, pixel-aligned overlay so cursor bars can never be baked into terminal text or retained before and after the hidden-path semicolon.
+- Keep exactly one Intel cursor overlay attached to the focused pane across tile creation, focus transfer, movement, blinking, and window changes.
+- Make Command-T the single terminal-creation shortcut: Hyprland mode now splits the focused pane recursively, alternating vertical and horizontal directions while focusing each new pane.
+- Remove the redundant Command-Shift-T menu action and default binding; non-Hyprland windows retain ordinary Command-T tabs.
+
 ## 1.14.17
 
 - Clear and synchronously repaint Intel AppKit tile backing stores whenever the cursor moves, blinks, changes style, or transfers focus, eliminating retained cursor bars before and after the hidden-path semicolon.
