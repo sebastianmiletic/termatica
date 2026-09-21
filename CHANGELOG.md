@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.14.19
 
 - Record keybindings directly in the config UI: select a binding, press Enter, then press the desired shortcut while the row displays `READING...`.
 - Capture Command, Shift, Option, Control, navigation, and function-key combinations before application shortcuts can consume them.
