@@ -302,7 +302,7 @@ Horizontal and vertical split commands remain grouped under the root tab where t
 
 ### Keybindings (nested under `"keybindings"`)
 
-Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`.
+Every keybinding is configurable. Values use macOS notation: `cmd+shift+h`. In `t c`, open **Keybindings**, select a binding, and press Enter. The UI shows `READING...`; press the desired key combination to save it, or Escape to cancel.
 
 | Key | Default | Description |
 |---|---|---|

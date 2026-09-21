@@ -219,7 +219,7 @@ See the complete [CLI reference](docs/CLI.md).
 
 `termatica config` always opens on Config Files first. It lists each real `.json` filename exactly once and marks it CURRENT, SAVED, or INVALID. Enter opens the current file's settings; Enter on another valid file selects it and opens its settings. New creates a complete default config and selects it. Rename changes the actual filename. Delete removes the selected file, and deleting the current file selects the first valid remaining filename; the only valid config cannot be deleted.
 
-Boolean settings are direct toggles. The terminal UI shows `ON` or `OFF`, and config files store the matching lowercase strings `"on"` or `"off"` instead of numeric or JSON boolean values.
+Boolean settings are direct toggles. The terminal UI shows `ON` or `OFF`, and config files store the matching lowercase strings `"on"` or `"off"` instead of numeric or JSON boolean values. To change a keybinding, select it, press Enter, wait for `READING...`, then press the desired shortcut; Escape cancels capture.
 
 Settings are grouped into:
 

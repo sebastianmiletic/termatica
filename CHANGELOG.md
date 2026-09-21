@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Record keybindings directly in the config UI: select a binding, press Enter, then press the desired shortcut while the row displays `READING...`.
+- Capture Command, Shift, Option, Control, navigation, and function-key combinations before application shortcuts can consume them.
+
 ## 1.14.18
 
 - Move the Intel AppKit cursor into a dedicated, pixel-aligned overlay so cursor bars can never be baked into terminal text or retained before and after the hidden-path semicolon.
