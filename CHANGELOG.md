@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.14.20
+
+- Restore certificate-backed signing for public ZIP and DMG packages so the built-in updater accepts downloaded releases.
+- Make production packaging select and verify the pinned Termatica release identity before creating distributable assets, preventing ad-hoc builds from being published accidentally.
+
 ## 1.14.19
 
 - Record keybindings directly in the config UI: select a binding, press Enter, then press the desired shortcut while the row displays `READING...`.

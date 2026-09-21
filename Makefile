@@ -18,19 +18,16 @@ SDK := $(shell xcrun --sdk macosx --show-sdk-path)
 ARCH_DIR := build/.arch
 COMMON := -fobjc-arc -fmodules -flto -DNDEBUG -mmacosx-version-min=13.0 -isysroot "$(SDK)" -Wall -Wextra -Wno-unused-parameter -Wl,-dead_strip -framework AppKit -framework Foundation -framework QuartzCore -framework Carbon -framework Metal -framework CoreText
 CODESIGN_IDENTITY ?= -
+RELEASE_CODESIGN_IDENTITY ?= F95605C333732A3AA6C9FCD24E1170B03B19DCE7
 SIGNING_REQUIREMENTS := Resources/Termatica.requirements
-ifeq ($(CODESIGN_IDENTITY),-)
-SIGN_APP = codesign --force --sign -
-else
-SIGN_APP = codesign --force --sign "$(CODESIGN_IDENTITY)" --requirements $(SIGNING_REQUIREMENTS)
-endif
+SIGN_APP = if [ "$(CODESIGN_IDENTITY)" = "-" ]; then codesign --force --sign - $(APP); else codesign --force --sign "$(CODESIGN_IDENTITY)" --requirements $(SIGNING_REQUIREMENTS) $(APP); fi
 
 .PHONY: all release run clean size install check package benchmark-harness benchmark-decoder benchmark-core benchmark-experience benchmark-metal benchmark
 
 all: release
 
 release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOURCES) $(BENCHMARK_RESOURCES) $(SYSTEM_MONITOR_RESOURCE) $(SCRIPTING_DEFINITION)
-	$(SIGN_APP) $(APP)
+	$(SIGN_APP)
 	@if [ "$(CODESIGN_IDENTITY)" != "-" ]; then codesign --verify --deep --strict -R '=certificate leaf = H"f95605c333732a3aa6c9fcd24e1170b03b19dce7" and identifier "com.termatica.Termatica"' $(APP); fi
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
 	  test "$$bytes" -le 1572864 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
@@ -113,7 +110,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.19$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.20$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -179,7 +176,7 @@ check: release $(BENCH)
 	  ! TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close window; \
 	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.19'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.20'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -440,7 +437,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.14.19 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.20 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \
@@ -449,7 +446,10 @@ check: release $(BENCH)
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  echo "Termatica checks passed"
 
+package: CODESIGN_IDENTITY := $(RELEASE_CODESIGN_IDENTITY)
 package: check
+	@test "$(CODESIGN_IDENTITY)" != "-" || { echo "Release packaging requires certificate-backed code signing"; exit 1; }
+	@codesign --verify --deep --strict -R '=certificate leaf = H"f95605c333732a3aa6c9fcd24e1170b03b19dce7" and identifier "com.termatica.Termatica"' $(APP)
 	@mkdir -p dist build/dmg
 	@rm -f $(ZIP) $(DMG) dist/SHA256SUMS
 	@rm -rf build/dmg/Termatica.app build/dmg/Applications
