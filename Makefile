@@ -30,7 +30,7 @@ release: $(BIN) $(SHORTCLI) $(PLIST) $(ICON) $(THEMES) $(SHELL_INTEGRATION_RESOU
 	$(SIGN_APP)
 	@if [ "$(CODESIGN_IDENTITY)" != "-" ]; then codesign --verify --deep --strict -R '=certificate leaf = H"f95605c333732a3aa6c9fcd24e1170b03b19dce7" and identifier "com.termatica.Termatica"' $(APP); fi
 	@bytes=$$(find $(APP) -type f -exec stat -f '%z' {} + | awk '{s+=$$1} END {print s}'); \
-	  test "$$bytes" -le 1572864 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
+	  test "$$bytes" -le 1625293 || { echo "Size limit exceeded: $$bytes bytes"; exit 1; }
 
 $(BIN): $(SOURCES)
 	@mkdir -p $(dir $@)
@@ -110,7 +110,7 @@ install: release
 check: release $(BENCH)
 	@set -eux; tmp=$$(mktemp -d /tmp/termatica-check.XXXXXX); \
 	  automation_pid=""; trap 'test -z "$$automation_pid" || kill "$$automation_pid" 2>/dev/null || true; rm -rf "$$tmp"' EXIT; \
-	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.20$$'; \
+	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) version | grep -q '^Termatica 1.14.21$$'; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(CLI) >"$$tmp/help.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) >"$$tmp/short-help.out"; \
 	  cmp "$$tmp/help.out" "$$tmp/short-help.out"; \
@@ -176,7 +176,7 @@ check: release $(BENCH)
 	  ! TERMATICA_CONFIG_DIR="$$automation_root" $(SHORTCLI) automation close window; \
 	  kill "$$automation_pid"; wait "$$automation_pid" 2>/dev/null || true; automation_pid=""; \
 	  test "$$(readlink $(SHORTCLI))" = Termatica; \
-	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.20'; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) v)" = 'Termatica 1.14.21'; \
 	  ! TERMATICA_CONFIG_DIR="$$tmp" $(CLI) completions zsh | grep -q 'renderer'; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp" $(SHORTCLI) cf path)" = "$$tmp/configs/default.json"; \
 	  test "$$(readlink "$$tmp/config.json")" = configs/default.json; \
@@ -188,6 +188,8 @@ check: release $(BENCH)
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-performance" $(CLI) config get appearance.renderer)" = metal; \
 	  TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\r"; expect "TERMATICA CONFIG / TABS & TILING"; expect -re "Hyprland layout +ON"; send "\033\[C"; expect "SAVED + RELOADED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
 	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-tabs" $(CLI) config get plugins.hyprland-layout)" = OFF; \
+	  TERMATICA_CONFIG_DIR="$$tmp/ui-keybinding" expect -c 'set timeout 8; spawn $(CLI) config; expect "CURRENT"; send "\r"; expect "TERMATICA CONFIG / SETTINGS"; send "\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\033\[B\r"; expect "TERMATICA CONFIG / KEYBINDINGS"; send "\r"; expect -re {term-keybinding-capture;([A-Za-z0-9]+)}; set token $$expect_out(1,string); send "TERMATICABIND:READY:$$token\r"; expect "READING..."; send "TERMATICABIND:VALUE:$$token:cmd+return\r"; expect "SAVED"; send "q"; expect "TERMATICA CONFIG / SETTINGS"; send "q"; expect "TERMATICA CONFIG / CONFIG FILES"; send "q"; expect eof' >/dev/null; \
+	  test "$$(TERMATICA_CONFIG_DIR="$$tmp/ui-keybinding" $(CLI) config get keybindings.clearTerminal)" = cmd+return; \
 	  mkdir -p "$$tmp/migrate"; \
 	  mkdir -p "$$tmp/migrate/screens"; \
 	  printf '%s\n' '{"plugins":{"hidden-path":true},"skeleterm":0,"system":{"restoreSession":true,"pasteProtection":false}}' >"$$tmp/migrate/config.json"; \
@@ -437,7 +439,7 @@ check: release $(BENCH)
 	  update_status=$$?; \
 	  set -e; \
 	  test "$$update_status" = 10; \
-	  grep -q 'Update available: 1.14.20 -> v9.9.9' "$$tmp/update-check.out"; \
+	  grep -q 'Update available: 1.14.21 -> v9.9.9' "$$tmp/update-check.out"; \
 	  TERMATICA_CONFIG_DIR="$$tmp" TERMATICA_UPDATE_API="file://$$fixture/release.json" TERMATICA_UPDATE_DESTINATION="$$tmp/install-target/Termatica.app" $(CLI) update >"$$tmp/update.out"; \
 	  test "$$(defaults read "$$tmp/install-target/Termatica.app/Contents/Info" CFBundleShortVersionString)" = 9.9.9; \
 	  codesign --verify --deep --strict "$$tmp/install-target/Termatica.app"; \

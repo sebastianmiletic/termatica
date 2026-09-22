@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.14.21
+
+- Make keybinding recording use an acknowledged, tokenized one-shot handshake so `READING...` appears only after the terminal is ready to intercept the next native key event.
+- Capture Command-Enter and other application-reserved combinations before menu dispatch, route pending capture to the requesting pane, and expire abandoned requests safely.
+- Report unavailable, invalid, cancelled, and timed-out captures instead of silently waiting or discarding the shortcut.
+
 ## 1.14.20
 
 - Restore certificate-backed signing for public ZIP and DMG packages so the built-in updater accepts downloaded releases.
